@@ -7,6 +7,7 @@ import os
 from PIL import Image
 from io import BytesIO
 import random
+import qrcode
 
 from Tools.config import useragent
 from Tools.config import bilicookies as cookies
@@ -92,79 +93,128 @@ class AuthUtil:
         return int(time.time())
 
 
-# 获取b站登录状态(目前该功能只做了获取登录状态, todo:应该将biliLoginState与biliQRLogin合并)
-class biliLoginState:
-    def __init__(self, headers):
+# 获取b站登录状态(目前能获取登录状态以及扫码登录)
+class biliLogin:
+    def __init__(self, headers=None):
         """
         :param headers: 比如headers={"Cookie": cookies().bilicookie, "User-Agent": useragent().pcChrome}
         """
-        self.headers = headers
-        self.url = 'https://api.bilibili.com/x/web-interface/nav'
+        if headers is not None:
+            self.headers = headers
+        else:
+            self.headers = {"User-Agent": useragent().pcChrome}
+        self.login_state_url = 'https://api.bilibili.com/x/web-interface/nav'
+        self.qr_generate_url = 'https://passport.bilibili.com/x/passport-login/web/qrcode/generate'
+        self.qr_login_url = 'https://passport.bilibili.com/x/passport-login/web/qrcode/poll'
 
     def get_login_state(self):
         """
         获取登录状态
         [使用方法]:
-            biliLoginState(headers).get_login_state()
+            biliLogin(headers).get_login_state()
         :return:
         """
         # get请求https://api.bilibili.com/x/web-interface/nav，参数是cookie，返回的是用户的信息
-        r = requests.get(url=self.url, headers=self.headers)
+        r = requests.get(url=self.login_state_url, headers=self.headers)
         login_msg = r.json()
         print("登录状态：", login_msg["data"]["isLogin"])
 
-
-# b站扫码登录(目前该功能没有实现)
-class biliQRLogin:
-    """B站扫码登录，目前该功能没有实现
-    [示例代码]:
-        QRL = biliQRLogin()
-        QRL.require()
-        QRL.generate()
-        while True:
-            status, cookie = QRL.scan_qr()
-            match status:
-                case 86090:
-                    print("扫码成功但未确认")
-                case 0:
-                    print("登录成功")
-                case 86101:
-                    print("未扫码")
-                case 86038:
-                    print("二维码失效")
-                    break
-    """
-    def __init__(self):
-        self.headers = {"User-Agent": useragent().pcChrome}
-        self.url = 'https://passport.bilibili.com/x/passport-login/web/qrcode/generate'
-
-    def require(self):
-        r = requests.get(self.url, headers=self.headers)
-        print(r.text)
+    def qr_login(self, save_path="cookie", save_name="扫码登录"):
+        """
+        扫码登录
+        [Warning]:
+            请妥善保管cookie的路径，本方法只会保存一份cookie到本地的指定路径里
+        [使用方法-扫码登录并检查登录状态]:
+            biliL = biliLogin()
+            biliL.qr_login()  # 扫码登录
+            headers = {
+                "User-Agent": useragent().pcChrome,
+                "Cookie": cookies(path='cookie/扫码登录.txt').bilicookie,
+                'referer': "https://www.bilibili.com"
+            }
+            biliLogin(headers).get_login_state()  # 检查登录状态
+        [使用方法-扫码登录并发送赛博评论]:
+            biliL = biliLogin()
+            biliL.qr_login()
+            headers = {
+                "User-Agent": useragent().pcChrome,
+                "Cookie": cookies(path='cookie/扫码登录.txt').bilicookie,
+                'referer': "https://www.bilibili.com"
+            }
+            biliLogin(headers).get_login_state()
+            biliR = biliReply(bv="BV1ov42117yC")
+            biliR.send_reply("可爱的白州梓！[喜欢]")
+        [Tips]:
+            登录成功后，返回的是一个字典，其中data中的url是登录成功后的url，其中包含了cookie：
+            {'code': 0, 'message': '0', 'ttl': 1, 'data': {'url': 'https://passport.biligame.com/x/passport-login/web/crossDomain?DedeUserID=506925078&DedeUserID__ckMd5=157f54a3efcc1f6c&Expires=1733319655&SESSDATA=11bc6725,1733319655,e4356*61CjDhRqoVMl0n2ynNcVvmXJrOhesGXjqQKrGumPdjqKAVvMseIyvmg43VBwn8PPi7-9kSVmFNM1pxYWYzYVU3NjBsOVVZcVZjYl9IaWd4M0VfZG5kbjU0M2hyLWROdXZ3NE4wMkx0S0Y2Y2o2b1VqeU5hZG14UmdIYjNiZzFhaU11MXZMOFdCWGJBIIEC&bili_jct=4b531e9662a4488573d0ff255f065963&gourl=https%3A%2F%2Fwww.bilibili.com&first_domain=.bilibili.com', 'refresh_token': '43a6c19b5c0e17b419fde286f3328f61', 'timestamp': 1717767655580, 'code': 0, 'message': ''}}
+        :param save_path: 保存cookie的路径
+        :param save_name: 保存cookie的文件名
+        :return: cookie
+        """
+        r = requests.get(self.qr_generate_url, headers=self.headers)
         data = r.json()
-        self.token = data['data']['qrcode_key']
-        self.qrcode_url = data['data']['url']
-
-    def generate(self):
-        r = requests.get(self.qrcode_url, headers=self.headers)
-        img = Image.open(BytesIO(r.content))
+        if data['code'] == 0:
+            qrcode_key = data['data']['qrcode_key']
+            url = data['data']['url']
+        else:
+            raise Exception('Failed to generate QR code: ' + data['message'])
+        qr = qrcode.QRCode()
+        qr.add_data(url)
+        qr.make()
+        img = qr.make_image()
         img.show()
-        print("请使用手机客户端扫描二维码登录...")
-
-    def scan_qr(self):
-        status = ''
-        cookie = ''
         while True:
-            url = f'https://passport.bilibili.com/x/passport-login/web/qrcode/poll?key={self.token}'
-            response = requests.get(url)
-            data = response.json().get('data', {})
-            status = data.get('status')
-            if status in ['ScanSuccess', 'Success']:
-                cookie = response.headers.get('set-cookie')
-            if status in ['ScanSuccess', 'Success', 'Timeout', 'Invalid']:
-                break
+            r = requests.get(self.qr_login_url, params={'qrcode_key': qrcode_key}, headers=self.headers)
+            data = r.json()
+            # print(data)
+            if data['data']['code'] == 86101:
+                print('未扫码')
+            elif data['data']['code'] == 86038:
+                print('二维码失效')
+            elif data['data']['code'] == 86090:
+                print('扫码成功但未确认')
+            elif data['data']['code'] == 0:
+                print('登录成功')
+                get_cookie = r.headers['set-cookie']
+                self._save_cookie(get_cookie, save_path, save_name)
+            else:
+                print('未知错误')
             time.sleep(1)
-        return status, cookie
+
+    def _save_cookie(self, cookie, save_path, save_name):
+        """
+        保存cookie
+        :param cookie: 原始cookie
+        :param save_path: 保存路径
+        :param save_name: 保存文件名
+        """
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        file_path = os.path.join(save_path, f"{save_name}.txt")  # 使用os.path.join()连接保存路径和文件名
+        # 将cookie存入
+        # cookie_pairs = cookie.split(", ")
+        # cookies_dict = {}
+        # for pair in cookie_pairs:
+        #     key, value = pair.split("=")
+        #     cookies_dict[key] = value
+        # cookie_string = "; ".join([f"{key}={value}" for key, value in cookies_dict.items()])
+        # 使用正则表达式匹配
+        # 找到cookie中的SESSDATA和bili_jct
+        pattern_SESSDATA = re.compile(r"SESSDATA=(.*?);")
+        pattern_bili_jct = re.compile(r"bili_jct=(.*?);")
+        pattern_DedeUserID = re.compile(r"DedeUserID=(.*?);")
+        pattern_DedeUserID__ckMd5 = re.compile(r"DedeUserID__ckMd5=(.*?);")
+        pattern_sid = re.compile(r"sid=(.*?);")
+        SESSDATA = re.search(pattern_SESSDATA, cookie).group(1)
+        bili_jct = re.search(pattern_bili_jct, cookie).group(1)
+        DedeUserID = re.search(pattern_DedeUserID, cookie).group(1)
+        DedeUserID__ckMd5 = re.search(pattern_DedeUserID__ckMd5, cookie).group(1)
+        sid = re.search(pattern_sid, cookie).group(1)
+        cookie = f"SESSDATA={SESSDATA}; bili_jct={bili_jct}; DedeUserID={DedeUserID}; " \
+                 f"DedeUserID__ckMd5={DedeUserID__ckMd5}; sid={sid}"
+
+        with open(file_path, "w") as file:
+            file.write(cookie)
 
 
 # 获取b站视频信息(目前已实现获取视频信息、下载视频和音频功能)
@@ -220,7 +270,14 @@ class biliVideo:
         self.down_video_json = None  # 视频的下载信息（包含视频与音频地址，在download_video()与download_audio()中获取）
 
     def get_html(self):
-        biliLoginState(self.headers).get_login_state()
+        """
+        获取html
+        [使用方法]:
+            biliV = biliVideo("BV1ov42117yC")
+            biliV.get_html()
+        :return:
+        """
+        biliLogin(self.headers).get_login_state()
         r = requests.get(url=self.url, headers=self.headers)
         r.encoding = 'utf-8'
         self.rtext = r.text
@@ -406,7 +463,11 @@ class biliVideo:
             return 114514
         print(self.pic)
         pic_content = requests.get(url=self.pic, headers=self.headers).content
-        self._save_pic(pic_content, save_pic_path, save_pic_name)
+        if self.pic.endswith(".png"):
+            save_pic_type = "png"
+        else:
+            save_pic_type = "jpg"
+        self._save_pic(pic_content, save_pic_path, save_pic_name, save_type=save_pic_type)
 
     def download_videoshot(self, save_videoshot_path=None, save_videoshot_name=None, index=0):
         """
@@ -509,6 +570,8 @@ class biliVideo:
             name = save_video_name
         # 保存视频
         if save_video_path is not None:
+            if not os.path.exists(save_video_path):
+                os.makedirs(save_video_path)
             with open(f"{save_video_path}{name}.mp4", 'wb') as f:
                 f.write(video_content)
         else:
@@ -533,6 +596,8 @@ class biliVideo:
             name = save_audio_name
         # 保存音频
         if save_audio_path is not None:
+            if not os.path.exists(save_audio_path):
+                os.makedirs(save_audio_path)
             with open(f"{save_audio_path}{name}.mp3", 'wb') as f:
                 f.write(audio_content)
         else:
@@ -553,7 +618,7 @@ class biliVideo:
                 save_pic_path += "/"
         # 图片名
         if save_pic_name is None:
-            name = str(self.bv) + "的快照"
+            name = str(self.bv) + "图片"
         else:
             name = save_pic_name
         # 保存图片
@@ -610,7 +675,7 @@ class biliReply:
         if reply_data["code"] != 0:
             print(f"评论失败，错误码{reply_data['code']}，"
                   f"请查看'https://socialsisteryi.github.io/bilibili-API-collect/docs/comment/action.html'获取错误码信息")
-            biliLoginState(self.headers).get_login_state()
+            biliLogin(self.headers).get_login_state()
         else:
             print("评论成功")
             print("评论rpid：", reply_data["data"]["rpid"])
@@ -755,10 +820,21 @@ if __name__ == '__main__':
     # biliM = biliMessage()
     # biliM.send_msg(506925078, 381978872, "催更[doge]")
 
-    biliV = biliVideo("BV1Jv4y1p7q3")
-    biliV.get_html()
-    biliV.get_content()
-    biliV.download_pic(save_pic_path="output", save_pic_name="BV1Jv4y1p7q3封面")
+    # biliV = biliVideo("BV1ov42117yC")
+    # biliV.get_html()
+    # biliV.get_content()
+    # biliV.download_pic(save_pic_path="output", save_pic_name="BV1ov42117yC封面")
+
+    # biliL = biliLogin()
+    # biliL.qr_login()
+    # headers = {
+    #     "User-Agent": useragent().pcChrome,
+    #     "Cookie": cookies(path='cookie/扫码登录.txt').bilicookie,
+    #     'referer': "https://www.bilibili.com"
+    # }
+    # biliLogin(headers).get_login_state()
+    # biliR = biliReply(bv="BV1ov42117yC")
+    # biliR.send_reply("可爱的白州梓！[喜欢]")
 
     # biliR = biliReply(bv="BV1Ss421M7VJ")
     # biliR.send_reply("兄弟你好香啊😋")

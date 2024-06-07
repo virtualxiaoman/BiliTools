@@ -1,6 +1,6 @@
 
 class bilicookies:
-    def __init__(self, path="cookie/cookie_小号.txt"):
+    def __init__(self, path="cookie/扫码登录.txt"):
         self.bilicookie = open(path, "r").read()
         self.SESSDATA = None
         self.bili_jct = None  # csrf参数
@@ -39,4 +39,4 @@ class bilicookies:
 
 class useragent:
     def __init__(self):
-        self.pcChrome = """Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"""
+        self.pcChrome = """Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"""
