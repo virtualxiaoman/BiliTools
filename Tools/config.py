@@ -1,6 +1,13 @@
 
 class bilicookies:
-    def __init__(self, path="cookie/扫码登录.txt"):
+    def __init__(self, path="cookie/qr_login.txt"):
+        try:
+            with open(path, "r") as file:
+                self.bilicookie = file.read()  # 读取cookie文件
+        except FileNotFoundError:
+            raise FileNotFoundError("Cookie 文件不存在: {}".format(path))
+        except Exception as e:
+            raise Exception("读取 Cookie 文件时发生错误: {}".format(str(e)))
         self.bilicookie = open(path, "r").read()
         self.SESSDATA = None
         self.bili_jct = None  # csrf参数

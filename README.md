@@ -1,0 +1,35 @@
+## 一、项目描述
+
+### 1.1 功能
+本项目是py操控bilibili的工具，目前主要实现了以下功能：
+1. 下载bilibili视频
+2. 在评论区留言
+3. 私信
+4. 扫码登录
+
+### 1.2 项目依赖
+- 本项目依赖以下库：`pandas, request, moviepy`
+
+最好能有`ffmpeg`，不然视频音频合成的时候比较慢。
+
+如果没有ffmpeg，可以在[ffmpeg官网](https://ffmpeg.org/download.html)下载，然后将ffmpeg.exe放到系统环境变量中。
+可以参考视频[BV1qw4m1d7hx](https://www.bilibili.com/video/BV1qw4m1d7hx/)
+
+### 1.3 项目结构
+本项目BiliTools的结构如下：
+```
+.
+├── Tools                             # BiliTools主要的功能代码
+│   ├── cookie                        # 存放cookie的文件夹
+│   │   └── qr_login.txt              # (默认名称，需要自行填写)扫码登录后的cookie
+│   ├── util                          # 工具类
+│   │   └── Colorful_Console.py       # 让控制台能彩色输出
+│   ├── bili_tools.py                 # 本项目的主要功能
+│   ├── bili_util.py                  # bili_tools所依赖的底层工具
+│   ├── config.py                     # 配置文件，主要是cookie与user-agent
+│
+├── UI                                # BiliTools的UI，还未开发
+│   ├── 待开发中~~~
+│
+├── main.py                           # BiliTools的入口，暂时没做，请运行bili_tools.py
+```
