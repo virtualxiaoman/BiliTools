@@ -150,7 +150,7 @@ class biliVideo(BiliVideoUtil):
         """
         [使用方法]:
             biliV = biliVideo("BV18x4y187DE")  # [必要]输入bv号
-            biliV.get_content()  # [可选]不下载视频
+            biliV.get_content()  # [可选]只获取信息，而不下载视频
             biliV.show_values()  # [非必要]显示视频信息
         [Attributes]:
           基本属性：
@@ -194,8 +194,6 @@ class biliVideo(BiliVideoUtil):
             modify_tip = '请修改为类似这样的参数传递：cookie_path="cookie/qr_login.txt"'
             warnings.warn(warning_text + "[Tips]: " + modify_tip, stacklevel=1)
 
-        # 初始化基本信息
-        # self.html_path = html_path  # html存储路径，该参数将被废弃
         self.url_bv = f"https://www.bilibili.com/video/{self.bv}"
         self.url_play = "https://api.bilibili.com/x/player/wbi/playurl"  # 视频下载信息的获取地址
         self.headers = {
@@ -606,7 +604,7 @@ class biliMessage:
         发送私信
         [使用方法]
             biliM = biliMessage()
-            biliM.send_msg(506925078, 381978872, "催更[doge]")
+            biliM.send_msg(506925078, 381978872, "你好，请问是千年的爱丽丝同学吗？")
         :param sender_uid: 发送者mid
         :param receiver_id: 接收者mid
         :param content: 内容
@@ -614,7 +612,9 @@ class biliMessage:
         :return:
         """
         url = 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg'
-        dev_id = "B182F410-3865-46ED-840F-B58B71A78B5E"  # 设备id
+        # 设备id(这个参数我大号是B182F410-3865-46ED-840F-B58B71A78B5E，小号是281ED237-9433-4BF5-BECC-D00AC88E69BF，
+        # 但是换过来也能用，估计这个参数不严格)
+        dev_id = AuthUtil.get_dev_id()
         timestamp = AuthUtil.get_timestamp()  # 时间戳（秒）
         data = {
             'msg[sender_uid]': sender_uid,
@@ -750,13 +750,12 @@ if __name__ == '__main__':
 
     # biliR = biliReply(bv="BV1Ss421M7VJ")
     # biliR.send_reply("兄弟你好香啊😋")
-    import time
-    start_time = time.time()
-    biliV = biliVideo("BV16m4y1p7PB")
-    biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
-    end_time = time.time()
-    print("耗时：", end_time - start_time)
 
+    biliV = biliVideo("BV1ov42117yC")
+    biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
+
+    # biliM = biliMessage()
+    # biliM.send_msg(3493133776062465, 506925078, "你好，请问是千年的爱丽丝同学吗？")
     pass
 
 

@@ -21,14 +21,16 @@ class Example:
 
     @staticmethod
     def download_video_with_audio():
-        biliV = biliVideo("BV16m4y1p7PB")
+        biliV = biliVideo("BV1ov42117yC")
         biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
 
 
 if __name__ == '__main__':
-    quick_start = Example()  # 这是一个快速开始示例
-    quick_start.download_video()  # 下载视频BV1ov42117yC到output文件夹里
-    quick_start.download_audio()  # 下载音频BV1ov42117yC到output文件夹里
-    quick_start.download_video_with_audio()  # 下载视频BV1ov42117yC到output文件夹里
+    pass
+    # 这是一个快速开始示例，请依次取消下面的注释，运行即可
+    # quick_start = Example()
+    # quick_start.download_video()  # 下载视频BV1ov42117yC到output文件夹里
+    # quick_start.download_audio()  # 下载音频BV1ov42117yC到output文件夹里
+    # quick_start.download_video_with_audio()  # 下载视频BV1ov42117yC到output文件夹里
 
 
