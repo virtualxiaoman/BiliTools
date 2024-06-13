@@ -1,6 +1,10 @@
+class Config:
+    def __init__(self):
+        self.LOGIN_COOKIE_PATH = "cookie/qr_login.txt"
+
 
 class bilicookies:
-    def __init__(self, path="cookie/qr_login.txt"):
+    def __init__(self, path=Config().LOGIN_COOKIE_PATH):
         try:
             with open(path, "r") as file:
                 self.bilicookie = file.read()  # 读取cookie文件

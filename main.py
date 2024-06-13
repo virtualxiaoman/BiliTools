@@ -1,6 +1,6 @@
 # Author: virtual小满
 # BiliTools是一个py操控B站的小工具
-# 示例代码一般以BV1ov42117yC为例。up主：蔚蓝档案；视频：动画小剧场《补习部的一天》第4集：烟火
+# 示例代码一般以视频BV1ov42117yC为例。up主：蔚蓝档案。标题：动画小剧场《补习部的一天》第4集：烟火
 
 
 from Tools.bili_tools import biliVideo

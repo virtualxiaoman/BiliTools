@@ -1,5 +1,3 @@
-import inspect
-
 class ColoredText:
     """
     用于更改输出到控制台的颜色

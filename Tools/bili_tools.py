@@ -10,13 +10,14 @@ from io import BytesIO
 import random
 import qrcode
 
+from Tools.util.Colorful_Console import ColoredText as CT  # 用于控制台的彩色输出
 from Tools.bili_util import BV2AV  # BV号和AV号的转换
 from Tools.bili_util import AuthUtil  # 获取鉴权参数
 from Tools.bili_util import BiliVideoUtil  # B站视频工具
 from Tools.config import useragent  # User-Agent
 from Tools.config import bilicookies as cookies  # B站cookie
-from Tools.util.Colorful_Console import ColoredText as CT  # 用于控制台的彩色输出
-
+from Tools.config import Config  # 加载配置信息
+cf = Config()
 
 # 获取b站登录状态(目前能获取登录状态以及扫码登录)
 class biliLogin:
@@ -37,12 +38,13 @@ class biliLogin:
         获取登录状态
         [使用方法]:
             biliLogin(headers).get_login_state()
-        :return:
+        :return: 登录信息。使用login_msg["data"]["isLogin"]可获取登录状态
         """
         # get请求https://api.bilibili.com/x/web-interface/nav，参数是cookie，返回的是用户的信息
         r = requests.get(url=self.login_state_url, headers=self.headers)
         login_msg = r.json()
         print("登录状态：", login_msg["data"]["isLogin"])
+        return login_msg
 
     def qr_login(self, save_path="cookie", save_name="qr_login"):
         """
@@ -76,7 +78,7 @@ class biliLogin:
             https://socialsisteryi.github.io/bilibili-API-collect/docs/login/login_action/QR.html
         :param save_path: 保存cookie的路径
         :param save_name: 保存cookie的文件名
-        :return: cookie
+        :return: 登录成功返回True
         """
         r = requests.get(self.qr_generate_url, headers=self.headers)
         data = r.json()
@@ -104,6 +106,7 @@ class biliLogin:
                 print('登录成功')
                 get_cookie = r.headers['set-cookie']
                 self._save_cookie(get_cookie, save_path, save_name)
+                return True
             else:
                 print('未知错误')
             time.sleep(1)
@@ -183,13 +186,13 @@ class biliVideo(BiliVideoUtil):
 
         :param bv: bv号
         :param av: av号
-        :param cookie_path: 本地cookie路径。默认为"cookie/qr_login.txt"
+        :param cookie_path: 本地cookie路径。默认为 LOGIN_COOKIE_PATH = "cookie/qr_login.txt"
 
         """
         # 初始化信息
         super().__init__(bv=bv, av=av)
         if cookie_path is None:
-            cookie_path = "cookie/qr_login.txt"
+            cookie_path = cf.LOGIN_COOKIE_PATH
             warning_text = "[此警告可忽略] cookie_path参数未指定，默认为 'cookie/qr_login.txt' ，请注意是否是所需要的cookie。"
             modify_tip = '请修改为类似这样的参数传递：cookie_path="cookie/qr_login.txt"'
             warnings.warn(warning_text + "[Tips]: " + modify_tip, stacklevel=1)
