@@ -376,8 +376,11 @@ class biliVideo(BiliVideoUtil):
         :param platform: 平台。pc或html5
         :param high_quality: 当platform=html5时，此值为1可使画质为1080p
         :param fnval: 1代表mp4，16是DASH。非常建议使用16。
+        :return: 下载成功返回True，失败返回False(大部分情况是因为视频不存在)
         """
         self.check_path(save_video_path)
+        if self.cid is None:
+            return False
         params = {
             "bvid": self.bv,
             "cid": self.cid,
@@ -397,6 +400,7 @@ class biliVideo(BiliVideoUtil):
             video_content = requests.get(url=self.down_video_json["data"]["dash"]["video"][0]["baseUrl"],
                                          headers=self.headers).content
         self._save_mp4(video_content, save_video_path, save_video_name, full_path=full_path)
+        return True
 
     def download_audio(self, save_audio_path=None, save_audio_name=None, full_path=None, fnval=16):
         """
@@ -408,10 +412,12 @@ class biliVideo(BiliVideoUtil):
         :param save_audio_name: 音频保存名称
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         :param fnval: 一般就是16了，原因请见download_video()里fnval参数的描述
-        :return:
+        :return: 下载成功返回True，失败返回False(大部分情况是因为音频不存在)
         """
         self.check_path(save_audio_path)
         if self.down_video_json is None:
+            if self.cid is None:
+                return False
             params = {
                 "bvid": self.bv,
                 "cid": self.cid,
@@ -423,6 +429,7 @@ class biliVideo(BiliVideoUtil):
         audio_content = requests.get(url=self.down_video_json["data"]["dash"]["audio"][0]["baseUrl"],
                                      headers=self.headers).content
         self._save_mp3(audio_content, save_audio_path, save_audio_name, full_path=full_path)
+        return True
 
     def download_video_with_audio(self, auto_remove=True, save_video_path=None, save_video_name=None,
                                   save_audio_path=None, save_audio_name=None,
@@ -441,12 +448,16 @@ class biliVideo(BiliVideoUtil):
         video_path = self._get_path(save_video_path, save_video_name, add_desc="视频(无音频)", save_type="mp4")
         audio_path = self._get_path(save_audio_path, save_audio_name, add_desc="音频", save_type="mp3")
         va_path = self._get_path(save_path, save_name, add_desc="视频", save_type="mp4")
-        self.download_video(full_path=video_path)
-        self.download_audio(full_path=audio_path)
-        self.merge_video_audio(video_path, audio_path, va_path)
+        video_state = self.download_video(full_path=video_path)
+        audio_state = self.download_audio(full_path=audio_path)
+        if video_state and audio_state:
+            self.merge_video_audio(video_path, audio_path, va_path)
+        else:
+            return False
         if auto_remove:
             os.remove(video_path)
             os.remove(audio_path)
+        return True
 
     def download_pic(self, save_pic_path=None, save_pic_name=None, full_path=None):
         """
@@ -768,9 +779,12 @@ if __name__ == '__main__':
     # biliR = biliReply(bv="BV1Ss421M7VJ")
     # biliR.send_reply("兄弟你好香啊😋")
 
-    biliV = biliVideo("BV1ov42117yC")
-    biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
-
+    biliV = biliVideo("BV1hi4y1e7B1")
+    success = biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
+    if success:
+        print("下载成功")
+    else:
+        print("下载失败")
     # biliM = biliMessage()
     # biliM.send_msg(3493133776062465, 506925078, "你好，请问是千年的爱丽丝同学吗？")
     pass

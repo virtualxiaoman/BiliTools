@@ -237,5 +237,8 @@ class BiliVideoUtil:
             self.headers = headers
 
         url_cid = f"https://api.bilibili.com/x/player/pagelist?bvid={self.bv}"
-        self.cid = requests.get(url=url_cid, headers=self.headers).json()["data"][0]["cid"]  # 目前这个似乎只适用于单P视频，暂未验证
+        try:
+            self.cid = requests.get(url=url_cid, headers=self.headers).json()["data"][0]["cid"]  # 目前这个似乎只适用于单P视频，暂未验证
+        except Exception as e:
+            print(f"[BiliVideoUtil-__init_params]获取cid失败，错误信息：{e}")
 
