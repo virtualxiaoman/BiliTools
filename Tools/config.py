@@ -1,6 +1,7 @@
 class Config:
     def __init__(self):
         self.LOGIN_COOKIE_PATH = "cookie/qr_login.txt"
+        self.LOGIN_QR_PATH = "cookie/qr_login.png"
 
 
 class bilicookies:

@@ -128,6 +128,24 @@ class BiliVideoUtil:
         else:
             os.system(f"ffmpeg -i {video_path} -i {audio_path} -c:v copy -c:a flac {save_path}")
 
+    def check_path(self, path):
+        """
+        [子函数]检查路径是否存在，不存在则创建
+        :param path: 路径
+        """
+        # 如果传入的是一个path，就只要检查这个path是否存在，不存在则创建。如果传入的是list，就检查每个path是否存在，不存在则创建
+        if isinstance(path, str):
+            if not os.path.exists(path) and path is not None:
+                os.makedirs(path)
+        elif isinstance(path, list):
+            for p in path:
+                if not os.path.exists(p) and p is not None:
+                    os.makedirs(p)
+        elif path is None:
+            pass
+        else:
+            raise ValueError("path参数类型错误")
+
     def _save_mp4(self, video_content, save_video_path=None, save_video_name=None, add_desc="视频(无音频)", full_path=None):
         """
         [子函数]保存视频

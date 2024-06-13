@@ -43,10 +43,10 @@ class biliLogin:
         # get请求https://api.bilibili.com/x/web-interface/nav，参数是cookie，返回的是用户的信息
         r = requests.get(url=self.login_state_url, headers=self.headers)
         login_msg = r.json()
-        print("登录状态：", login_msg["data"]["isLogin"])
+        print("[biliLogin-get_login_state]登录状态：", login_msg["data"]["isLogin"])
         return login_msg
 
-    def qr_login(self, save_path="cookie", save_name="qr_login"):
+    def qr_login(self, save_path="cookie", save_name="qr_login", img_show=True):
         """
         扫码登录
         [Warning]:
@@ -78,6 +78,7 @@ class biliLogin:
             https://socialsisteryi.github.io/bilibili-API-collect/docs/login/login_action/QR.html
         :param save_path: 保存cookie的路径
         :param save_name: 保存cookie的文件名
+        :param img_show: 是否立刻用本地的图片查看器打开二维码，默认为True，便于调试扫码
         :return: 登录成功返回True
         """
         r = requests.get(self.qr_generate_url, headers=self.headers)
@@ -91,24 +92,34 @@ class biliLogin:
         qr.add_data(url)
         qr.make()
         img = qr.make_image()
-        img.show()
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        img.save(f"{save_path}/{save_name}.png")
+        if img_show:
+            img.show()
+        print(f"请扫描二维码登录，二维码已保存在{save_path}/{save_name}.png")
+        start_time = time.time()
         while True:
             r = requests.get(self.qr_login_url, params={'qrcode_key': qrcode_key}, headers=self.headers)
             data = r.json()
             # print(data)
             if data['data']['code'] == 86101:
-                print('未扫码')
+                print('[biliLogin-qr_login]未扫码')
             elif data['data']['code'] == 86038:
-                print('二维码失效')
+                print('[biliLogin-qr_login]二维码失效')
             elif data['data']['code'] == 86090:
-                print('扫码成功但未确认')
+                print('[biliLogin-qr_login]扫码成功但未确认')
             elif data['data']['code'] == 0:
-                print('登录成功')
+                print('[biliLogin-qr_login]登录成功')
                 get_cookie = r.headers['set-cookie']
                 self._save_cookie(get_cookie, save_path, save_name)
                 return True
             else:
-                print('未知错误')
+                print('[biliLogin-qr_login]未知错误')
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 60:
+                print('[biliLogin-qr_login]超过一分钟，返回False')
+                return False
             time.sleep(1)
 
     def _save_cookie(self, cookie, save_path, save_name):
@@ -366,6 +377,7 @@ class biliVideo(BiliVideoUtil):
         :param high_quality: 当platform=html5时，此值为1可使画质为1080p
         :param fnval: 1代表mp4，16是DASH。非常建议使用16。
         """
+        self.check_path(save_video_path)
         params = {
             "bvid": self.bv,
             "cid": self.cid,
@@ -398,6 +410,7 @@ class biliVideo(BiliVideoUtil):
         :param fnval: 一般就是16了，原因请见download_video()里fnval参数的描述
         :return:
         """
+        self.check_path(save_audio_path)
         if self.down_video_json is None:
             params = {
                 "bvid": self.bv,
@@ -424,6 +437,7 @@ class biliVideo(BiliVideoUtil):
         :param save_path: 合并后的视频保存路径
         :param save_name: 合并后的视频保存名称
         """
+        self.check_path([save_video_path, save_audio_path, save_path])
         video_path = self._get_path(save_video_path, save_video_name, add_desc="视频(无音频)", save_type="mp4")
         audio_path = self._get_path(save_audio_path, save_audio_name, add_desc="音频", save_type="mp3")
         va_path = self._get_path(save_path, save_name, add_desc="视频", save_type="mp4")

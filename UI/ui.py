@@ -1,6 +1,8 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton, QStackedLayout, QLabel
 
+from Tools.bili_tools import biliVideo
+
 from UI.main_ui import Win_Main
 from UI.download_ui import Win_Download
 from UI.login_ui import Win_Login
@@ -33,7 +35,7 @@ class BiliTools_UI(QMainWindow):
     def init_ui(self):
         # 设置窗口的基础属性
         self.resize(1200, 700)
-        self.setWindowTitle("BiliTools")
+        self.setWindowTitle("BiliTools_V0.0(测试版)")
         self.setStyleSheet(Background_css.WHITE)
 
         # 窗口的中心部件，用来放置其他控件
@@ -108,3 +110,5 @@ if __name__ == "__main__":
     win = BiliTools_UI()
     win.show()
     app.exec()
+    # biliV = biliVideo("BV1Qy411B79T")
+    # biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
