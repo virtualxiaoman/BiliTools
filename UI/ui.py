@@ -7,8 +7,9 @@ from UI.main_ui import Win_Main
 from UI.download_ui import Win_Download
 from UI.login_ui import Win_Login
 
-from UI.config import Background_css
+from UI.config import Background_css, Button_css
 Background_css = Background_css()
+Button_css = Button_css()
 
 
 class BiliTools_UI(QMainWindow):
@@ -35,7 +36,7 @@ class BiliTools_UI(QMainWindow):
     def init_ui(self):
         # 设置窗口的基础属性
         self.resize(1200, 700)
-        self.setWindowTitle("BiliTools_V0.0(测试版)")
+        self.setWindowTitle("BiliTools_V0.1(测试版)")
         self.setStyleSheet(Background_css.WHITE)
 
         # 窗口的中心部件，用来放置其他控件
@@ -85,6 +86,9 @@ class BiliTools_UI(QMainWindow):
         btn_press1 = QPushButton("主界面")
         btn_press2 = QPushButton("下载界面")
         btn_press3 = QPushButton("登录界面")
+        btn_press1.setStyleSheet(Button_css.BTN_BLUE_PURPLE)
+        btn_press2.setStyleSheet(Button_css.BTN_BLUE_PURPLE)
+        btn_press3.setStyleSheet(Button_css.BTN_BLUE_PURPLE)
         # 添加点击事件
         btn_press1.clicked.connect(self.__switch_to_main)
         btn_press2.clicked.connect(self.__switch_to_download)

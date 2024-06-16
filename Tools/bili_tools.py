@@ -43,7 +43,10 @@ class biliLogin:
         # get请求https://api.bilibili.com/x/web-interface/nav，参数是cookie，返回的是用户的信息
         r = requests.get(url=self.login_state_url, headers=self.headers)
         login_msg = r.json()
-        print("[biliLogin-get_login_state]登录状态：", login_msg["data"]["isLogin"])
+        if login_msg["code"] == 0:
+            print("[biliLogin-get_login_state]登录成功")  # 亦可使用login_msg["data"]["isLogin"])
+        else:
+            print("[biliLogin-get_login_state]未登录")
         return login_msg
 
     def qr_login(self, save_path="cookie", save_name="qr_login", img_show=True):
@@ -436,6 +439,13 @@ class biliVideo(BiliVideoUtil):
                                   save_path=None, save_name=None):
         """
         下载视频与音频后合并
+        [使用方法]:
+            biliV = biliVideo("BV1hi4y1e7B1")
+            success = biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
+            if success:
+                print("下载成功")
+            else:
+                print("下载失败")
         :param auto_remove: 是否自动删除视频与音频，默认自动删除
         :param save_video_path: 视频保存路径
         :param save_video_name: 视频保存名称
@@ -671,6 +681,40 @@ class biliMessage:
             print("发送失败，错误码：", r_json['code'])
 
 
+# b站收藏夹功能
+class biliFav:
+    def __init__(self):
+        self.mid = None
+        self.headers = None
+        self.fav_ids_url = "https://api.bilibili.com/x/v3/fav/resource/ids"
+        self.init_params()
+
+    def get_fav_bv(self, media_id):
+        fav_bvids = None
+        params = {"media_id": media_id}
+        r = requests.get(url=self.fav_ids_url, headers=self.headers, params=params)
+        fav_data = r.json()
+        if fav_data["code"] != 0:
+            print(f"获取收藏夹{media_id}失败，错误码{fav_data['code']}")
+        else:
+            fav_list = fav_data["data"]
+            fav_bvids = [fav["bvid"] for fav in fav_list]
+        return fav_bvids
+
+    def init_params(self):
+        headers = {
+            "User-Agent": useragent().pcChrome,
+            "Cookie": cookies().bilicookie,
+            'referer': 'https://www.bilibili.com/'
+        }
+        login_msg = biliLogin(headers).get_login_state()
+        self.mid = login_msg["data"]["mid"]
+        self.headers = {
+            "User-Agent": useragent().pcChrome,
+            "Cookie": cookies().bilicookie,
+            'referer': f'https://space.bilibili.com/{self.mid}/favlist'
+        }
+
 # b站的一些排行榜(目前建议只使用get_popular，其余的不太行的样子)
 class biliRank:
     def __init__(self):
@@ -779,12 +823,9 @@ if __name__ == '__main__':
     # biliR = biliReply(bv="BV1Ss421M7VJ")
     # biliR.send_reply("兄弟你好香啊😋")
 
-    biliV = biliVideo("BV1hi4y1e7B1")
-    success = biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
-    if success:
-        print("下载成功")
-    else:
-        print("下载失败")
+    biliF = biliFav()
+    bvids = biliF.get_fav_bv(2525700378)
+    print(bvids)
     # biliM = biliMessage()
     # biliM.send_msg(3493133776062465, 506925078, "你好，请问是千年的爱丽丝同学吗？")
     pass

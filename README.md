@@ -1,6 +1,8 @@
 ## 一、项目描述
 main.py提供了quickstart，亦可看函数里的注释。
 
+UI项目构建：`pyinstaller -F --noconsole UI/ui.py`
+
 ### 1.1 功能
 本项目是py操控bilibili的工具，目前主要实现了以下功能：
 1. 下载bilibili视频

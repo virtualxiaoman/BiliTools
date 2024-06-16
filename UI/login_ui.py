@@ -9,7 +9,11 @@ from Tools.bili_tools import biliLogin
 from Tools.config import useragent
 from Tools.config import bilicookies as cookies
 from Tools.config import Config
+
+from UI.config import Button_css
+
 Config = Config()
+Button_css = Button_css()
 
 # 扫码登录
 class LoginThread(QThread):
@@ -83,18 +87,17 @@ class Win_Login(QWidget):
         H_Layout_login = QHBoxLayout()
         # 登录提示信息
         self.Label_login_tip = QLabel("点击右侧按钮以检查登录状态--->")
-        self.Label_login_tip.setStyleSheet("font-size: 20px; color: black;"
+        self.Label_login_tip.setStyleSheet("font-size: 12px; color: black;"
                                            "background-color: pink;")
         # 创建一个按钮，连接init_login_thread
         self.Button_login = QPushButton("点击检查状态")
-        self.Button_login.setStyleSheet("font-size: 16px;"
-                                        "background-color: lightblue;")
+        self.Button_login.setStyleSheet(Button_css.BTN_BLUE_PURPLE)
         self.Button_login.clicked.connect(self.init_check_login_thread)
 
         H_Layout_login.addWidget(self.Label_login_tip)
         H_Layout_login.addStretch(1)
         H_Layout_login.addWidget(self.Button_login)
-        H_Layout_login.addStretch(10)
+        H_Layout_login.addStretch(20)
         return H_Layout_login
 
     def _show_qr_code(self):
@@ -120,7 +123,6 @@ class Win_Login(QWidget):
                 os.remove(Config.LOGIN_QR_PATH)
             # 删除界面上的二维码图片
             self.Label_qr_code.clear()
-
         else:
             print("[__on_login_finished]登录失败，请重试（目前没写重试功能，需要重启程序）")
             self.Label_login_tip.setText("登录失败，请重试（目前没写重试功能，需要重启程序）")
