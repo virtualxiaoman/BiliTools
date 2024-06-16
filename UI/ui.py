@@ -1,5 +1,8 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton, QStackedLayout, QLabel
+from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton, QStackedLayout,\
+    QLabel, QSplashScreen
+from PyQt6.QtGui import QPixmap, QFont
+from PyQt6.QtCore import QTimer, Qt, QBasicTimer
 
 from Tools.bili_tools import biliVideo
 
@@ -12,6 +15,7 @@ Background_css = Background_css()
 Button_css = Button_css()
 
 
+# 主界面
 class BiliTools_UI(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -109,10 +113,46 @@ class BiliTools_UI(QMainWindow):
     def __switch_to_login(self):
         self.Layout_stack.setCurrentIndex(2)
 
+
+# 启动画面
+class LoadWin(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+
+    def init_ui(self):
+        original_pix = QPixmap("data/BG_CS_S1Final_24_5.jpg")
+        pix = original_pix.scaled(500, 351, aspectRatioMode=Qt.AspectRatioMode.KeepAspectRatio,
+                                  transformMode=Qt.TransformationMode.SmoothTransformation)
+
+        self.splash = QSplashScreen(pix)
+        self.splash.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)  # 设置背景透明
+        self.splash.setFixedSize(500, 450)  # 设置启动画面的大小
+
+        loading_label = QLabel("魔力填充100%...要上了！", self.splash)
+        loading_label.setStyleSheet("color: #66CCFF;"
+                                    "font-size: 32px;")
+        label_width = 400
+        label_height = 50
+        label_x = 80
+        label_y = 380
+        loading_label.setGeometry(label_x, label_y, label_width, label_height)
+
+        self.splash.show()
+
+        QTimer.singleShot(2000, self.close_splash)  # 2s后关闭启动画面并显示主窗口
+
+    def close_splash(self):
+        self.splash.close()
+        self.main_win = BiliTools_UI()
+        self.main_win.show()
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    win = BiliTools_UI()
-    win.show()
-    app.exec()
-    # biliV = biliVideo("BV1Qy411B79T")
-    # biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
+    load_win = LoadWin()
+    sys.exit(app.exec())
+    # app = QApplication(sys.argv)
+    # win = BiliTools_UI()
+    # win.show()
+    # app.exec()
+

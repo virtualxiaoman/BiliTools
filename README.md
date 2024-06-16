@@ -1,7 +1,7 @@
 ## 一、项目描述
-main.py提供了quickstart，亦可看函数里的注释。
+通过代码运行：main.py提供了quickstart，亦可看函数里的注释。
 
-UI项目构建：`pyinstaller -F --noconsole UI/ui.py`
+构建UI项目：`pyinstaller -F --noconsole UI/ui.py`
 
 ### 1.1 功能
 本项目是py操控bilibili的工具，目前主要实现了以下功能：
@@ -9,11 +9,12 @@ UI项目构建：`pyinstaller -F --noconsole UI/ui.py`
 2. 在评论区留言
 3. 私信
 4. 扫码登录
+5. 获取收藏夹信息
 
 ### 1.2 项目依赖
 - 本项目依赖以下库：`pandas, request, moviepy`
 
-最好能有`ffmpeg`，不然视频音频合成的时候比较慢。
+其中`moviepy`非必须，个人建议使用`ffmpeg`（然后将音视频合成的`moviepy`代码注释掉），不然视频音频合成的时候比较慢。
 
 如果没有ffmpeg，可以在[ffmpeg官网](https://ffmpeg.org/download.html)下载，然后将ffmpeg.exe放到系统环境变量中。
 可以参考视频[BV1qw4m1d7hx](https://www.bilibili.com/video/BV1qw4m1d7hx/)
