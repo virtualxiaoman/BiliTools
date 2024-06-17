@@ -1,3 +1,8 @@
+class Text:
+    def __init__(self):
+        self.WindowTitle = "BiliTools_V0.1(测试版)"
+
+
 class Background_css:
     def __init__(self):
         # 背景颜色

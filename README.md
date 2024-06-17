@@ -24,7 +24,7 @@
 ```
 .
 ├── Tools                             # BiliTools主要的功能代码
-│   ├── cookie                        # 存放cookie的文件夹
+│   ├── cookie
 │   │   └── qr_login.txt              # (默认名称，需要自行填写)扫码登录后的cookie
 │   ├── util                          # 工具类
 │   │   └── Colorful_Console.py       # 让控制台能彩色输出
@@ -33,7 +33,15 @@
 │   ├── config.py                     # 配置文件，主要是cookie与user-agent
 │
 ├── UI                                # BiliTools的UI，还未开发
-│   ├── 待开发中~~~
+│   ├── cookie
+│   │   └── qr_login.txt              # (默认名称，需要自行填写)扫码登录后的cookie
+│   ├── data
+│   │   └── BG_CS_S1Final_24_5.jpg    # 启动界面图片
+│   ├── config.py                     # 配置文件，主要是样式与文本
+│   ├── download_ui.py                # 下载视频
+│   ├── login_ui.py                   # 登录
+│   ├── main_ui.py                    # 主界面
+│   ├── ui.py                         # UI的入口
 │
 ├── main.py                           # BiliTools的入口，暂时没做，请运行bili_tools.py
 ```

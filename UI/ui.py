@@ -1,8 +1,9 @@
 import sys
+import time
 from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton, QStackedLayout,\
     QLabel, QSplashScreen
 from PyQt6.QtGui import QPixmap, QFont
-from PyQt6.QtCore import QTimer, Qt, QBasicTimer
+from PyQt6.QtCore import QTimer, Qt, QBasicTimer, QThread, pyqtSignal
 
 from Tools.bili_tools import biliVideo
 
@@ -13,7 +14,6 @@ from UI.login_ui import Win_Login
 from UI.config import Background_css, Button_css
 Background_css = Background_css()
 Button_css = Button_css()
-
 
 # 主界面
 class BiliTools_UI(QMainWindow):
@@ -139,10 +139,9 @@ class LoadWin(QWidget):
         loading_label.setGeometry(label_x, label_y, label_width, label_height)
 
         self.splash.show()
+        QTimer.singleShot(1500, self.init_main_ui)  # 1.5s后关闭启动画面并显示主窗口
 
-        QTimer.singleShot(2000, self.close_splash)  # 2s后关闭启动画面并显示主窗口
-
-    def close_splash(self):
+    def init_main_ui(self):
         self.splash.close()
         self.main_win = BiliTools_UI()
         self.main_win.show()
@@ -151,8 +150,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     load_win = LoadWin()
     sys.exit(app.exec())
-    # app = QApplication(sys.argv)
-    # win = BiliTools_UI()
-    # win.show()
-    # app.exec()
 

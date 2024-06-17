@@ -19,7 +19,7 @@ from Tools.config import bilicookies as cookies  # B站cookie
 from Tools.config import Config  # 加载配置信息
 cf = Config()
 
-# 获取b站登录状态(目前能获取登录状态以及扫码登录)
+# b站登录(目前能获取登录状态以及扫码登录)
 class biliLogin:
     def __init__(self, headers=None):
         """
@@ -213,6 +213,7 @@ class biliVideo(BiliVideoUtil):
 
         self.url_bv = f"https://www.bilibili.com/video/{self.bv}"
         self.url_play = "https://api.bilibili.com/x/player/wbi/playurl"  # 视频下载信息的获取地址
+
         self.headers = {
             "User-Agent": useragent().pcChrome,
             "Cookie": cookies(path=cookie_path).bilicookie,
@@ -708,12 +709,52 @@ class biliFav:
             'referer': 'https://www.bilibili.com/'
         }
         login_msg = biliLogin(headers).get_login_state()
-        self.mid = login_msg["data"]["mid"]
+        self.mid = login_msg["data"]["mid"]  # 用户UID
         self.headers = {
             "User-Agent": useragent().pcChrome,
             "Cookie": cookies().bilicookie,
             'referer': f'https://space.bilibili.com/{self.mid}/favlist'
         }
+
+# 获取b站合集视频列表
+class biliArchive:
+    def __init__(self, cookie_path='cookie/qr_login.txt'):
+        self.headers = {
+            "User-Agent": useragent().pcChrome,
+            "Cookie": cookies(path=cookie_path).bilicookie,
+        }
+        # 视频合集列表
+        self.url_archives_list = "https://api.bilibili.com/x/polymer/web-space/seasons_archives_list"
+
+        # 用户UID/mid
+        login_msg = biliLogin(self.headers).get_login_state()
+        self.mid = login_msg["data"]["mid"]
+
+    def get_archives_list(self, season_id):
+        """
+        获取视频合集列表
+        [使用方法]:
+            biliA = biliArchive()
+            # 和纱猫猫小剧场, url: https://space.bilibili.com/37507923/channel/collectiondetail?sid=2033914
+            bvids = biliA.get_archives_list(2033914)
+            print(bvids)
+        :return: list, 视频BV号列表
+        """
+        # 请求self.url_archives_list，参数是season_id与mid
+        params = {
+            "season_id": season_id,
+            "mid": self.mid
+        }
+        r = requests.get(url=self.url_archives_list, headers=self.headers, params=params)
+        r_json = r.json()
+        if r_json["code"] == 0:
+            archives_list = r_json["data"]["archives"]
+            bv_list = [archive["bvid"] for archive in archives_list]
+            return bv_list
+        else:
+            print(f"获取视频合集列表失败，错误码：{r_json['code']}，错误信息：{r_json['message']}")
+            return None
+
 
 # b站的一些排行榜(目前建议只使用get_popular，其余的不太行的样子)
 class biliRank:
@@ -823,8 +864,11 @@ if __name__ == '__main__':
     # biliR = biliReply(bv="BV1Ss421M7VJ")
     # biliR.send_reply("兄弟你好香啊😋")
 
-    biliF = biliFav()
-    bvids = biliF.get_fav_bv(2525700378)
+    # biliF = biliFav()
+    # bvids = biliF.get_fav_bv(2525700378)
+    # print(bvids)
+    biliA = biliArchive()
+    bvids = biliA.get_archives_list(2033914)
     print(bvids)
     # biliM = biliMessage()
     # biliM.send_msg(3493133776062465, 506925078, "你好，请问是千年的爱丽丝同学吗？")
