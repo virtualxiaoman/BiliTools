@@ -372,7 +372,7 @@ class biliVideo(BiliVideoUtil):
             biliV = biliVideo("BV18x4y187DE")
             biliV.download_video()
         参数具体请查看 `BAC文档
-        <https://socialsisteryi.github.io/bilibili-API-collect/docs/video/videostream_url.html>`__.
+        <https://socialsisteryi.github.io/bilibili-API-collect/docs/video/videostream_url.html>`_.
         :param save_video_path: 视频保存路径。路径为f"{save_video_path}{self.bv}.mp4"。如不指定，则保存在当前目录下f"{self.bv}.mp4"
         :param save_video_name: 视频保存名称。
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效

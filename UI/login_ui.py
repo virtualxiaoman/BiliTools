@@ -8,11 +8,11 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from Tools.bili_tools import biliLogin
 from Tools.config import useragent
 from Tools.config import bilicookies as cookies
-from Tools.config import Config
+from Tools.config import Config as Tools_Config
 
 from UI.config import Button_css
 
-Config = Config()
+Tools_Config = Tools_Config()
 Button_css = Button_css()
 
 # 扫码登录
@@ -29,12 +29,12 @@ class CheckLoginThread(QThread):
 
     def run(self):
         # 检查登录状态
-        if not os.path.exists(Config.LOGIN_COOKIE_PATH):
+        if not os.path.exists(Tools_Config.LOGIN_COOKIE_PATH):
             self.login_state.emit(False)
         else:
             headers = {
                 "User-Agent": useragent().pcChrome,
-                "Cookie": cookies(path=Config.LOGIN_COOKIE_PATH).bilicookie,
+                "Cookie": cookies(path=Tools_Config.LOGIN_COOKIE_PATH).bilicookie,
                 'referer': "https://www.bilibili.com"
             }
             login_msg = biliLogin(headers).get_login_state()  # 获取登录信息
@@ -47,7 +47,7 @@ class CheckQRLoginThread(QThread):
 
     def run(self):
         # 一直检查本地是否有二维码图片，有则返回True
-        while not os.path.exists(Config.LOGIN_QR_PATH):
+        while not os.path.exists(Tools_Config.LOGIN_QR_PATH):
             print("等待二维码图片生成...")
             time.sleep(0.5)
         self.qrcode_state.emit(True)
@@ -102,7 +102,7 @@ class Win_Login(QWidget):
 
     def _show_qr_code(self):
         # 加载二维码图片
-        qr_code_pixmap = QPixmap(Config.LOGIN_QR_PATH)
+        qr_code_pixmap = QPixmap(Tools_Config.LOGIN_QR_PATH)
 
         # 设置 QLabel 的尺寸为图片的尺寸
         self.Label_qr_code.setPixmap(qr_code_pixmap)
@@ -117,30 +117,30 @@ class Win_Login(QWidget):
         if success_qr_login:
             # 扫码登录成功
             print("[__on_login_finished]登录成功")
-            self.Label_login_tip.setText("已登录")
+            self.Label_login_tip.setText("已登录(扫码登录失败)")
             # 删除二维码图片
-            if os.path.exists(Config.LOGIN_QR_PATH):
-                os.remove(Config.LOGIN_QR_PATH)
+            if os.path.exists(Tools_Config.LOGIN_QR_PATH):
+                os.remove(Tools_Config.LOGIN_QR_PATH)
             # 删除界面上的二维码图片
             self.Label_qr_code.clear()
         else:
             print("[__on_login_finished]登录失败，请重试（目前没写重试功能，需要重启程序）")
-            self.Label_login_tip.setText("登录失败，请重试（目前没写重试功能，需要重启程序）")
+            self.Label_login_tip.setText("登录失败，请重试（目前没写重试功能，因为一般不会有这个错误。如果需要重新登录，需要重启程序）")
 
     # 检查本地是否已经登录，如果已经登录则显示已登录，否则显示未登录并生成二维码
     def __on_login_state_checked(self, success_local):
         if success_local:
             # 本地cookie文件存在且有效
             print("[__on_login_state_checked]已登录")
-            self.Label_login_tip.setText("已登录")
+            self.Label_login_tip.setText("已登录(本地已有登录信息)")
         else:
             print("[__on_login_state_checked]未登录")
             self.Label_login_tip.setText("尚未登录，请扫描二维码登录")
             # 删除过时的二维码图片与cookie文件
-            if os.path.exists(Config.LOGIN_QR_PATH):
-                os.remove(Config.LOGIN_QR_PATH)
-            if os.path.exists(Config.LOGIN_COOKIE_PATH):
-                os.remove(Config.LOGIN_COOKIE_PATH)
+            if os.path.exists(Tools_Config.LOGIN_QR_PATH):
+                os.remove(Tools_Config.LOGIN_QR_PATH)
+            if os.path.exists(Tools_Config.LOGIN_COOKIE_PATH):
+                os.remove(Tools_Config.LOGIN_COOKIE_PATH)
             # 重新登录
             self.Thread_login = LoginThread()
             self.Thread_login.login_finish_state.connect(self.__on_login_finished)

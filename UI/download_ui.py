@@ -1,14 +1,21 @@
 import os
+import re
 import time
 import random
+import requests
 from functools import partial
 
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from Tools.bili_tools import biliVideo, biliFav
-from UI.config import Button_css
+from Tools.bili_util import BV2AV
+from Tools.config import useragent
+
+from UI.config import Button_css, Input_css, Text_css
 Button_css = Button_css()
+Input_css = Input_css()
+Text_css = Text_css()
 
 class DownloadThread(QThread):
     # 定义一个信号，用于在下载完成时发射：bool下载是否成功，str提示语类型，tuple当前下载的进度， strBV号
@@ -46,15 +53,23 @@ class Win_Download(QWidget):
     def _init_V_Layout_main(self):
         V_Layout_main = QVBoxLayout()
 
+        # 创建检查登录信息的文本
+        self.Label_login_check = QLabel("检查登录信息中...")
+        self.Label_login_check.setStyleSheet(Text_css.TEXT_BLACK_16)
+
         # 创建视频下载的输入框&按钮的水平布局
         HLayout_video = self._init_HLayout_video()
         # 创建提示文本
         self.Label_download_video_tip = QLabel("输入BV号后，点击下载按钮开始下载")
+        self.Label_download_video_tip.setStyleSheet(Text_css.TEXT_GRAY_12)
+
         # 创建收藏夹下载的输入框&按钮的水平布局
         HL_fav = self._init_HLayout_fav()
         # 创建提示文本
         self.Label_download_fav_tip = QLabel("输入收藏夹fid后，点击下载按钮开始下载")
+        self.Label_download_fav_tip.setStyleSheet(Text_css.TEXT_GRAY_12)
 
+        V_Layout_main.addWidget(self.Label_login_check)
         V_Layout_main.addLayout(HLayout_video)
         V_Layout_main.addWidget(self.Label_download_video_tip)
         V_Layout_main.addLayout(HL_fav)
@@ -66,9 +81,15 @@ class Win_Download(QWidget):
         HLayout_video = QHBoxLayout()
 
         # 创建提示文本
-        Label_bv_prompt = QLabel("BV号：")
+        Label_bv_prompt = QLabel("视频BV号：")
+        Label_bv_prompt.setStyleSheet(Text_css.TEXT_BLACK_16)
+
         # 创建输入框
         self.Line_bv_input = QLineEdit()
+        self.Line_bv_input.setStyleSheet(Input_css.INPUT_BLUE_PURPLE)
+        self.Line_bv_input.setPlaceholderText("bv, av, url")
+        self.Line_bv_input.setToolTip("支持bv、av、网址的输入")
+
         # 创建下载按钮
         btns_download = self.__init_Widget_btn_video()
 
@@ -81,10 +102,17 @@ class Win_Download(QWidget):
 
     def _init_HLayout_fav(self):
         HL_fav = QHBoxLayout()
+
         # 创建提示文本
         Label_fav_prompt = QLabel("收藏夹FID：")
+        Label_fav_prompt.setStyleSheet(Text_css.TEXT_BLACK_16)
+
         # 创建输入框
         self.Line_fav_input = QLineEdit()
+        self.Line_fav_input.setStyleSheet(Input_css.INPUT_BLUE_PURPLE)
+        self.Line_fav_input.setPlaceholderText("fid")
+        self.Line_fav_input.setToolTip("支持fid或收藏夹链接的输入")
+
         # 创建下载按钮
         btns_download = self.__init_Widget_btn_fav()
 
@@ -130,20 +158,15 @@ class Win_Download(QWidget):
     def __on_download_clicked(self, down_type):
         # 获取用户输入的内容
         bv_number = self.Line_bv_input.text()
-        self.bv = bv_number
+        self.bv = self.__transform_bv(bv_number)
         self.down_type = down_type
-        if not self.bv:
-            print("用户未输入BV号")
-            self.Label_download_video_tip.setText(f"不输入BV号那下载个锤子啊！")
-        # 不是12位的字符串或者不是BV,bv开头就不合法
-        elif not (isinstance(self.bv, str) and len(self.bv) == 12 and (self.bv.startswith("BV") or self.bv.startswith("bv"))):
-            print("用户输入的BV号不合法")
-            self.Label_download_video_tip.setText(f"输入的BV号不合法，请检查后重新输入")
+        if not self.__check_bv(self.bv):
+            return
         else:
-            print("用户输入的BV号为：", self.bv)
+            print("[__on_download_clicked]用户输入的BV号为：", self.bv)
             self.Label_download_video_tip.setText(f"正在下载{self.bv}")
             if down_type == 'va' and os.path.exists(f"output/{self.bv}视频.mp4"):
-                print("视频已经存在，不再下载")
+                print("[__on_download_clicked]视频已经存在，不再下载")
                 self.Label_download_video_tip.setText(f"视频{self.bv}已经存在，不需要再次下载")
             elif down_type == 'audio' and os.path.exists(f"output/{self.bv}音频.mp3"):
                 print("音频已经存在，不再下载")
@@ -163,19 +186,14 @@ class Win_Download(QWidget):
     def __on_download_fav_clicked(self, down_type):
         fid = self.Line_fav_input.text()
 
-        self.fid = fid  # 收藏夹fid
+        self.fid = self.__transform_fav(fid)
         self.down_type = down_type  # 下载类型：视频va/音频audio
         bv_count = 0  # 需要下载的视频数量（也就是去掉已经下载的视频）
 
-        if not self.fid:
-            print("用户未输入收藏夹FID")
-            self.Label_download_fav_tip.setText(f"不输入收藏夹FID那下载个锤子啊！")
-        # 不是数字就不合法
-        elif not (isinstance(self.fid, str) and self.fid.isdigit()):
-            print("用户输入的收藏夹FID不合法")
-            self.Label_download_fav_tip.setText(f"输入的收藏夹FID不合法，请检查后重新输入")
+        if not self.__check_fav(self.fid):
+            return
         else:
-            print("用户输入的收藏夹FID为：", self.fid)  # 如2525700378
+            print("[__on_download_fav_clicked]用户输入的收藏夹FID为：", self.fid)  # 如2525700378
             self.Label_download_fav_tip.setText(f"正在获取收藏夹{self.fid}的视频BV号，别急")
             biliF = biliFav()
             bvids = biliF.get_fav_bv(self.fid)
@@ -233,3 +251,113 @@ class Win_Download(QWidget):
                                                         "提示：下载的视频和音频将保存在output文件夹中（目前默认就这样，我现在懒得优化）")
             else:
                 self.Label_download_video_tip.setText(f"[代码进入错误路径]请注意tip_type的值，当前视频{bv_number}下载成功")
+
+    def __transform_bv(self, bvORav):
+        """
+        输入bv, av, url，返回得到的bv号或False。
+        返回的bv号不一定是准确的，需要self.__check_bv
+        False代表转化过程中已经存在问题
+        """
+        # 如果以av,AV开头，则提取后面的数字部分，然后转换成BV
+        if bvORav.startswith("av") or bvORav.startswith("AV"):
+            bvORav = bvORav[2:]
+            if not bvORav.isdigit():
+                print("[__transform_bv]用户输入的AV号不合法")
+                self.Label_download_video_tip.setText(f"输入的AV号不合法，请检查后重新输入")
+                return False
+            bv = BV2AV().av2bv(bvORav)
+            return bv
+        # 如果以bv,BV开头，则直接返回即可（检查部分请在__check_bv中进行）
+        elif bvORav.startswith("bv") or bvORav.startswith("BV"):
+            return bvORav
+        # 如果含有http，尝试访问这个url，获取最终的url，然后提取bv号
+        elif "http" in bvORav:
+            url_pattern = r'https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'  # 匹配url
+            urls = re.findall(url_pattern, bvORav)
+            if urls:
+                bvORav = urls[0]
+            else:
+                print("[__transform_bv]用户输入的URL不合法")
+                self.Label_download_video_tip.setText(f"无法获取URL，请检查后重新输入")
+                return False
+            r = requests.get(bvORav, headers={"User-Agent": useragent().pcChrome})
+            if r.status_code == 200:
+                url = r.url
+                bv = re.findall(r"BV[0-9a-zA-Z]{10}", url)
+                if bv:
+                    print(url)
+                    print(bv[0])
+                    return bv[0]
+                else:
+                    self.Label_download_video_tip.setText(f"获取BV号失败，请检查URL是否正确")
+                    return False
+            else:
+                print("[__transform_bv]用户输入的URL不合法")
+                self.Label_download_video_tip.setText(f"输入的URL不合法，请检查后重新输入")
+                return False
+        else:
+            print("[__transform_bv]用户输入的内容不合法")
+            self.Label_download_video_tip.setText(f"暂不支持此种输入，只能输入bv,av,url")
+            return False
+
+    def __transform_fav(self, fidORurl):
+        """
+        输入fid, url，返回得到的fid号或False。
+        返回的fid号不一定是准确的，需要self.__check_fav
+        False代表转化过程中已经存在问题
+        """
+        # 如果含有http，尝试访问这个url，获取最终的url，然后提取fid号
+        if "http" in fidORurl:
+            url_pattern = r'https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+            urls = re.findall(url_pattern, fidORurl)
+            if urls:
+                fidORurl = urls[0]
+            else:
+                print("[__transform_fav]用户输入的URL不合法")
+                self.Label_download_fav_tip.setText(f"无法获取URL，请检查后重新输入")
+                return False
+            r = requests.get(fidORurl, headers={"User-Agent": useragent().pcChrome})
+            if r.status_code == 200:
+                url = r.url
+                fid = re.findall(r"fid=\d+", url)
+                if fid:
+                    print(url)
+                    print(fid[0][4:])
+                    return fid[0][4:]
+                else:
+                    self.Label_download_fav_tip.setText(f"获取FID号失败，请检查URL是否正确")
+                    return False
+
+    def __check_bv(self, bv_number):
+        """检查bv号是否合法"""
+        if bv_number is None:
+            print("用户未输入BV号")
+            self.Label_download_video_tip.setText(f"不输入BV号那下载个锤子啊！")
+            return False
+        elif bv_number == False:
+            print("用户输入的AV号不合法")
+            # 对应的self.Label_download_video_tip的变动已经在__transform_bv中实现了
+            return False
+        # 不是12位的字符串或者不是BV,bv开头就不合法
+        elif not (isinstance(bv_number, str) and len(bv_number) == 12 and (bv_number.startswith("BV") or bv_number.startswith("bv"))):
+            print("用户输入的BV号不合法")
+            self.Label_download_video_tip.setText(f"输入的BV号不合法，请检查后重新输入")
+            return False
+        else:
+            print("用户输入的BV号为：", bv_number)
+            return True
+
+    def __check_fav(self, fid):
+        """检查收藏夹FID是否合法"""
+        if not fid:
+            print("[__check_fav]用户未输入收藏夹FID")
+            self.Label_download_fav_tip.setText(f"不输入收藏夹FID那下载个锤子啊！")
+            return False
+        # 不是数字就不合法
+        elif not (isinstance(fid, str) and fid.isdigit()):
+            print("[__check_fav]用户输入的收藏夹FID不合法")
+            self.Label_download_fav_tip.setText(f"输入的收藏夹FID不合法，请检查后重新输入")
+            return False
+        else:
+            print("[__check_fav]用户输入的收藏夹FID为：", fid)
+            return True

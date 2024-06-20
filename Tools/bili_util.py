@@ -14,7 +14,8 @@ from Tools.config import bilicookies as cookies  # B站cookie
 # BV号和AV号的转换
 class BV2AV:
     def __init__(self):
-        """转化算法来自于https://socialsisteryi.github.io/bilibili-API-collect/docs/misc/bvid_desc.html#python"""
+        """转化算法来自于 `BAC文档
+        <https://socialsisteryi.github.io/bilibili-API-collect/docs/misc/bvid_desc.html#python>`_."""
         self.XOR_CODE = 23442827791579
         self.MASK_CODE = 2251799813685247
         self.MAX_AID = 1 << 51
@@ -212,21 +213,29 @@ class BiliVideoUtil:
         """
         初始化参数bv, av ,cid, headers，检验参数的合法性
         """
+        # 检查参数的合法性
         if av is None and bv is None:
             raise ValueError("av和bv不能同时为空")
         elif av is not None and bv is not None:
             bv2av = BV2AV().bv2av(bv)
             if av != bv2av:
                 raise ValueError(f"av和bv不对应，av={av}, bv={bv}")
+        # 根据av得到bv
         elif av is not None:
             self.av = av
-            self.bv = BV2AV().av2bv(av)
+            self.bv = BV2AV().av2bv(self.av)
+        # 根据bv得到av
         elif bv is not None:
-            self.bv = bv
-            self.av = BV2AV().bv2av(bv)
+            # 如果BV号以bv开头，则改为BV开头
+            if bv[:2] == "bv":
+                self.bv = "BV" + bv[2:]
+            else:
+                self.bv = bv
+            self.av = BV2AV().bv2av(self.bv)
         else:
             raise ValueError("该分支理论上不会出现")
 
+        # 设置headers
         if headers is None:
             self.headers = {
                 "User-Agent": useragent().pcChrome,
@@ -236,6 +245,7 @@ class BiliVideoUtil:
         else:
             self.headers = headers
 
+        # 获取cid
         url_cid = f"https://api.bilibili.com/x/player/pagelist?bvid={self.bv}"
         try:
             self.cid = requests.get(url=url_cid, headers=self.headers).json()["data"][0]["cid"]  # 目前这个似乎只适用于单P视频，暂未验证
