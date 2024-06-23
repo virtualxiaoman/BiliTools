@@ -8,33 +8,41 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from Tools.bili_tools import biliLogin
 from Tools.config import useragent
 from Tools.config import bilicookies as cookies
-from Tools.config import Config as Tools_Config
 
-from UI.config import Button_css
+from UI.config import Config, Button_css
 
-Tools_Config = Tools_Config()
+UI_Config = Config()
 Button_css = Button_css()
 
 # 扫码登录
 class LoginThread(QThread):
     login_finish_state = pyqtSignal(bool)
 
+    def __init__(self):
+        super().__init__()
+        self.cookie_path = UI_Config.config["utils"]["cookie_path"]
+
     def run(self):
-        login_success = biliLogin().qr_login(img_show=False)  # 返回登录结果, True of False
+        # 扫码登录，登录cookie存入COOKIE_PATH
+        login_success = biliLogin().qr_login(img_show=False, full_path=self.cookie_path)  # 返回登录结果, True of False
         self.login_finish_state.emit(login_success)
 
 # 检查登录状态
 class CheckLoginThread(QThread):
     login_state = pyqtSignal(bool)
 
+    def __init__(self):
+        super().__init__()
+        self.cookie_path = UI_Config.config["utils"]["cookie_path"]
+
     def run(self):
         # 检查登录状态
-        if not os.path.exists(Tools_Config.LOGIN_COOKIE_PATH):
+        if not os.path.exists(self.cookie_path):
             self.login_state.emit(False)
         else:
             headers = {
                 "User-Agent": useragent().pcChrome,
-                "Cookie": cookies(path=Tools_Config.LOGIN_COOKIE_PATH).bilicookie,
+                "Cookie": cookies(path=self.cookie_path).bilicookie,
                 'referer': "https://www.bilibili.com"
             }
             login_msg = biliLogin(headers).get_login_state()  # 获取登录信息
@@ -45,9 +53,13 @@ class CheckLoginThread(QThread):
 class CheckQRLoginThread(QThread):
     qrcode_state = pyqtSignal(bool)
 
+    def __init__(self):
+        super().__init__()
+        self.qr_path = UI_Config.config["utils"]["qr_path"]
+
     def run(self):
         # 一直检查本地是否有二维码图片，有则返回True
-        while not os.path.exists(Tools_Config.LOGIN_QR_PATH):
+        while not os.path.exists(self.qr_path):
             print("等待二维码图片生成...")
             time.sleep(0.5)
         self.qrcode_state.emit(True)
@@ -57,6 +69,8 @@ class Win_Login(QWidget):
     def __init__(self):
         super().__init__()
         self.init_ui()
+        self.cookie_path = UI_Config.config["utils"]["cookie_path"]
+        self.qr_path = UI_Config.config["utils"]["qr_path"]
 
     def init_ui(self):
         self.setWindowTitle("登录界面")
@@ -102,7 +116,7 @@ class Win_Login(QWidget):
 
     def _show_qr_code(self):
         # 加载二维码图片
-        qr_code_pixmap = QPixmap(Tools_Config.LOGIN_QR_PATH)
+        qr_code_pixmap = QPixmap(self.qr_path)
 
         # 设置 QLabel 的尺寸为图片的尺寸
         self.Label_qr_code.setPixmap(qr_code_pixmap)
@@ -117,10 +131,10 @@ class Win_Login(QWidget):
         if success_qr_login:
             # 扫码登录成功
             print("[__on_login_finished]登录成功")
-            self.Label_login_tip.setText("已登录(扫码登录失败)")
+            self.Label_login_tip.setText("已登录(扫码登录成功)")
             # 删除二维码图片
-            if os.path.exists(Tools_Config.LOGIN_QR_PATH):
-                os.remove(Tools_Config.LOGIN_QR_PATH)
+            if os.path.exists(self.qr_path):
+                os.remove(self.qr_path)
             # 删除界面上的二维码图片
             self.Label_qr_code.clear()
         else:
@@ -137,10 +151,10 @@ class Win_Login(QWidget):
             print("[__on_login_state_checked]未登录")
             self.Label_login_tip.setText("尚未登录，请扫描二维码登录")
             # 删除过时的二维码图片与cookie文件
-            if os.path.exists(Tools_Config.LOGIN_QR_PATH):
-                os.remove(Tools_Config.LOGIN_QR_PATH)
-            if os.path.exists(Tools_Config.LOGIN_COOKIE_PATH):
-                os.remove(Tools_Config.LOGIN_COOKIE_PATH)
+            if os.path.exists(self.qr_path):
+                os.remove(self.qr_path)
+            if os.path.exists(self.cookie_path):
+                os.remove(self.cookie_path)
             # 重新登录
             self.Thread_login = LoginThread()
             self.Thread_login.login_finish_state.connect(self.__on_login_finished)

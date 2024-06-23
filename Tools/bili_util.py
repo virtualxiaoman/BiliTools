@@ -127,7 +127,8 @@ class BiliVideoUtil:
             video_with_audio = video_clip.set_audio(audio_clip)
             video_with_audio.write_videofile(save_path, codec='libx264', audio_codec='aac')
         else:
-            os.system(f"ffmpeg -i {video_path} -i {audio_path} -c:v copy -c:a flac {save_path}")
+            # 为了防止路径中有空格等ffmpeg不支持字符，使用双引号
+            os.system(f'ffmpeg -i "{video_path}" -i "{audio_path}" -c:v copy -c:a flac "{save_path}"')
 
     def check_path(self, path):
         """

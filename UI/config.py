@@ -2,40 +2,63 @@ import json
 import os
 
 class Config:
+    config = None
+
     def __init__(self, config_path="data/ui_config.json"):
         self.config_path = config_path
-        self.config = self._load_config()
+        Config.config = self._load_config()
+
+    # 在更新Config.config后，需要调用此函数更新json文件
+    def update_config(self):
+        # 将config写入self.config_path里
+        with open(self.config_path, 'w', encoding='utf-8') as f:
+            json.dump(Config.config, f, ensure_ascii=False, indent=4)
 
     def _load_config(self):
         # 检查配置文件是否存在，不存在则创建
         if not os.path.exists(self.config_path):
             self.__init_json()
         with open(self.config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            # 先检测是否是json文件，不是则初始化
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                self.__init_json()
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
 
     def __init_json(self):
         with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump({
-                "ui": {
-
-                },
-                "main_ui": {
-
-                },
-                "login_ui": {
-
-                },
-                "download_ui": {
-                    'video': {
-                        'video_path': 'output',
-                        'audio_path': 'output',
-                        'save_path': 'output',
+            json.dump(
+                {
+                    "utils": {
+                        "version": "0.0.2",
+                        "author": "virtual小满",
+                        "cookie_path": "cookie/qr_login.txt",
+                        "qr_path": "cookie/qr_login.png"
                     },
-                    'fav': {
-                        'fav_path': 'output',
-                    },
+                    "ui": {},
+                    "main_ui": {},
+                    "login_ui": {},
+                    "download_ui": {
+                        "video": {
+                            "video_path": "output",
+                            "video_name": "bv",
+                            "video_add_desc": "视频(无音频)",
+                            "audio_path": "output",
+                            "audio_name": "bv",
+                            "audio_add_desc": "音频",
+                            "save_path": "output",
+                            "save_name": "title+bv",
+                            "save_add_desc": ""
+                        },
+                        "fav": {
+                            "fav_path": "output"
+                        }
+                    }
                 },
-            }, f, ensure_ascii=False, indent=4)
+                f, ensure_ascii=False, indent=4)
+
 
 # 常用颜色：
 # 天依蓝66CCFF（102,204,255）
@@ -63,7 +86,7 @@ class Config:
 
 class Text:
     def __init__(self):
-        self.WindowTitle = "BiliTools_V0.1(测试版)"
+        self.WindowTitle = "BiliTools_V0.2(测试版)"
 
 
 class Background_css:
@@ -79,13 +102,17 @@ class Button_css:
         self.BTN_ARONA = """
         QPushButton {
             background-color: rgba(71, 224, 241, 0.3);
-            border: 3px solid rgba(238, 228, 241, 1);
+            border: 2px solid rgba(238, 228, 241, 1);
             border-radius: 6px;
             padding: 4px 8px;
         }
         QPushButton:hover {
             background-color: rgba(203, 226, 239, 0.8);
             border-color: rgba(44, 48, 72, 0.6);
+        }
+        QPushButton:pressed {
+            background-color: rgba(203, 226, 239, 1);
+            border-color: rgba(44, 48, 72, 1);
         }
         """
         # 上面这个颜色不适合白色背景，所以我自己调了一下QAQ
@@ -99,6 +126,10 @@ class Button_css:
         QPushButton:hover {
             background-color: rgba(203, 226, 239, 0.8);
             border-color: rgba(156,39,176, 0.6);
+        }
+        QPushButton:pressed {
+            background-color: rgba(203, 226, 239, 1);
+            border-color: rgba(156,39,176, 1);
         }
         """
 
@@ -126,6 +157,25 @@ class Text_css:
         self.TEXT_BLACK_BOLD_16 = "font-size: 16px; color: black; font-weight: bold;"
         # 文本样式，字体大小16px，黑色
         self.TEXT_BLACK_16 = "font-size: 16px; color: black;"
+        # 文本样式，字体大小16px，红色
+        self.TEXT_RED_16 = "font-size: 16px; color: red;"
+        # 文本样式，字体大小14px，黑色
+        self.TEXT_BLACK_14 = "font-size: 14px; color: black;"
         # 文本样式，字体大小12px，灰色
         self.TEXT_GRAY_12 = "font-size: 12px; color: gray;"
 
+class ComboBox_css:
+    def __init__(self):
+        # 下拉框样式，圆角，蓝色边框，悬停时颜色变成绿色
+        self.COMBOBOX_BLUE_GREEN = """
+        QComboBox {
+            border: 2px solid rgba(206,147,216, 0.8);
+            background-color: rgba(71, 224, 241, 0.3);
+            border-radius: 3px;
+            padding: 2px 4px;
+        }
+        
+        QComboBox:hover {
+            border: 2px solid rgba(149,212,117, 0.6);
+        }
+        """

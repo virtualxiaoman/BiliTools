@@ -1,0 +1,27 @@
+{
+    "utils": {
+        "version": "0.0.2",
+        "author": "virtual小满",
+        "cookie_path": "cookie/qr_login.txt",
+        "qr_path": "cookie/qr_login.png"
+    },
+    "ui": {},
+    "main_ui": {},
+    "login_ui": {},
+    "download_ui": {
+        "video": {
+            "video_path": "D:\\HP\\Desktop\\BiliTools\\output\\卡拉比丘",
+            "video_name": "bv_special",
+            "video_add_desc": "视频(无音频)",
+            "audio_path": "D:\\HP\\Desktop\\BiliTools\\output\\卡拉比丘",
+            "audio_name": "title+bv",
+            "audio_add_desc": "音频",
+            "save_path": "D:\\HP\\Desktop\\BiliTools\\output\\卡拉比丘",
+            "save_name": "title+bv",
+            "save_add_desc": ""
+        },
+        "fav": {
+            "fav_path": "output"
+        }
+    }
+}

@@ -49,7 +49,7 @@ class biliLogin:
             print("[biliLogin-get_login_state]未登录")
         return login_msg
 
-    def qr_login(self, save_path="cookie", save_name="qr_login", img_show=True):
+    def qr_login(self, save_path="cookie", save_name="qr_login", full_path=None, img_show=True):
         """
         扫码登录
         [Warning]:
@@ -79,8 +79,9 @@ class biliLogin:
             {'code': 0, 'message': '0', 'ttl': 1, 'data': {'url': 'https://passport.biligame.com/x/passport-login/web/crossDomain?DedeUserID=506925078&DedeUserID__ckMd5=157f54a3efcc1f6c&Expires=1733319655&SESSDATA=11bc6725,1733319655,e4356*61CjDhRqoVMl0n2ynNcVvmXJrOhesGXjqQKrGumPdjqKAVvMseIyvmg43VBwn8PPi7-9kSVmFNM1pxYWYzYVU3NjBsOVVZcVZjYl9IaWd4M0VfZG5kbjU0M2hyLWROdXZ3NE4wMkx0S0Y2Y2o2b1VqeU5hZG14UmdIYjNiZzFhaU11MXZMOFdCWGJBIIEC&bili_jct=4b531e9662a4488573d0ff255f065963&gourl=https%3A%2F%2Fwww.bilibili.com&first_domain=.bilibili.com', 'refresh_token': '43a6c19b5c0e17b419fde286f3328f61', 'timestamp': 1717767655580, 'code': 0, 'message': ''}}
         [文档]:
             https://socialsisteryi.github.io/bilibili-API-collect/docs/login/login_action/QR.html
-        :param save_path: 保存cookie的路径
-        :param save_name: 保存cookie的文件名
+        :param save_path: 保存二维码、cookie的路径
+        :param save_name: 保存二维码、cookie的文件名
+        :param full_path: cookie的全路径名称(含路径、文件名、后缀)，指定此参数时，其余与cookie路径相关的信息均失效
         :param img_show: 是否立刻用本地的图片查看器打开二维码，默认为True，便于调试扫码
         :return: 登录成功返回True
         """
@@ -115,7 +116,7 @@ class biliLogin:
             elif data['data']['code'] == 0:
                 print('[biliLogin-qr_login]登录成功')
                 get_cookie = r.headers['set-cookie']
-                self._save_cookie(get_cookie, save_path, save_name)
+                self._save_cookie(get_cookie, save_path, save_name, full_path)
                 return True
             else:
                 print('[biliLogin-qr_login]未知错误')
@@ -125,16 +126,23 @@ class biliLogin:
                 return False
             time.sleep(1)
 
-    def _save_cookie(self, cookie, save_path, save_name):
+    def _save_cookie(self, cookie, save_path=None, save_name=None, full_path=None):
         """
         保存cookie
         :param cookie: 原始cookie
         :param save_path: 保存路径
         :param save_name: 保存文件名
+        :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         """
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        file_path = os.path.join(save_path, f"{save_name}.txt")  # 使用os.path.join()连接保存路径和文件名
+        if full_path is not None:
+            # 检查路径是否存在，不存在则创建
+            if not os.path.exists(os.path.dirname(full_path)):
+                os.makedirs(os.path.dirname(full_path))
+            file_path = full_path
+        else:
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            file_path = os.path.join(save_path, f"{save_name}.txt")  # 使用os.path.join()连接保存路径和文件名
         # 将cookie存入 [×]此方法会导致部分鉴权参数无法被识别
         # cookie_pairs = cookie.split(", ")
         # cookies_dict = {}
@@ -158,6 +166,7 @@ class biliLogin:
                  f"DedeUserID__ckMd5={DedeUserID__ckMd5}; sid={sid}"
 
         with open(file_path, "w") as file:
+            print(f"[biliLogin-_save_cookie]cookie已保存在{file_path}")
             file.write(cookie)
 
 
@@ -251,7 +260,7 @@ class biliVideo(BiliVideoUtil):
             biliV.get_html()
         :return:
         """
-        biliLogin(self.headers).get_login_state()
+        # biliLogin(self.headers).get_login_state()  # 为了防止检查次数过多，这里注释掉了，需要时可以取消注释
         r = requests.get(url=self.url_bv, headers=self.headers)
         r.encoding = 'utf-8'
         self.rtext = r.text
@@ -365,8 +374,8 @@ class biliVideo(BiliVideoUtil):
         # else:
         #     print("爬取转发数据错误，再见ヾ(￣▽￣)")
 
-    def download_video(self, save_video_path=None, save_video_name=None, full_path=None, qn=80, platform="pc",
-                       high_quality=1, fnval=16):
+    def download_video(self, save_video_path=None, save_video_name=None, save_video_add_desc="视频(无音频)",
+                       full_path=None, qn=80, platform="pc", high_quality=1, fnval=16):
         """
         [使用方法]:
             biliV = biliVideo("BV18x4y187DE")
@@ -375,6 +384,7 @@ class biliVideo(BiliVideoUtil):
         <https://socialsisteryi.github.io/bilibili-API-collect/docs/video/videostream_url.html>`_.
         :param save_video_path: 视频保存路径。路径为f"{save_video_path}{self.bv}.mp4"。如不指定，则保存在当前目录下f"{self.bv}.mp4"
         :param save_video_name: 视频保存名称。
+        :param save_video_add_desc: 视频保存名称的附加描述
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         :param qn: 视频清晰度。80就是1080p，64就是720p。该值在DASH格式下无效，因为DASH会取到所有分辨率的流地址
         :param platform: 平台。pc或html5
@@ -403,10 +413,11 @@ class biliVideo(BiliVideoUtil):
         else:
             video_content = requests.get(url=self.down_video_json["data"]["dash"]["video"][0]["baseUrl"],
                                          headers=self.headers).content
-        self._save_mp4(video_content, save_video_path, save_video_name, full_path=full_path)
+        self._save_mp4(video_content, save_video_path, save_video_name, add_desc=save_video_add_desc, full_path=full_path)
         return True
 
-    def download_audio(self, save_audio_path=None, save_audio_name=None, full_path=None, fnval=16):
+    def download_audio(self, save_audio_path=None, save_audio_name=None, save_audio_add_desc="音频",
+                       full_path=None, fnval=16):
         """
         下载音频。如果视频音频都要，建议在download_video之后使用，这样能减少一次请求。
         [使用方法]:
@@ -414,6 +425,7 @@ class biliVideo(BiliVideoUtil):
             biliV.download_audio(save_audio_path="output")
         :param save_audio_path: 音频保存路径
         :param save_audio_name: 音频保存名称
+        :param save_audio_add_desc: 音频保存名称的附加描述
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         :param fnval: 一般就是16了，原因请见download_video()里fnval参数的描述
         :return: 下载成功返回True，失败返回False(大部分情况是因为音频不存在)
@@ -432,12 +444,13 @@ class biliVideo(BiliVideoUtil):
         # print(self.down_video_json)
         audio_content = requests.get(url=self.down_video_json["data"]["dash"]["audio"][0]["baseUrl"],
                                      headers=self.headers).content
-        self._save_mp3(audio_content, save_audio_path, save_audio_name, full_path=full_path)
+        self._save_mp3(audio_content, save_audio_path, save_audio_name, add_desc=save_audio_add_desc, full_path=full_path)
         return True
 
-    def download_video_with_audio(self, auto_remove=True, save_video_path=None, save_video_name=None,
-                                  save_audio_path=None, save_audio_name=None,
-                                  save_path=None, save_name=None):
+    def download_video_with_audio(self, auto_remove=True,
+                                  save_video_path=None, save_video_name=None, save_video_add_desc="视频(无音频)",
+                                  save_audio_path=None, save_audio_name=None, save_audio_add_desc="音频",
+                                  save_path=None, save_name=None, save_add_desc="视频"):
         """
         下载视频与音频后合并
         [使用方法]:
@@ -450,15 +463,18 @@ class biliVideo(BiliVideoUtil):
         :param auto_remove: 是否自动删除视频与音频，默认自动删除
         :param save_video_path: 视频保存路径
         :param save_video_name: 视频保存名称
+        :param save_video_add_desc: 视频保存名称的附加描述
         :param save_audio_path: 音频保存路径
         :param save_audio_name: 音频保存名称
+        :param save_audio_add_desc: 音频保存名称的附加描述
         :param save_path: 合并后的视频保存路径
         :param save_name: 合并后的视频保存名称
+        :param save_add_desc: 合并后的视频保存名称的附加描述
         """
         self.check_path([save_video_path, save_audio_path, save_path])
-        video_path = self._get_path(save_video_path, save_video_name, add_desc="视频(无音频)", save_type="mp4")
-        audio_path = self._get_path(save_audio_path, save_audio_name, add_desc="音频", save_type="mp3")
-        va_path = self._get_path(save_path, save_name, add_desc="视频", save_type="mp4")
+        video_path = self._get_path(save_video_path, save_video_name, add_desc=save_video_add_desc, save_type="mp4")
+        audio_path = self._get_path(save_audio_path, save_audio_name, add_desc=save_audio_add_desc, save_type="mp3")
+        va_path = self._get_path(save_path, save_name, add_desc=save_add_desc, save_type="mp4")
         video_state = self.download_video(full_path=video_path)
         audio_state = self.download_audio(full_path=audio_path)
         if video_state and audio_state:
