@@ -3,6 +3,7 @@ import re
 import time
 import random
 import requests
+import threading
 from functools import partial
 
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QFileDialog, QComboBox
@@ -36,25 +37,28 @@ class DownloadThread(QThread):
         print(f"开始下载{self.down_type}，BV号：{self.bv_number}")
         biliV = biliVideo(self.bv_number)
         success = False
-        if self.down_type == 'va':
-            success = biliV.download_video_with_audio(
-                save_video_path=self.video_config["video_path"],
-                save_video_name=self.get_name(self.bv_number, self.video_config["video_name"]),
-                save_video_add_desc=self.video_config["video_add_desc"],
-                save_audio_path=self.video_config["audio_path"],
-                save_audio_name=self.get_name(self.bv_number, self.video_config["audio_name"]),
-                save_audio_add_desc=self.video_config["audio_add_desc"],
-                save_path=self.video_config["save_path"],
-                save_name=self.get_name(self.bv_number, self.video_config["save_name"]),
-                save_add_desc=self.video_config["save_add_desc"]
-            )
-        elif self.down_type == 'audio':
-            success = biliV.download_audio(
-                save_audio_path=self.video_config["audio_path"],
-                save_audio_name=self.get_name(self.bv_number, self.video_config["audio_name"]),
-                save_audio_add_desc=self.video_config["audio_add_desc"])
-        print(f"下载结果：{success}")
-        self.download_finished.emit(success, self.tip_type, self.current_process, self.bv_number, self.down_type)  # 发射信号
+        if biliV.accessible is False:
+            self.download_finished.emit(False, self.tip_type, self.current_process, self.bv_number, self.down_type)
+        else:
+            if self.down_type == 'va':
+                success = biliV.download_video_with_audio(
+                    save_video_path=self.video_config["video_path"],
+                    save_video_name=self.get_name(self.bv_number, self.video_config["video_name"]),
+                    save_video_add_desc=self.video_config["video_add_desc"],
+                    save_audio_path=self.video_config["audio_path"],
+                    save_audio_name=self.get_name(self.bv_number, self.video_config["audio_name"]),
+                    save_audio_add_desc=self.video_config["audio_add_desc"],
+                    save_path=self.video_config["save_path"],
+                    save_name=self.get_name(self.bv_number, self.video_config["save_name"]),
+                    save_add_desc=self.video_config["save_add_desc"]
+                )
+            elif self.down_type == 'audio':
+                success = biliV.download_audio(
+                    save_audio_path=self.video_config["audio_path"],
+                    save_audio_name=self.get_name(self.bv_number, self.video_config["audio_name"]),
+                    save_audio_add_desc=self.video_config["audio_add_desc"])
+            print(f"下载结果：{success}")
+            self.download_finished.emit(success, self.tip_type, self.current_process, self.bv_number, self.down_type)  # 发射信号
 
     def get_name(self, bv_number, name_type):
         """
@@ -367,7 +371,7 @@ class Win_Download(QWidget):
 
         # 准备下载
         self.Label_download_fav_tip.setText(f"正在准备下载，共有{len(bvids)}个视频需要下载")
-        self.download_thread = []
+
         videos_to_download = []
         for i, bvid in enumerate(bvids):
             if down_type == 'va' and self.__check_video_exist(bvid):
@@ -387,17 +391,32 @@ class Win_Download(QWidget):
             else:
                 self.Label_download_fav_tip.setText(f"收藏夹{self.fid}的音频已经全部存在，不需要再次下载")
         else:
-            for i, bvid in enumerate(videos_to_download):
-                self.download_thread_i = DownloadThread(bvid, down_type, 'fav', (i + 1, bv_count))
-                self.download_thread_i.download_finished.connect(self.__on_download_finished)
-                self.download_thread.append(self.download_thread_i)
-                self.download_thread[i].start()  # 开始下载
-                time.sleep(random.uniform(0.2, 0.5))  # 防止请求过快导致封号
-            # for thread in self.download_thread:
-            #     thread.start()
-            self.Label_download_fav_tip.setText(f"进程已经全部开始，共有{bv_count}个视频需要下载")
+            download_thread = threading.Thread(target=self.__start_fav_download_threads,
+                                               args=(videos_to_download, down_type, bv_count))
+            download_thread.start()
+            self.Label_download_fav_tip.setText(f"线程已经全部开始，共有{bv_count}个视频需要下载")
 
-    # 下载完成后的回调函数
+    # 收藏夹下载线程
+    def __start_fav_download_threads(self, videos_to_download, down_type, bv_count):
+        folder = UI_Config.config["download_ui"]["video"]["save_path"]
+        folder_show = self.__shorten_folder_path(folder)
+        self.download_thread = []
+        for i, bvid in enumerate(videos_to_download):
+            self.download_thread_i = DownloadThread(bvid, down_type, 'fav', (i + 1, bv_count))
+            self.download_thread_i.download_finished.connect(self.__on_download_finished)
+            self.download_thread.append(self.download_thread_i)
+            self.download_thread[i].start()  # 开始下载
+            time.sleep(random.uniform(0.2, 0.5))  # 防止请求过快导致封号
+
+        # 等待所有线程完成
+        for i in range(bv_count):
+            self.download_thread[i].wait()
+
+        time.sleep(1)  # 等待1秒，防止界面显示不及时而被其他的地方修改了self.Label_download_fav_tip的内容
+        print("[__start_fav_download_threads]所有线程已经完成")
+        self.Label_download_fav_tip.setText(f"收藏夹{self.fid}的视频已经全部下载完毕，共有{bv_count}个视频，保存在'{folder_show}'里")
+
+    # 单个视频(无论是普通视频还是收藏夹的视频都是这个)下载完成后的回调函数
     def __on_download_finished(self, success, tip_type, current_process, bv_number, download_type):
         if download_type == "va":
             download_type = "视频"
@@ -618,3 +637,5 @@ class Win_Download(QWidget):
         else:
             folder_show = folder
         return folder_show
+
+

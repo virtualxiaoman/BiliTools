@@ -171,6 +171,7 @@ class biliLogin:
 
 
 # 获取b站视频信息(目前已实现获取视频信息，下载视频、音频、封面、快照功能)
+# 对于不确定的视频，请务必先检查其属性值accessible是否为True，在biliVideo各个板块中不一定主动判断了该值。
 class biliVideo(BiliVideoUtil):
     def __init__(self, bv=None, av=None, cookie_path=None):
         """
@@ -221,6 +222,7 @@ class biliVideo(BiliVideoUtil):
             warnings.warn(warning_text + "[Tips]: " + modify_tip, stacklevel=1)
 
         self.url_bv = f"https://www.bilibili.com/video/{self.bv}"
+        self.url_stat = f"https://api.bilibili.com/x/web-interface/view?bvid={self.bv}"
         self.url_play = "https://api.bilibili.com/x/player/wbi/playurl"  # 视频下载信息的获取地址
 
         self.headers = {
@@ -276,103 +278,36 @@ class biliVideo(BiliVideoUtil):
             biliV = biliVideo("BV18x4y187DE")
             biliV.get_html()  # [必要]获取html
             biliV.get_content()
-        不能保证一定能用，获取view,dm的上个月还能用，这个月就不能用了，B站前端牛魔王又改了
+        文档：https://socialsisteryi.github.io/bilibili-API-collect/docs/video/info.html
         """
         # if self.html_path is not None:
         #     with open(f"{self.html_path}{self.bv}.html", 'r', encoding='utf-8') as f:
         #         self.rtext = f.read()
 
-        pattern_base_data = re.compile(r'window\.__INITIAL_STATE__=(.*?);\(function\(\)')
-        base_data_match = re.search(pattern_base_data, self.rtext)
-
-        if base_data_match:
-            base_data_content = base_data_match.group(1)
-            base_data_content = json.loads(base_data_content)
-            aid = base_data_content['videoData']['aid']
-            bvid = base_data_content['videoData']['bvid']
-            if self.av != aid or self.bv != bvid:
-                error_text = f'av:{self.av}，bv:{self.bv}有误。'
-                modify_tip = f'请检查其与爬取到的av:{aid}，bv:{bvid}是否一致'
-                raise ValueError(error_text + "[Tips:]" + modify_tip)
-            self.title = base_data_content['videoData']['title']
-            self.pic = base_data_content["videoData"]["pic"]
-            self.desc = base_data_content["videoData"]["desc"]
-            self.stat = base_data_content["videoData"]["stat"]  # B站牛魔前端又改了
-            self.view = self.stat["view"]
-            self.dm = self.stat["danmaku"]
-            self.reply = self.stat["reply"]
-            self.like = self.stat["like"]
-            self.coin = self.stat["coin"]
-            self.fav = self.stat["favorite"]
-            self.share = self.stat["share"]
-        else:
-            print("爬取基础数据错误，再见ヾ(￣▽￣)")
-
-        # # <div class="view-text" data-v-aed3e268="">2.8万</div>
-        # pattern_view_data = re.compile(r'<div class="view-text"[^>]*>(.*?)\s*</div>')
-        # view_data_match = re.search(pattern_view_data, self.rtext)
-        # if view_data_match:
-        #     view_data_content = view_data_match.group(1)
-        #     self.view = view_data_content
-        # else:
-        #     print("爬取播放量数据错误，再见ヾ(￣▽￣)")
-        #
-        # pattern_dm_data = re.compile(r'<div class="dm-text"[^>]*>(.*?)\s*</div>')
-        # dm_data_match = re.search(pattern_dm_data, self.rtext)
-        # if dm_data_match:
-        #     dm_data_content = dm_data_match.group(1)
-        #     self.dm = dm_data_content
-        # else:
-        #     print("爬取弹幕数据错误，再见ヾ(￣▽￣)")
-        #
-        # # <span data-v-052ae598="" class="total-reply">143</span>
-        # pattern_reply_data = re.compile(r'class="total-reply[^>]*>(.*?)</span>')
-        # reply_data_match = re.search(pattern_reply_data, self.rtext)
-        # if reply_data_match:
-        #     reply_data_content = reply_data_match.group(1)
-        #     self.reply = reply_data_content
-        # else:
-        #     print("爬取评论数据错误，再见ヾ(￣▽￣)")
-
-        pattern_time_data = re.compile(r'<div class="pubdate-ip-text"[^>]*>(.*?)\s*</div>')
-        time_data_match = re.search(pattern_time_data, self.rtext)
-        if time_data_match:
-            time_data_content = time_data_match.group(1)
-            self.time = time_data_content
-        else:
-            print("爬取发布时间数据错误，再见ヾ(￣▽￣)")
-
-        # pattern_like_data = re.compile(r'<span class="video-like-info[^>]*>(.*?)</span>')
-        # like_data_match = re.search(pattern_like_data, self.rtext)
-        # if like_data_match:
-        #     like_data_content = like_data_match.group(1)
-        #     self.like = like_data_content
-        # else:
-        #     print("爬取点赞数据错误，再见ヾ(￣▽￣)")
-        #
-        # pattern_coin_data = re.compile(r'<span class="video-coin-info[^>]*>(.*?)</span>')
-        # coin_data_match = re.search(pattern_coin_data, self.rtext)
-        # if coin_data_match:
-        #     coin_data_content = coin_data_match.group(1)
-        #     self.coin = coin_data_content
-        # else:
-        #     print("爬取投币数据错误，再见ヾ(￣▽￣)")
-        #
-        # pattern_fav_data = re.compile(r'<span class="video-fav-info[^>]*>(.*?)</span>')
-        # fav_data_match = re.search(pattern_fav_data, self.rtext)
-        # if fav_data_match:
-        #     fav_data_content = fav_data_match.group(1)
-        #     self.fav = fav_data_content
-        # else:
-        #     print("爬取收藏数据错误，再见ヾ(￣▽￣)")
-        #
-        # pattern_share_data = re.compile(r'<span class="video-share-info[^>]*>(.*?)</span>')
-        # share_data_match = re.search(pattern_share_data, self.rtext)
-        # if share_data_match:
-        #     share_data_content = share_data_match.group(1)
-        #     self.share = share_data_content
-        # else:
-        #     print("爬取转发数据错误，再见ヾ(￣▽￣)")
+        r = requests.get(url=self.url_stat, headers=self.headers)
+        r_json = r.json()
+        # 获取视频信息错误
+        if r_json["code"] != 0:
+            print(f"获取视频信息失败，错误代码：{r_json['code']}，错误信息：{r_json['message']}")
+            return False
+        # 检查aid是否一致
+        aid = r_json["data"]["aid"]
+        if self.av != aid :
+            error_text = f'av:{self.av}，bv:{self.bv}有误。'
+            modify_tip = f'请检查{self.av}与爬取到的av:{aid}，是否一致。另外传入的bv是{self.bv}'
+            raise ValueError(error_text + "[Tips:]" + modify_tip)
+        # 开始真正获取信息
+        self.title = r_json["data"]["title"]
+        self.pic = r_json["data"]["pic"]
+        self.desc = r_json["data"]["desc"]
+        self.stat = r_json["data"]["stat"]
+        self.view = self.stat["view"]
+        self.dm = self.stat["danmaku"]
+        self.reply = self.stat["reply"]
+        self.like = self.stat["like"]
+        self.coin = self.stat["coin"]
+        self.fav = self.stat["favorite"]
+        self.share = self.stat["share"]
 
     def download_video(self, save_video_path=None, save_video_name=None, save_video_add_desc="视频(无音频)",
                        full_path=None, qn=80, platform="pc", high_quality=1, fnval=16):

@@ -102,6 +102,7 @@ class BiliVideoUtil:
         :param av: av号
         :param headers: 请求头
         """
+        self.accessible = False
         self.bv = None
         self.av = None
         self.cid = None
@@ -245,6 +246,19 @@ class BiliVideoUtil:
             }
         else:
             self.headers = headers
+
+        # 检查视频是否可访问
+        params = {
+            "bvid": self.bv
+        }
+        r = requests.get("https://api.bilibili.com/x/web-interface/view", params=params, headers=self.headers)
+        r_json = r.json()
+        if r_json["code"] != 0:
+            self.accessible = False
+            print(f"[BiliVideoUtil-__init_params]获取视频信息失败，错误信息：{r_json['message']}")
+            return False
+        else:
+            self.accessible = True
 
         # 获取cid
         url_cid = f"https://api.bilibili.com/x/player/pagelist?bvid={self.bv}"

@@ -43,10 +43,10 @@ class Config:
                     "download_ui": {
                         "video": {
                             "video_path": "output",
-                            "video_name": "bv",
+                            "video_name": "bv_special",
                             "video_add_desc": "视频(无音频)",
                             "audio_path": "output",
-                            "audio_name": "bv",
+                            "audio_name": "title+bv",
                             "audio_add_desc": "音频",
                             "save_path": "output",
                             "save_name": "title+bv",
