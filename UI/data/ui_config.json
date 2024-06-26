@@ -10,13 +10,13 @@
     "login_ui": {},
     "download_ui": {
         "video": {
-            "video_path": "D:\\HP\\Desktop\\BiliTools\\output\\循环歌单",
+            "video_path": "D:\\HP\\Desktop\\BiliTools\\output",
             "video_name": "bv_special",
             "video_add_desc": "视频(无音频)",
-            "audio_path": "D:\\HP\\Desktop\\BiliTools\\output\\循环歌单",
+            "audio_path": "D:\\HP\\Desktop\\BiliTools\\output",
             "audio_name": "title+bv",
             "audio_add_desc": "音频",
-            "save_path": "D:\\HP\\Desktop\\BiliTools\\output\\循环歌单",
+            "save_path": "D:\\HP\\Desktop\\BiliTools\\output",
             "save_name": "title+bv",
             "save_add_desc": ""
         },

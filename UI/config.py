@@ -144,6 +144,7 @@ class Input_css:
             color: rgba(51,126,204, 1);
             font-family: "Times New Roman";
             font-size: 16px;
+            width: 300px;
         }
         
         QLineEdit:hover {
