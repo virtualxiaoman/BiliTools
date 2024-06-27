@@ -228,6 +228,7 @@ class biliVideo(BiliVideoUtil):
         self.url_stat = f"https://api.bilibili.com/x/web-interface/view?bvid={self.bv}"  # 视频信息
         self.url_tag = "https://api.bilibili.com/x/tag/archive/tags"  # 视频标签
         self.url_play = "https://api.bilibili.com/x/player/wbi/playurl"  # 视频下载
+        self.url_up = "https://api.bilibili.com/x/web-interface/card"  # up主信息(简略)
 
         self.headers = {
             "User-Agent": useragent().pcChrome,
@@ -251,9 +252,15 @@ class biliVideo(BiliVideoUtil):
         self.coin = None  # 视频的投币量
         self.fav = None  # 视频的收藏量
         self.share = None  # 视频的转发量
+        # 视频tag与分区
         self.tag = None  # 视频的标签
         self.tid = None  # 视频的分区tid
         self.tname = None  # 视频的子分区名称
+        # 视频作者
+        self.up = None  # 视频的up主昵称
+        self.up_mid = None  # 视频的up主的mid
+        self.up_follow = None  # 视频的up主是否关注 0,1
+        self.up_followers = None  # 视频的up主的粉丝数
 
         # 额外信息
         self.down_video_json = None  # 视频的下载信息
@@ -286,7 +293,7 @@ class biliVideo(BiliVideoUtil):
         #         f.write(self.rtext)
 
     # 用于获取视频信息
-    def get_content(self):
+    def get_content(self, stat=True, tag=True, up=True):
         """
         [使用方法]:
             biliV = biliVideo("BV18x4y187DE")
@@ -294,51 +301,58 @@ class biliVideo(BiliVideoUtil):
             biliV.get_content()
         文档：https://socialsisteryi.github.io/bilibili-API-collect/docs/video/info.html
         """
-        # if self.html_path is not None:
-        #     with open(f"{self.html_path}{self.bv}.html", 'r', encoding='utf-8') as f:
-        #         self.rtext = f.read()
+        # 获取视频信息
+        if stat:
+            r = requests.get(url=self.url_stat, headers=self.headers)
+            r_json = r.json()
+            # 获取视频信息错误
+            if r_json["code"] != 0:
+                print(f"获取视频信息失败，错误代码：{r_json['code']}，错误信息：{r_json['message']}")
+                return False
+            # 检查aid是否一致
+            aid = r_json["data"]["aid"]
+            if self.av != aid:
+                error_text = f'av:{self.av}，bv:{self.bv}有误。'
+                modify_tip = f'请检查{self.av}与爬取到的av:{aid}，是否一致。另外传入的bv是{self.bv}'
+                raise ValueError(error_text + "[Tips:]" + modify_tip)
+            # 开始真正获取信息
+            self.title = r_json["data"]["title"]
+            self.pic = r_json["data"]["pic"]
+            self.desc = r_json["data"]["desc"]
+            self.stat = r_json["data"]["stat"]
+            self.view = self.stat["view"]
+            self.dm = self.stat["danmaku"]
+            self.reply = self.stat["reply"]
+            self.time = r_json["data"]["pubdate"]
+            self.like = self.stat["like"]
+            self.coin = self.stat["coin"]
+            self.fav = self.stat["favorite"]
+            self.share = self.stat["share"]
+            self.tid = r_json["data"]["tid"]
+            self.tname = r_json["data"]["tname"]
+            self.up = r_json["data"]["owner"]["name"]
+            self.up_mid = r_json["data"]["owner"]["mid"]
 
-        r = requests.get(url=self.url_stat, headers=self.headers)
-        r_json = r.json()
-        # 获取视频信息错误
-        if r_json["code"] != 0:
-            print(f"获取视频信息失败，错误代码：{r_json['code']}，错误信息：{r_json['message']}")
-            return False
-        # 检查aid是否一致
-        aid = r_json["data"]["aid"]
-        if self.av != aid :
-            error_text = f'av:{self.av}，bv:{self.bv}有误。'
-            modify_tip = f'请检查{self.av}与爬取到的av:{aid}，是否一致。另外传入的bv是{self.bv}'
-            raise ValueError(error_text + "[Tips:]" + modify_tip)
-        # 开始真正获取信息 todo time还没实现
-        self.title = r_json["data"]["title"]
-        self.pic = r_json["data"]["pic"]
-        self.desc = r_json["data"]["desc"]
-        self.stat = r_json["data"]["stat"]
-        self.view = self.stat["view"]
-        self.dm = self.stat["danmaku"]
-        self.reply = self.stat["reply"]
-        self.time = r_json["data"]["pubdate"]
-        self.like = self.stat["like"]
-        self.coin = self.stat["coin"]
-        self.fav = self.stat["favorite"]
-        self.share = self.stat["share"]
-        self.tid = r_json["data"]["tid"]
-        self.tname = r_json["data"]["tname"]
+        # 获取up主信息(除了name与mid之外的)
+        if up:
+            r = requests.get(url=self.url_up, headers=self.headers, params={"mid": self.up_mid})
+            r_json = r.json()
+            if r_json["code"] != 0:
+                print(f"获取up主信息失败，错误代码：{r_json['code']}，错误信息：{r_json['message']}")
+                return False
+            r_data = r_json["data"]
+            self.up_follow = 1 if r_data["following"] else 0
+            self.up_followers = r_data["follower"]
 
-        r = requests.get(url=self.url_tag, headers=self.headers, params={"bvid": self.bv})
-        print(r.url)
-        r_json = r.json()
-        if r_json["code"] != 0:
-            print(f"获取标签信息失败，错误代码：{r_json['code']}，错误信息：{r_json['message']}")
-            return False
-        r_json = r_json["data"]
-        self.tag = [tag["tag_name"] for tag in r_json]
-
-        # r = requests.get(url="https://api.bilibili.com/x/web-interface/view/detail", headers=self.headers, params={"bvid": self.bv})
-        # r_json = r.json()
-        # r_json = r_json["data"]["Tags"]
-        # self.tags = [tag["tag_name"] for tag in r_json]
+        # 获取视频标签
+        if tag:
+            r = requests.get(url=self.url_tag, headers=self.headers, params={"bvid": self.bv})
+            r_json = r.json()
+            if r_json["code"] != 0:
+                print(f"获取标签信息失败，错误代码：{r_json['code']}，错误信息：{r_json['message']}")
+                return False
+            r_json = r_json["data"]
+            self.tag = [tag["tag_name"] for tag in r_json]
 
     # 下载视频
     def download_video(self, save_video_path=None, save_video_name=None, save_video_add_desc="视频(无音频)",
@@ -610,6 +624,16 @@ class biliVideo(BiliVideoUtil):
         print(CT('硬币数: ').blue() + f"{self.coin}")
         print(CT('收藏数: ').blue() + f"{self.fav}")
         print(CT('分享数: ').blue() + f"{self.share}")
+        print(CT('标签: ').blue() + f"{self.tag}")
+        print(CT('分区tid: ').blue() + f"{self.tid}")
+        print(CT('子分区名称: ').blue() + f"{self.tname}")
+        print(CT('up主: ').blue() + f"{self.up}")
+        print(CT('up主mid: ').blue() + f"{self.up_mid}")
+        print(CT('是否关注up主: ').blue() + f"{self.up_follow}")
+        print(CT('up主粉丝数: ').blue() + f"{self.up_followers}")
+        print(CT('是否点赞: ').blue() + f"{self.user_like}")
+        print(CT('投币数量: ').blue() + f"{self.user_coin}")
+        print(CT('是否收藏: ').blue() + f"{self.user_fav}")
 
 
 # b站评论相关操作(目前已实现发布评论功能， todo: 爬取评论)
@@ -882,7 +906,7 @@ class biliHistory:
         business = ""
         view_at = 0
         for i in range(max_iter):
-            print(f"正在获取第{i+1}/{max_iter}页历史记录")
+            print(f"\r正在获取第{i+1}/{max_iter}页历史记录", end='')
             success = self.get_history(max_id=max_id, business=business, view_at=view_at, filter_type=filter_type, ps=ps)
             if success:
                 max_id = self.last_cursor["max"]
@@ -896,6 +920,7 @@ class biliHistory:
 
     # 打印获取到的历史记录
     def log_history(self):
+        print("\n获取到的历史记录如下：")
         print(f"oid列表， {len(self.oid_list)}个：{self.oid_list}")
         print(f"视频BV号列表, {len(self.archive_list)}个：{self.archive_list}")
         print(f"剧集(番剧/影视)ssid列表, {len(self.pgc_list)}个：{self.pgc_list}")
@@ -909,30 +934,23 @@ class biliHistory:
         """
         保存历史记录中的视频信息，有bv号、观看进度
         :param view_info: 是否需要保存观看信息：你是否对视频点赞、投币、收藏了。(分享功能暂时没办法)
-        :param detailed_info: 是否需要额外保存详细信息：视频的各种stat，请见代码或者biliVideo中实现的属性。
-        :param save_path: 保存路径
-        :param save_name: 保存名称
+        :param detailed_info: 是否需要额外保存详细信息：视频的各种stat，具体请见下面的代码或者是biliVideo中实现的属性。
+        :param save_path: xlsx的保存路径
+        :param save_name: xlsx的保存名称
         :return: df
         """
         data = {
             "bv": self.archive_list,
             "progress": self.bv_process_list,
             "duration": self.bv_duration_list,
-            "view_percent": [f"{round(p/d, 2)*100}%" for p, d in zip(self.bv_process_list, self.bv_duration_list)]
+            "view_percent": [f"{100 if p == -1 else round(p / d * 100, 2):.2f}%"
+                             for p, d in zip(self.bv_process_list, self.bv_duration_list)]
         }
         if view_info:
             data["u_like"] = []
             data["u_coin"] = []
             data["u_fav"] = []
-            for bv in self.archive_list:
-                print(f"正在获取{bv}的观看信息")
-                biliV = biliVideo(bv, cookie_path=self.cookie_path)
-                biliV.get_user_action()
-                data["u_like"].append(biliV.user_like)
-                data["u_coin"].append(biliV.user_coin)
-                data["u_fav"].append(biliV.user_fav)
-                # print(f"点赞：{biliV.user_like}，投币：{biliV.user_coin}，收藏：{biliV.user_fav}")
-                time.sleep(random.uniform(0.1, 0.2))
+            data["u_score"] = []  # 该值是u_like+u_coin+u_fav*2。比如点赞了+投1币+没收藏=2，点赞+没投币+收藏=3
         if detailed_info:
             data["title"] = []
             data["view"] = []
@@ -945,9 +963,22 @@ class biliHistory:
             data["share"] = []
             data["tag"] = []
             data["tid"] = []
-            for bv in self.archive_list:
-                print(f"正在获取{bv}的详细信息")
-                biliV = biliVideo(bv, cookie_path=self.cookie_path)
+            data["up_name"] = []
+            data["up_follow"] = []
+            data["up_followers"] = []
+        # 获取视频信息
+        total_videos = len(self.archive_list)
+        for i, bv in enumerate(self.archive_list):
+            print(f"\r正在获取第 {i+1}/{total_videos} 个视频 {bv} 的观看信息", end='')
+            biliV = biliVideo(bv, cookie_path=self.cookie_path)
+            if view_info:
+                biliV.get_user_action()
+                data["u_like"].append(biliV.user_like)
+                data["u_coin"].append(biliV.user_coin)
+                data["u_fav"].append(biliV.user_fav)
+                data["u_score"].append(biliV.user_like + biliV.user_coin + biliV.user_fav*2)
+                # print(f"点赞：{biliV.user_like}，投币：{biliV.user_coin}，收藏：{biliV.user_fav}")
+            if detailed_info:
                 biliV.get_content()
                 data["title"].append(biliV.title)
                 data["view"].append(biliV.view)
@@ -960,7 +991,10 @@ class biliHistory:
                 data["share"].append(biliV.share)
                 data["tag"].append(biliV.tag)
                 data["tid"].append(biliV.tid)
-                time.sleep(random.uniform(0.1, 0.3))
+                data["up_name"].append(biliV.up)
+                data["up_follow"].append(biliV.up_follow)
+                data["up_followers"].append(biliV.up_followers)
+            time.sleep(random.uniform(0.1, 0.2))
         df = pd.DataFrame(data)
         df.to_excel(f"{save_path}/{save_name}.xlsx", index=False)
         return df
@@ -1084,10 +1118,10 @@ if __name__ == '__main__':
     # biliM.send_msg(3493133776062465, 506925078, "你好，请问是千年的爱丽丝同学吗？")
     full_path = 'cookie/cookie_大号.txt'  # 这里只是为了展示更改路径，实际使用时仍然建议使用默认路径cookie/qr_login.txt
     biliH = biliHistory(cookie_path=full_path)
-    success = biliH.get_history_all(max_iter=3)
+    success = biliH.get_history_all(max_iter=10)
     if success:
         biliH.log_history()
-        biliH.save_video_history_df(view_info=True, detailed_info=True, save_path="output", save_name="history")
+        biliH.save_video_history_df(view_info=True, detailed_info=True, save_path="output", save_name="history_xm")
     else:
         print("获取历史记录失败")
 
