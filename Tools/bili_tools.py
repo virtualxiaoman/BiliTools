@@ -333,7 +333,7 @@ class biliVideo(BiliVideoUtil):
             self.up = r_json["data"]["owner"]["name"]
             self.up_mid = r_json["data"]["owner"]["mid"]
 
-        # 获取up主信息(除了name与mid之外的)
+        # 获取up主信息(除了name与mid之外的：是否关注up、up粉丝数)
         if up:
             r = requests.get(url=self.url_up, headers=self.headers, params={"mid": self.up_mid})
             r_json = r.json()
@@ -830,6 +830,7 @@ class biliHistory:
         self.archive_list = []  # 视频BV号列表
         self.bv_process_list = []  # (对应archive_list)观看进度列表
         self.bv_duration_list = []  # (对应archive_list)视频时长列表
+        self.view_at_list = []  # (对应archive_list)观看时间列表
         self.pgc_list = []  # 剧集(番剧/影视)ssid列表
         self.live_list = []  # 直播间id列表
         self.articlelist_list = []  # 文集rlid列表
@@ -877,6 +878,7 @@ class biliHistory:
                     self.archive_list.append(stat["bvid"])  # 视频
                     self.bv_process_list.append(history["progress"])  # 视频观看进度
                     self.bv_duration_list.append(history["duration"])  # 视频时长
+                    self.view_at_list.append(history["view_at"])  # 观看时间戳
                 elif stat_business == "pgc":
                     self.pgc_list.append(stat["epid"])  # 剧集(番剧/影视)
                 elif stat_business == "live":
@@ -897,14 +899,14 @@ class biliHistory:
             return None
 
     # 获取所有历史记录(建议使用这个函数，但是需要自己指定合适的max_iter，获取到的历史记录总数为max_iter*ps)
-    def get_history_all(self, max_iter=5, filter_type="all", ps=20):
+    def get_history_all(self, max_iter=5, filter_type="all", ps=20, **kwargs):
         """
         获取所有历史记录
         [使用方法-获取所有记录]:
         """
-        max_id = 0
-        business = ""
-        view_at = 0
+        max_id = kwargs.get("max_id", 0)
+        business = kwargs.get("business", "")
+        view_at = kwargs.get("view_at", 0)
         for i in range(max_iter):
             print(f"\r正在获取第{i+1}/{max_iter}页历史记录", end='')
             success = self.get_history(max_id=max_id, business=business, view_at=view_at, filter_type=filter_type, ps=ps)
@@ -916,6 +918,7 @@ class biliHistory:
                 print("获取历史记录失败")
                 return False
             time.sleep(random.uniform(0.2, 0.5))
+        print(f"\n最后一次的max_id='{max_id}', business'{business}', view_at='{view_at}'")
         return True
 
     # 打印获取到的历史记录
@@ -930,21 +933,33 @@ class biliHistory:
         print(f"上一页的cursor：{self.last_cursor}")
 
     # 保存历史记录。因为视频是最主要的，所以这里给出的是保存历史记录中的视频信息
-    def save_video_history_df(self, view_info=True, detailed_info=False, save_path="output", save_name="history"):
+    def save_video_history_df(self, view_info=True, detailed_info=False,
+                              save_path="output", save_name="history", add_df=True):
         """
         保存历史记录中的视频信息，有bv号、观看进度
         :param view_info: 是否需要保存观看信息：你是否对视频点赞、投币、收藏了。(分享功能暂时没办法)
         :param detailed_info: 是否需要额外保存详细信息：视频的各种stat，具体请见下面的代码或者是biliVideo中实现的属性。
         :param save_path: xlsx的保存路径
         :param save_name: xlsx的保存名称
+        :param add_df: 当文件存在时，是否使用追加数据而不是覆盖数据。默认为True(追加), 反之是False(覆盖)
         :return: df
         """
+        # 检查路径是否存在
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        view_percent_list = [
+            "100.00%" if p == -1 else
+            "-1.00%" if d == 0 else
+            f"{round(p / d * 100, 2):.2f}%"
+            for p, d in zip(self.bv_process_list, self.bv_duration_list)
+        ]
         data = {
             "bv": self.archive_list,
             "progress": self.bv_process_list,
             "duration": self.bv_duration_list,
-            "view_percent": [f"{100 if p == -1 else round(p / d * 100, 2):.2f}%"
-                             for p, d in zip(self.bv_process_list, self.bv_duration_list)]
+            "view_percent": view_percent_list,
+            "view_time": self.view_at_list
         }
         if view_info:
             data["u_like"] = []
@@ -995,10 +1010,86 @@ class biliHistory:
                 data["up_follow"].append(biliV.up_follow)
                 data["up_followers"].append(biliV.up_followers)
             time.sleep(random.uniform(0.1, 0.2))
+            # 如果i能被25整除，就保存一次，防止数据丢失
+            if i % 25 == 0:
+                # 选择前i+1个数据保存一次
+                temp_data = {k: v[:i+1] for k, v in data.items()}
+                temp_df = pd.DataFrame(temp_data)
+                temp_df.to_excel(f"{save_path}/temp_{save_name}.xlsx", index=False)
+                print(f"\n[save_video_history_df]已临时保存{i+1}个视频的观看信息到{save_path}/temp_{save_name}.xlsx")
+                time.sleep(random.uniform(2, 3))
+
         df = pd.DataFrame(data)
-        df.to_excel(f"{save_path}/{save_name}.xlsx", index=False)
+        file_path = f"{save_path}/{save_name}.xlsx"
+        if os.path.exists(file_path) and add_df:
+            print(f"\n{file_path}已存在，正在追加数据")
+            df_old = pd.read_excel(file_path)
+            # 合并
+            df = pd.concat([df_old, df], axis=0)
+            # 按bv去重，保留view更高的
+            df = df.sort_values(by='view', ascending=False)
+            df = df.drop_duplicates(subset=['bv'], keep='first')  # 删除bv列中重复的行，保留view更高的行，subset是指定列，keep是保留方式
+            # 按view_time降序排序
+            df = df.sort_values(by='view_time', ascending=False)
+        df.to_excel(file_path, index=False)
+        print(f"[save_video_history_df]历史记录已保存到{file_path}")
         return df
 
+    # 通过历史记录获取已经观看但是失效了视频的信息
+    def get_invalid_video(self, bv, max_iter=10, ps=20, **kwargs):
+        """
+        [灵感来源]:
+            在使用get_history_all的时候，因为视频
+              BV1sS411w7Fk(卡拉彼丘香奈美泳装皮靶场实机演示)，
+              BV1aM4m127Ab()
+            已经失效，无法通过之前的正常途径获取，但是历史记录里其实保存了的。
+            所以遍历历史记录去找到这些失效视频即可。
+        [使用方法]:
+            full_path = 'cookie/cookie_大号.txt'  # 这里只是为了展示更改路径，实际使用时仍然建议使用默认路径cookie/qr_login.txt
+            biliH = biliHistory(cookie_path=full_path)
+            ans = biliH.get_invalid_video("BV1aM4m127Ab", max_iter=10)
+            print(ans)
+        :param bv: 视频BV号
+        :param max_iter: 最大迭代次数，超过这个次数即使未找到也停止，如果指定为-1，则一直查找
+        :param ps: 每页项数
+        :return: 视频信息
+        """
+        max_id = kwargs.get("max_id", 0)
+        business = kwargs.get("business", "")
+        view_at = kwargs.get("view_at", 0)
+        for i in range(max_iter):
+            print(f"\r正在获取第{i+1}/{max_iter}页历史记录", end='')
+            params = {
+                "max": max_id,
+                "business": business,
+                "view_at": view_at,
+                "type": "archive",
+                "ps": ps
+            }
+            r = requests.get(url=self.url_history, headers=self.headers, params=params)
+            r_json = r.json()
+            if r_json["code"] == 0:
+                history_list = r_json["data"]["list"]
+                for history in history_list:
+                    stat = history["history"]
+                    stat_business = stat["business"]
+                    if stat_business != "archive":
+                        print(f"非视频的历史记录类型：{history['history']['business']}")
+                        continue
+                    if stat["bvid"] == bv:
+                        print(f"已找到视频{bv}的历史记录")
+                        # print(history)
+                        return history
+                self.last_cursor = r_json["data"]["cursor"]
+            else:
+                print(f"获取历史记录失败，错误码：{r_json['code']}，错误信息：{r_json['message']}")
+                return None
+            time.sleep(random.uniform(0.2, 0.5))
+            max_id = self.last_cursor["max"]
+            business = self.last_cursor["business"]
+            view_at = self.last_cursor["view_at"]
+        print(f"\n最后一次的max_id='{max_id}', business'{business}', view_at='{view_at}'")
+        return None
 
 # b站的一些排行榜(目前建议只使用get_popular，其余的不太行的样子)
 class biliRank:
@@ -1118,12 +1209,16 @@ if __name__ == '__main__':
     # biliM.send_msg(3493133776062465, 506925078, "你好，请问是千年的爱丽丝同学吗？")
     full_path = 'cookie/cookie_大号.txt'  # 这里只是为了展示更改路径，实际使用时仍然建议使用默认路径cookie/qr_login.txt
     biliH = biliHistory(cookie_path=full_path)
-    success = biliH.get_history_all(max_iter=10)
-    if success:
-        biliH.log_history()
-        biliH.save_video_history_df(view_info=True, detailed_info=True, save_path="output", save_name="history_xm")
-    else:
-        print("获取历史记录失败")
+    ans = biliH.get_invalid_video("BV1aM4m127Ab", max_iter=10)
+    print(ans)
+    # success = biliH.get_history_all(max_iter=10, max_id='577723401', business='archive', view_at='1719573037')
+    # if success:
+    #     biliH.log_history()
+    #     biliH.save_video_history_df(view_info=True, detailed_info=True,
+    #                                 save_path="output", save_name="history_xm", add_df=True)
+    #     # 最终输出结果里包含获得到上一次的信息，如：{'max': 437394784, 'view_at': 1718623141, 'business': 'archive', 'ps': 20}
+    # else:
+    #     print("获取历史记录失败")
 
     # biliV = biliVideo("BV1YS421d7Yx", cookie_path=full_path)
     # biliV.get_content()

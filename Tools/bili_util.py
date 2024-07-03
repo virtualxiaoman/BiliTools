@@ -9,7 +9,8 @@ from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 
 from Tools.config import useragent  # User-Agent
 from Tools.config import bilicookies as cookies  # B站cookie
-
+from Tools.config import Config  # 配置文件
+Config = Config()
 
 # BV号和AV号的转换
 class BV2AV:
@@ -247,23 +248,33 @@ class BiliVideoUtil:
         else:
             self.headers = headers
 
+        retry_count = 0
         # 检查视频是否可访问
         params = {
             "bvid": self.bv
         }
-        r = requests.get("https://api.bilibili.com/x/web-interface/view", params=params, headers=self.headers)
-        r_json = r.json()
-        if r_json["code"] != 0:
-            self.accessible = False
-            print(f"[BiliVideoUtil-__init_params]获取视频信息失败，错误信息：{r_json['message']}")
-            return False
-        else:
-            self.accessible = True
+        while retry_count < Config.MAX_RETRY:
+            r = requests.get("https://api.bilibili.com/x/web-interface/view", params=params, headers=self.headers)
+            r_json = r.json()
+            if r_json["code"] != 0:
+                self.accessible = False
+                retry_count += 1
+                print(f"[BiliVideoUtil-__init_params]第{retry_count}次获取视频{self.bv}是否可访问的信息失败，错误信息：{r_json['message']}")
+                time.sleep(Config.RETRY_DELAY)
+            else:
+                self.accessible = True
+                break
 
+        retry_count = 0
         # 获取cid
         url_cid = f"https://api.bilibili.com/x/player/pagelist?bvid={self.bv}"
-        try:
-            self.cid = requests.get(url=url_cid, headers=self.headers).json()["data"][0]["cid"]  # 目前这个似乎只适用于单P视频，暂未验证
-        except Exception as e:
-            print(f"[BiliVideoUtil-__init_params]获取cid失败，错误信息：{e}")
-
+        while retry_count < Config.MAX_RETRY:
+            r = requests.get(url=url_cid, headers=self.headers)
+            r_json = r.json()
+            if r_json["code"] != 0:
+                retry_count += 1
+                print(f"[BiliVideoUtil-__init_params]第{retry_count}次获取{self.bv}的cid失败，错误信息：{r_json['message']}")
+                time.sleep(Config.RETRY_DELAY)
+            else:
+                self.cid = r_json["data"][0]["cid"]  # 目前这个似乎只适用于单P视频，暂未验证
+                break

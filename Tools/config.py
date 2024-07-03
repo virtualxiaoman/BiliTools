@@ -2,6 +2,8 @@ class Config:
     def __init__(self):
         self.LOGIN_COOKIE_PATH = "cookie/qr_login.txt"
         self.LOGIN_QR_PATH = "cookie/qr_login.png"
+        self.MAX_RETRY = 3  # 最大重试次数3次
+        self.RETRY_DELAY = 1.2  # 重试延迟1.2秒
 
 
 class bilicookies:
