@@ -51,6 +51,39 @@
 ## 二、使用说明
 ### 2.1 Tools的使用方法
 如项目描述所述，可以通过`main.py`、注释等来使用项目中的各个功能。
+其中介绍一下通过历史记录导出用户喜好的方法：
+通过`save_video_history_df`导出的df的属性有：
+
+`bv	progress	duration	view_percent	view_time	u_like	u_coin	u_fav	u_score	title	view	dm	reply	time	like	coin	fav	share	tag	tid	up_name	up_follow	up_followers`
+
+解释如下：
+
+|    英文属性名     |       中文解释        |
+|:------------:|:-----------------:|
+|      bv      |       视频ID        |
+|   progress   |       观看进度        |
+|   duration   |       视频时长        |
+| view_percent |     观看进度的百分比      |
+|  view_time   |       观看时间        |
+|    u_like    |       用户点赞数       |
+|    u_coin    |       用户投币数       |
+|    u_fav     |       用户收藏数       |
+|   u_score    | 用户评分(点赞+硬币数+2*收藏) |
+|    title     |       视频标题        |
+|     view     |       观看次数        |
+|      dm      |       弹幕数量        |
+|    reply     |       评论数量        |
+|     time     |       发布时间        |
+|     like     |        点赞数        |
+|     coin     |        投币数        |
+|     fav      |        收藏数        |
+|    share     |        分享数        |
+|     tag      |        标签         |
+|     tid      |      视频分区tid      |
+|   up_name    |       up昵称        |
+|  up_follow   |      是否关注up       |
+| up_followers |       up粉丝数       |
+
 ### 2.2 UI的使用方法
 UI项目需要运行`UI/ui.py`。
 ui_config.json是UI的配置文件，可以自行修改。具体解释如下：
