@@ -86,7 +86,7 @@ class Config:
 
 class Text:
     def __init__(self):
-        self.WindowTitle = "BiliTools_V0.2(测试版)"
+        self.WindowTitle = "BiliTools_V1.0"
 
 
 class Background_css:

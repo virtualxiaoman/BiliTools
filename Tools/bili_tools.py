@@ -1050,28 +1050,15 @@ class biliHistory:
               BV1sS411w7Fk(卡拉彼丘香奈美泳装皮靶场实机演示)，
               BV1aM4m127Ab(炎热的夏天，柴郡当然要去玩水啦～)，
             已经失效，无法通过之前的正常途径获取，但是历史记录里其实保存了的。
-            所以遍历历史记录去找到这些失效视频即可。其余还有：
-            BV1Bw4m1e7JR,
-            BV1j1g7eaE16,
-            BV1Vn4y1R7fH,
-            BV1Z1421k7nC,
-            BV194421D736,
-            BV1ihVteYEuZ,
-            BV1kM4m1S7na,
-            BV1WD421u71W,
-            BV1P1421C7A5,
-            BV1Xs421M7w6,
-            BV1AJ4m137hk,
-            BV1bNTvewEUB,
-            BV1VM4m1S7sv,
-            BV11y411b7Y4,
-            BV1Lz4y157vD,
+            所以遍历历史记录去找到这些失效视频即可。
         [使用方法]:
             full_path = 'cookie/cookie_大号.txt'  # 这里是用大号的cookie来获取大号的历史记录
             biliH = biliHistory(cookie_path=full_path)
             ans = biliH.get_invalid_video("BV1aM4m127Ab", max_iter=10)
+            # 也可以定义一个列表，类似于bv_list = ["BV1Bw4m1e7JR", "BV1j1g7eaE16", "BV1Vn4y1R7fH"]，
+            # 然后使用ans = biliH.get_invalid_video(bv_list, max_iter=100)也是可以的
             print(ans)
-        :param bv: 视频BV号
+        :param bv: 视频BV号，可以是单个(str)，也可以是bv号列表(list)
         :param max_iter: 最大迭代次数，超过这个次数即使未找到也停止，(如果指定为-1，则一直查找，该功能暂未实现)
         :param ps: 每页项数
         :return: 视频信息
@@ -1079,6 +1066,11 @@ class biliHistory:
         max_id = kwargs.get("max_id", 0)
         business = kwargs.get("business", "")
         view_at = kwargs.get("view_at", 0)
+        if not isinstance(bv, list):
+            bv = [bv]
+        bv_count = len(bv)
+        found_videos = []
+        video_stat = []
         for i in range(max_iter):
             print(f"\r正在获取第{i+1}/{max_iter}页历史记录", end='')
             params = {
@@ -1098,10 +1090,16 @@ class biliHistory:
                     if stat_business != "archive":
                         print(f"非视频的历史记录类型：{history['history']['business']}")
                         continue
-                    if stat["bvid"] == bv:
-                        print(f"已找到视频{bv}的历史记录")
-                        # print(history)
-                        return history
+                    if stat["bvid"] in bv:
+                        bv.remove(stat['bvid'])  # 从列表中移除找到的 bvid
+                        print(f"已找到视频{stat['bvid']}的历史记录，还剩{len(bv)}个未找到的视频")
+                        found_videos.append(stat['bvid'])
+                        video_stat.append(history)
+                    if not bv:
+                        # 如果列表中的所有视频都找到了，就提前结束
+                        print(f"\n所有视频已找到")
+                        print(f"找到的视频有{len(found_videos)}/{bv_count}个: {found_videos}")
+                        return video_stat
                 self.last_cursor = r_json["data"]["cursor"]
             else:
                 print(f"获取历史记录失败，错误码：{r_json['code']}，错误信息：{r_json['message']}")
@@ -1111,7 +1109,8 @@ class biliHistory:
             business = self.last_cursor["business"]
             view_at = self.last_cursor["view_at"]
         print(f"\n最后一次的max_id='{max_id}', business'{business}', view_at='{view_at}'")
-        return None
+        print(f"找到的视频有{len(found_videos)}/{bv_count}个: {found_videos}")
+        return video_stat
 
 # b站的一些排行榜(目前建议只使用get_popular，其余的不太行的样子)
 class biliRank:
@@ -1231,17 +1230,20 @@ if __name__ == '__main__':
     # biliM.send_msg(3493133776062465, 506925078, "你好，请问是千年的爱丽丝同学吗？")
     full_path = 'cookie/cookie_大号.txt'  # 这里只是为了展示更改路径，实际使用时仍然建议使用默认路径cookie/qr_login.txt
     biliH = biliHistory(cookie_path=full_path)
-
-    success = biliH.get_history_all(max_iter=1)
-    # get_history_all最终输出结果里包含获得到上一次的信息，以方便下一次使用，如：
-    # 最后一次的max_id='1055866500', business='archive', view_at='1719150877'
-    if success:
-        biliH.log_history()
-        biliH.save_video_history_df(view_info=True, detailed_info=True,
-                                    save_path="output", save_name="history_xm", add_df=True)
-
-    else:
-        print("获取历史记录失败")
+    bv_list = ["BV1Bw4m1e7JR", "BV1j1g7eaE16", "BV1Vn4y1R7fH", "BV1Z1421k7nC", "BV194421D736", "BV1ihVteYEuZ",
+               "BV1kM4m1S7na", "BV1WD421u71W", "BV1P1421C7A5", "BV1Xs421M7w6", "BV1AJ4m137hk", "BV1bNTvewEUB",
+               "BV1VM4m1S7sv", "BV11y411b7Y4", "BV1Lz4y157vD", "BV1sS411w7Fk", "BV1aM4m127Ab"]
+    ans = biliH.get_invalid_video(bv_list, max_iter=100)
+    print(ans)
+    # success = biliH.get_history_all(max_iter=1)
+    # # get_history_all最终输出结果里包含获得到上一次的信息，以方便下一次使用，如：
+    # # 最后一次的max_id='1055866500', business='archive', view_at='1719150877'
+    # if success:
+    #     biliH.log_history()
+    #     biliH.save_video_history_df(view_info=True, detailed_info=True,
+    #                                 save_path="output", save_name="history_xm", add_df=True)
+    # else:
+    #     print("获取历史记录失败")
 
     # biliV = biliVideo("BV1YS421d7Yx", cookie_path=full_path)
     # biliV.get_content()

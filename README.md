@@ -1,7 +1,7 @@
 ## 一、项目描述
 **通过代码运行(Tools)**：`main.py`提供了quickstart，亦可通过查看函数里的注释来运行项目中的各个功能。
 
-**构建UI项目(UI)**：运行`UI/ui.py`或者使用`pyinstaller -F --noconsole UI/ui.py`构建项目
+**构建UI项目(UI)**：运行`UI/ui.py`。或者使用`pyinstaller -F --noconsole UI/ui.py`构建项目。如需图标，请使用`pyinstaller -F --noconsole --icon=UI/data/arona.ico UI/ui.py`
 
 **注意**：UI项目依赖于Tools项目，但是Tools项目不依赖于UI项目。同样的，Tools项目与UI的config相互独立。因为Tools是方便开发者使用的，而UI界面是方便普通用户使用的。
 
@@ -54,17 +54,17 @@
 其中介绍一下通过历史记录导出用户喜好的方法：
 通过`save_video_history_df`导出的df的属性有：
 
-`bv	progress	duration	view_percent	view_time	u_like	u_coin	u_fav	u_score	title	view	dm	reply	time	like	coin	fav	share	tag	tid	up_name	up_follow	up_followers`
+`bv, progress, duration, view_percent, view_time, u_like, u_coin, u_fav, u_score, title, view, dm ,reply, time, like, coin ,fav, share, tag, tid, up_name, up_follow, up_followers`
 
 解释如下：
 
 |    英文属性名     |       中文解释        |
 |:------------:|:-----------------:|
-|      bv      |       视频ID        |
+|      bv      |    视频bv号(唯一ID)    |
 |   progress   |       观看进度        |
 |   duration   |       视频时长        |
 | view_percent |     观看进度的百分比      |
-|  view_time   |       观看时间        |
+|  view_time   |  观看时间(表格按时间降序排列)  |
 |    u_like    |       用户点赞数       |
 |    u_coin    |       用户投币数       |
 |    u_fav     |       用户收藏数       |
