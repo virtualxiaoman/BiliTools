@@ -14,10 +14,9 @@
 5. 获取收藏夹信息
 
 ### 1.2 项目依赖
-- 本项目依赖以下库：`pandas, request, moviepy`
-
-其中`moviepy`非必须，个人建议使用`ffmpeg`（然后将音视频合成的`moviepy`代码注释掉），不然视频音频合成的时候比较慢。 如果没有`ffmpeg`，可以在[ffmpeg官网](https://ffmpeg.org/download.html)下载，然后将ffmpeg.exe放到系统环境变量中。
-可以参考视频[BV1qw4m1d7hx](https://www.bilibili.com/video/BV1qw4m1d7hx/)
+- 本项目依赖以下库：`pandas, request`。
+个人建议使用`ffmpeg`，如果没有`ffmpeg`，可以在[ffmpeg官网](https://ffmpeg.org/download.html)下载，然后将ffmpeg.exe放到系统环境变量中。
+可以参考视频[BV1qw4m1d7hx](https://www.bilibili.com/video/BV1qw4m1d7hx/)。 注：原先音视频合成的`moviepy`代码已经删除，现**仅可使用**`ffmpeg`进行音视频合成。
 
 ### 1.3 项目结构
 本项目BiliTools的结构如下：

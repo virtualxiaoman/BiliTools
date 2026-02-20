@@ -9,7 +9,7 @@ from functools import partial
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QFileDialog, QComboBox
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 
-from src.bili_tools import biliVideo, biliFav, BiliLogin
+from src.bili_tools import BiliVideo, biliFav, BiliLogin
 from src.bili_util import BV2AV
 from src.config import UserAgent
 
@@ -35,7 +35,7 @@ class DownloadThread(QThread):
 
     def run(self):
         print(f"开始下载{self.down_type}，BV号：{self.bv_number}")
-        biliV = biliVideo(self.bv_number)
+        biliV = BiliVideo(self.bv_number)
         success = False
         if biliV.accessible is False:
             self.download_finished.emit(False, self.tip_type, self.current_process, self.bv_number, self.down_type)
@@ -70,7 +70,7 @@ class DownloadThread(QThread):
         if name_type == 'bv':
             return bv_number
         elif name_type == 'title':
-            biliV = biliVideo(bv_number)
+            biliV = BiliVideo(bv_number)
             biliV.get_content()
             title = biliV.title
             title = re.sub(r'[\\/:*?"<>|]', '', title)  # 检查title中是否有不能作为文件名的字符

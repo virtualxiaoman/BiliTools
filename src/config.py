@@ -1,7 +1,10 @@
+import os
+
+
 class Config:
     def __init__(self):
-        self.LOGIN_COOKIE_PATH = "cookie/qr_login.txt"
-        self.LOGIN_QR_PATH = "cookie/qr_login.png"
+        self.LOGIN_COOKIE_PATH = "./assets/cookie/qr_login.txt"
+        self.LOGIN_QR_PATH = "./assets/cookie/qr_login.png"
         self.MAX_RETRY = 3  # 最大重试次数3次
         self.RETRY_DELAY = 1.2  # 重试延迟1.2秒
 
@@ -12,7 +15,8 @@ class bilicookies:
             with open(path, "r") as file:
                 self.bilicookie = file.read()  # 读取cookie文件
         except FileNotFoundError:
-            raise FileNotFoundError("Cookie 文件不存在: {}".format(path))
+            abs_path = os.path.abspath(path)
+            raise FileNotFoundError(f"Cookie 文件未找到，请确保文件存在于路径: {abs_path}")
         except Exception as e:
             raise Exception("读取 Cookie 文件时发生错误: {}".format(str(e)))
         self.bilicookie = open(path, "r").read()

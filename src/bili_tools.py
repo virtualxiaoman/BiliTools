@@ -41,16 +41,16 @@ class BiliLogin:
         """
         获取登录状态
         [使用方法]:
-            biliLogin(headers).get_login_state()
+            BiliLogin(headers).get_login_state()
         :return: 登录信息。使用login_msg["data"]["isLogin"]可获取登录状态
         """
         # get请求https://api.bilibili.com/x/web-interface/nav，参数是cookie，返回的是用户的信息
         r = requests.get(url=self.login_state_url, headers=self.headers)
         login_msg = r.json()
         if login_msg["code"] == 0:
-            print("[biliLogin-get_login_state]登录成功")  # 亦可使用login_msg["data"]["isLogin"])
+            print("[BiliLogin-get_login_state]登录成功")  # 亦可使用login_msg["data"]["isLogin"])
         else:
-            print("[biliLogin-get_login_state]未登录")
+            print("[BiliLogin-get_login_state]未登录")
         return login_msg
 
     def qr_login(self, save_path="cookie", save_name="qr_login", full_path=None, img_show=True):
@@ -60,23 +60,23 @@ class BiliLogin:
             请妥善保管cookie的路径，本方法只会保存一份cookie到本地的指定路径里
         [使用方法-扫码登录，指定自定义保存cookie的路径，然后检查登录状态]:
             full_path = 'cookie/cookie_大号.txt'  # 这里只是为了展示更改路径，实际使用时仍然建议使用默认路径cookie/qr_login.txt
-            biliL = biliLogin()
+            biliL = BiliLogin()
             biliL.qr_login(full_path=full_path)  # 扫码登录
             headers = {
                 "User-Agent": useragent().pcChrome,
                 "Cookie": cookies(path=full_path).bilicookie,
                 'referer': "https://www.bilibili.com"
             }
-            biliLogin(headers).get_login_state()  # 检查登录状态
+            BiliLogin(headers).get_login_state()  # 检查登录状态
         [使用方法-扫码登录并发送赛博评论]:
-            biliL = biliLogin()
+            biliL = BiliLogin()
             biliL.qr_login()
             headers = {
                 "User-Agent": useragent().pcChrome,
                 "Cookie": cookies(path='cookie/qr_login.txt').bilicookie,
                 'referer': "https://www.bilibili.com"
             }
-            biliLogin(headers).get_login_state()
+            BiliLogin(headers).get_login_state()
             biliR = biliReply(bv="BV1ov42117yC")
             biliR.send_reply("可爱的白州梓！[喜欢]")
         [Tips]:
@@ -90,48 +90,60 @@ class BiliLogin:
         :param img_show: 是否立刻用本地的图片查看器打开二维码，默认为True，便于调试扫码
         :return: 登录成功返回True
         """
+        # 1. 生成二维码链接
         r = requests.get(self.qr_generate_url, headers=self.headers)
         data = r.json()
         if data['code'] == 0:
             qrcode_key = data['data']['qrcode_key']
             url = data['data']['url']
         else:
-            raise Exception('Failed to generate QR code: ' + data['message'])
+            raise Exception('Failed to generate QR code: ' + data.get('message', ''))
+
+        # 2. 准备要保存的目录和文件名，并确保目录存在
+        if not full_path:
+            full_path = "./assets/cookie/qr_login.txt"
+        dirname = os.path.dirname(full_path) or "."
+        base_name = os.path.splitext(os.path.basename(full_path))[0]
+        qr_img_path = os.path.join(dirname, base_name + ".png")
+        if not os.path.exists(dirname):
+            os.makedirs(dirname, exist_ok=True)
+            print(f"[BiliLogin-qr_login]目录 {os.path.abspath(dirname)} 不存在，已创建。")
+
+        # 3. 生成并保存二维码图片
         qr = qrcode.QRCode()
         qr.add_data(url)
         qr.make()
         img = qr.make_image()
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        img.save(f"{save_path}/{save_name}.png")
+        img.save(qr_img_path)
         if img_show:
             img.show()
-        print(f"请扫描二维码登录，二维码已保存在{save_path}/{save_name}.png")
+        print(f"请扫描二维码登录，二维码已保存在 {os.path.abspath(qr_img_path)}")
+
         start_time = time.time()
         while True:
             r = requests.get(self.qr_login_url, params={'qrcode_key': qrcode_key}, headers=self.headers)
             data = r.json()
             # print(data)
-            if data['data']['code'] == 86101:
-                print('[biliLogin-qr_login]未扫码')
-            elif data['data']['code'] == 86038:
-                print('[biliLogin-qr_login]二维码失效')
-            elif data['data']['code'] == 86090:
-                print('[biliLogin-qr_login]扫码成功但未确认')
-            elif data['data']['code'] == 0:
-                print('[biliLogin-qr_login]登录成功')
+            code = data.get('data', {}).get('code')
+            if code == 86101:
+                print('[BiliLogin-qr_login]未扫码')
+            elif code == 86038:
+                print('[BiliLogin-qr_login]二维码失效')
+            elif code == 86090:
+                print('[BiliLogin-qr_login]扫码成功但未确认')
+            elif code == 0:
+                print('[BiliLogin-qr_login]登录成功')
                 get_cookie = r.headers['set-cookie']
                 self._save_cookie(get_cookie, save_path, save_name, full_path)
                 return True
             else:
-                print('[biliLogin-qr_login]未知错误')
-            elapsed_time = time.time() - start_time
-            if elapsed_time > 60:
-                print('[biliLogin-qr_login]超过一分钟，返回False')
+                print('[BiliLogin-qr_login]未知错误', data)
+            if time.time() - start_time > 60:
+                print('[BiliLogin-qr_login]超过一分钟，返回False')
                 return False
             time.sleep(1)
 
-    def _save_cookie(self, cookie, save_path=None, save_name=None, full_path=None):
+    def _save_cookie(self, cookie, save_path=None, save_name=None, full_path="./assets/cookie/qr_login.txt"):
         """
         保存cookie
         :param cookie: 原始cookie
@@ -139,15 +151,24 @@ class BiliLogin:
         :param save_name: 保存文件名
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         """
-        if full_path is not None:
-            # 检查路径是否存在，不存在则创建
-            if not os.path.exists(os.path.dirname(full_path)):
-                os.makedirs(os.path.dirname(full_path))
-            file_path = full_path
-        else:
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
-            file_path = os.path.join(save_path, f"{save_name}.txt")  # 使用os.path.join()连接保存路径和文件名
+        dirname = os.path.dirname(full_path) or "."
+        if not os.path.exists(dirname):
+            os.makedirs(dirname, exist_ok=True)
+            print(f"[BiliLogin-_save_cookie]目录 {os.path.abspath(dirname)} 不存在，已创建。")
+
+        file_path = full_path
+        # if full_path is not None:
+        #     # 检查路径是否存在，不存在则创建
+        #     dirname = os.path.dirname(full_path)
+        #     if not os.path.exists(dirname):
+        #         os.makedirs(os.path.dirname(full_path))
+        #         print(f"full_path{full_path}中的目录不存在，已创建目录。绝对路径为: {os.path.abspath(dirname)}")
+        #     file_path = full_path
+        # else:
+        #     if not os.path.exists(save_path):
+        #         os.makedirs(save_path)
+        #         print(f"save_path: {save_path} 不存在，已创建。绝对路径为: {os.path.abspath(save_path)}")
+        #     file_path = os.path.join(save_path, f"{save_name}.txt")  # 使用os.path.join()连接保存路径和文件名
         # 将cookie存入 [×]此方法会导致部分鉴权参数无法被识别
         # cookie_pairs = cookie.split(", ")
         # cookies_dict = {}
@@ -157,27 +178,31 @@ class BiliLogin:
         # cookie_string = "; ".join([f"{key}={value}" for key, value in cookies_dict.items()])
         # 使用正则表达式匹配
         # 找到cookie中的SESSDATA和bili_jct
-        pattern_SESSDATA = re.compile(r"SESSDATA=(.*?);")
-        pattern_bili_jct = re.compile(r"bili_jct=(.*?);")
-        pattern_DedeUserID = re.compile(r"DedeUserID=(.*?);")
-        pattern_DedeUserID__ckMd5 = re.compile(r"DedeUserID__ckMd5=(.*?);")
-        pattern_sid = re.compile(r"sid=(.*?);")
-        SESSDATA = re.search(pattern_SESSDATA, cookie).group(1)
-        bili_jct = re.search(pattern_bili_jct, cookie).group(1)
-        DedeUserID = re.search(pattern_DedeUserID, cookie).group(1)
-        DedeUserID__ckMd5 = re.search(pattern_DedeUserID__ckMd5, cookie).group(1)
-        sid = re.search(pattern_sid, cookie).group(1)
-        cookie = f"SESSDATA={SESSDATA}; bili_jct={bili_jct}; DedeUserID={DedeUserID}; " \
-                 f"DedeUserID__ckMd5={DedeUserID__ckMd5}; sid={sid}"
+        try:
+            pattern_SESSDATA = re.compile(r"SESSDATA=(.*?);")
+            pattern_bili_jct = re.compile(r"bili_jct=(.*?);")
+            pattern_DedeUserID = re.compile(r"DedeUserID=(.*?);")
+            pattern_DedeUserID__ckMd5 = re.compile(r"DedeUserID__ckMd5=(.*?);")
+            pattern_sid = re.compile(r"sid=(.*?);")
+            SESSDATA = re.search(pattern_SESSDATA, cookie).group(1)
+            bili_jct = re.search(pattern_bili_jct, cookie).group(1)
+            DedeUserID = re.search(pattern_DedeUserID, cookie).group(1)
+            DedeUserID__ckMd5 = re.search(pattern_DedeUserID__ckMd5, cookie).group(1)
+            sid = re.search(pattern_sid, cookie).group(1)
+            cookie_string = f"SESSDATA={SESSDATA}; bili_jct={bili_jct}; DedeUserID={DedeUserID}; DedeUserID__ckMd5={DedeUserID__ckMd5}; sid={sid}"
+        except Exception as e:
+            # 如果正则提取失败，则降级为直接写入原始 cookie（适用于格式不同的情况）
+            print(f"[BiliLogin-_save_cookie]正则解析 cookie 失败: {e}，将原始 cookie 写入文件以便调试")
+            cookie_string = cookie or ""
 
-        with open(file_path, "w") as file:
-            print(f"[biliLogin-_save_cookie]cookie已保存在{file_path}")
-            file.write(cookie)
+        with open(file_path, "w", encoding="utf-8") as file:
+            file.write(cookie_string)
+            print(f"[BiliLogin-_save_cookie]cookie已保存在{file_path}")
 
 
 # 获取b站视频信息(目前已实现获取视频信息，下载视频、音频、封面、快照功能)
 # 对于不确定的视频，请务必先检查其属性值accessible是否为True，在biliVideo各个板块中不一定主动判断了该值。
-class biliVideo(BiliVideoUtil):
+class BiliVideo(BiliVideoUtil):
     def __init__(self, bv=None, av=None, cookie_path=None):
         """
         [使用方法]:
@@ -282,11 +307,11 @@ class biliVideo(BiliVideoUtil):
         """
         获取html
         [使用方法]:
-            biliV = biliVideo("BV1ov42117yC")
+            biliV = BiliVideo("BV1ov42117yC")
             biliV.get_html()
         :return:
         """
-        # biliLogin(self.headers).get_login_state()  # 为了防止检查次数过多，这里注释掉了，需要时可以取消注释
+        # BiliLogin(self.headers).get_login_state()  # 为了防止检查次数过多，这里注释掉了，需要时可以取消注释
         r = requests.get(url=self.url_bv, headers=self.headers)
         r.encoding = 'utf-8'
         self.rtext = r.text
@@ -300,7 +325,7 @@ class biliVideo(BiliVideoUtil):
     def get_content(self, stat=True, tag=True, up=True):
         """
         [使用方法]:
-            biliV = biliVideo("BV18x4y187DE")
+            biliV = BiliVideo("BV18x4y187DE")
             biliV.get_html()  # [必要]获取html
             biliV.get_content()
         文档：https://socialsisteryi.github.io/bilibili-API-collect/docs/video/info.html
@@ -370,7 +395,7 @@ class biliVideo(BiliVideoUtil):
                        full_path=None, qn=80, platform="pc", high_quality=1, fnval=16):
         """
         [使用方法]:
-            biliV = biliVideo("BV18x4y187DE")
+            biliV = BiliVideo("BV18x4y187DE")
             biliV.download_video()
         参数具体请查看 `BAC文档
         <https://socialsisteryi.github.io/bilibili-API-collect/docs/video/videostream_url.html>`_.
@@ -416,7 +441,7 @@ class biliVideo(BiliVideoUtil):
         """
         下载音频。如果视频音频都要，建议在download_video之后使用，这样能减少一次请求。
         [使用方法]:
-            biliV = biliVideo("BV12a411k7os")
+            biliV = BiliVideo("BV12a411k7os")
             biliV.download_audio(save_audio_path="output")
         :param save_audio_path: 音频保存路径
         :param save_audio_name: 音频保存名称
@@ -451,7 +476,7 @@ class biliVideo(BiliVideoUtil):
         """
         下载视频与音频后合并
         [使用方法]:
-            biliV = biliVideo("BV1hi4y1e7B1")
+            biliV = BiliVideo("BV1hi4y1e7B1")
             success = biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
             if success:
                 print("下载成功")
@@ -488,7 +513,7 @@ class biliVideo(BiliVideoUtil):
         """
         图片下载
         [使用方法]
-            biliV = biliVideo("BV1Jv4y1p7q3")
+            biliV = BiliVideo("BV1Jv4y1p7q3")
             biliV.get_html()
             biliV.get_content()
             biliV.download_pic(save_pic_path="output", save_pic_name="BV1Jv4y1p7q3封面")
@@ -514,7 +539,7 @@ class biliVideo(BiliVideoUtil):
         """
         视频快照下载
         [使用方法]
-            biliv = biliVideo("BV1zm411y7eF")
+            biliv = BiliVideo("BV1zm411y7eF")
             biliv.download_videoshot(save_videoshot_path="output", save_videoshot_name="快照")
         :param save_videoshot_path: 视频快照保存路径。
         :param save_videoshot_name: 视频快照保存名称。保存的名字是f"{save_videoshot_path}{save_videoshot_name}_{i}.jpg"
@@ -546,7 +571,7 @@ class biliVideo(BiliVideoUtil):
         文档：https://socialsisteryi.github.io/bilibili-API-collect/docs/video/action.html
         [使用方法]:
             full_path = 'cookie/cookie_大号.txt'
-            biliV = biliVideo("BV1ov42117yC", cookie_path=full_path)
+            biliV = BiliVideo("BV1ov42117yC", cookie_path=full_path)
             s = biliV.get_user_action()
             if s:
                 print(biliV.user_like, biliV.user_coin, biliV.user_fav)
@@ -593,7 +618,7 @@ class biliVideo(BiliVideoUtil):
             for i, bvs in enumerate(bvs_popular):
                 # 第352个视频BV1H1421R7i8的信息获取失败，因为tmd是星铁生日会
                 print(f"正在获取第{i+1}个视频信息: {bvs}")
-                biliV = biliVideo(bvs)
+                biliV = BiliVideo(bvs)
                 biliV.get_html()
                 biliV.get_content()
                 bv_content_df = pd.concat([bv_content_df, biliV.to_csv()], axis=0)
@@ -749,9 +774,9 @@ class biliMessage:
             msg_content = r_json['data']['msg_content']
             content_dict = json.loads(msg_content)
             content_value = content_dict['content']
-            print("发送成功，内容是：", content_value)
+            print(f"发送成功，消息内容：{content_value}")
         else:
-            print("发送失败，错误码：", r_json['code'])
+            print(f"发送失败，错误码{r_json['code']}，错误信息：{r_json}")
 
 
 # b站收藏夹(目前已实现获取收藏夹视频功能)
@@ -961,7 +986,7 @@ class biliHistory:
         """
         保存历史记录中的视频信息，有bv号、观看进度
         :param view_info: 是否需要保存观看信息：你是否对视频点赞、投币、收藏了。(分享功能暂时没办法)
-        :param detailed_info: 是否需要额外保存详细信息：视频的各种stat，具体请见下面的代码或者是biliVideo中实现的属性。
+        :param detailed_info: 是否需要额外保存详细信息：视频的各种stat，具体请见下面的代码或者是BiliVideo中实现的属性。
         :param save_path: xlsx的保存路径
         :param save_name: xlsx的保存名称
         :param add_df: 当文件存在时，是否使用追加数据而不是覆盖数据。默认为True(追加), 反之是False(覆盖)
@@ -1008,7 +1033,7 @@ class biliHistory:
         total_videos = len(self.archive_list)
         for i, bv in enumerate(self.archive_list):
             print(f"\r正在获取第 {i + 1}/{total_videos} 个视频 {bv} 的观看信息", end='')
-            biliV = biliVideo(bv, cookie_path=self.cookie_path)
+            biliV = BiliVideo(bv, cookie_path=self.cookie_path)
             if view_info:
                 biliV.get_user_action()
                 data["u_like"].append(biliV.user_like)
@@ -1237,19 +1262,19 @@ if __name__ == '__main__':
     # biliM = biliMessage()
     # biliM.send_msg(506925078, 381978872, "催更[doge]")
 
-    # biliV = biliVideo("BV1ov42117yC")
+    # biliV = BiliVideo("BV1ov42117yC")
     # biliV.get_html()
     # biliV.get_content()
     # biliV.download_pic(save_pic_path="output", save_pic_name="BV1ov42117yC封面")
 
-    # biliL = biliLogin()
+    # biliL = BiliLogin()
     # biliL.qr_login()
     # headers = {
     #     "User-Agent": useragent().pcChrome,
     #     "Cookie": cookies(path='cookie/qr_login.txt').bilicookie,
     #     'referer': "https://www.bilibili.com"
     # }
-    # biliLogin(headers).get_login_state()
+    # BiliLogin(headers).get_login_state()
     # biliR = biliReply(bv="BV1ov42117yC")
     # biliR.send_reply("可爱的白州梓！[喜欢]")
 
@@ -1287,12 +1312,12 @@ if __name__ == '__main__':
     # else:
     #     print("获取历史记录失败")
 
-    # biliV = biliVideo("BV1YS421d7Yx", cookie_path=full_path)
+    # biliV = BiliVideo("BV1YS421d7Yx", cookie_path=full_path)
     # biliV.get_content()
     # print(biliV.tag)
     # print(biliV.tid, biliV.tname, biliV.time)
 
-    # biliV = biliVideo("BV1ov42117yC", cookie_path=full_path)
+    # biliV = BiliVideo("BV1ov42117yC", cookie_path=full_path)
     # s = biliV.get_user_action()
     # if s:
     #     print(biliV.user_like, biliV.user_coin, biliV.user_fav)
