@@ -5,12 +5,13 @@ import random
 import time
 import os
 import requests
-from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 
-from Tools.config import useragent  # User-Agent
-from Tools.config import bilicookies as cookies  # B站cookie
-from Tools.config import Config  # 配置文件
+from src.config import UserAgent  # User-Agent
+from src.config import bilicookies as cookies  # B站cookie
+from src.config import Config  # 配置文件
+
 Config = Config()
+
 
 # BV号和AV号的转换
 class BV2AV:
@@ -123,11 +124,7 @@ class BiliVideoUtil:
         # 检查ffmpeg是否安装
         if os.system("ffmpeg -version") != 0:
             print("ffmpeg未安装")
-            # 使用其他方法
-            video_clip = VideoFileClip(video_path)
-            audio_clip = AudioFileClip(audio_path)
-            video_with_audio = video_clip.set_audio(audio_clip)
-            video_with_audio.write_videofile(save_path, codec='libx264', audio_codec='aac')
+            return -1
         else:
             # 为了防止路径中有空格等ffmpeg不支持字符，使用双引号
             os.system(f'ffmpeg -i "{video_path}" -i "{audio_path}" -c:v copy -c:a flac "{save_path}"')
@@ -150,7 +147,8 @@ class BiliVideoUtil:
         else:
             raise ValueError("path参数类型错误")
 
-    def _save_mp4(self, video_content, save_video_path=None, save_video_name=None, add_desc="视频(无音频)", full_path=None):
+    def _save_mp4(self, video_content, save_video_path=None, save_video_name=None, add_desc="视频(无音频)",
+                  full_path=None):
         """
         [子函数]保存视频
         :param video_content: 视频内容，是get请求返回的二进制数据
@@ -159,7 +157,8 @@ class BiliVideoUtil:
         :param add_desc: 额外描述，默认是"视频(无音频)"
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         """
-        video_path = self._get_path(save_video_path, save_video_name, add_desc=add_desc, save_type="mp4", full_path=full_path)
+        video_path = self._get_path(save_video_path, save_video_name, add_desc=add_desc, save_type="mp4",
+                                    full_path=full_path)
         if save_video_path is not None and not os.path.exists(save_video_path):
             os.makedirs(save_video_path)
         with open(video_path, 'wb') as f:
@@ -174,13 +173,15 @@ class BiliVideoUtil:
         :param add_desc: 额外描述，默认是"音频"
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         """
-        audio_path = self._get_path(save_audio_path, save_audio_name, add_desc=add_desc, save_type="mp3", full_path=full_path)
+        audio_path = self._get_path(save_audio_path, save_audio_name, add_desc=add_desc, save_type="mp3",
+                                    full_path=full_path)
         if save_audio_path is not None and not os.path.exists(save_audio_path):
             os.makedirs(save_audio_path)
         with open(audio_path, 'wb') as f:
             f.write(audio_content)
 
-    def _save_pic(self, pic_content, save_pic_path=None, save_pic_name=None, add_desc="封面", save_type="jpg", full_path=None):
+    def _save_pic(self, pic_content, save_pic_path=None, save_pic_name=None, add_desc="封面", save_type="jpg",
+                  full_path=None):
         """
         [子函数]保存图片
         :param pic_content: 图片内容，是get请求返回的二进制数据
@@ -190,7 +191,8 @@ class BiliVideoUtil:
         :param save_type: 图片保存格式
         :param full_path: 全路径名称(含路径、文件名、后缀)，指定此参数时，其余与路径相关的信息均失效
         """
-        pic_path = self._get_path(save_pic_path, save_pic_name, add_desc=add_desc, save_type=save_type, full_path=full_path)
+        pic_path = self._get_path(save_pic_path, save_pic_name, add_desc=add_desc, save_type=save_type,
+                                  full_path=full_path)
         if save_pic_path is not None and not os.path.exists(save_pic_path):
             os.makedirs(save_pic_path)
         with open(pic_path, 'wb') as f:
@@ -241,7 +243,7 @@ class BiliVideoUtil:
         # 设置headers
         if headers is None:
             self.headers = {
-                "User-Agent": useragent().pcChrome,
+                "User-Agent": UserAgent().pcChrome,
                 "Cookie": cookies().bilicookie,
                 'referer': self.url
             }
@@ -259,7 +261,8 @@ class BiliVideoUtil:
             if r_json["code"] != 0:
                 self.accessible = False
                 retry_count += 1
-                print(f"[BiliVideoUtil-__init_params]第{retry_count}次获取视频{self.bv}是否可访问的信息失败，错误信息：{r_json['message']}")
+                print(
+                    f"[BiliVideoUtil-__init_params]第{retry_count}次获取视频{self.bv}是否可访问的信息失败，错误信息：{r_json['message']}")
                 time.sleep(Config.RETRY_DELAY)
             else:
                 self.accessible = True
@@ -273,7 +276,8 @@ class BiliVideoUtil:
             r_json = r.json()
             if r_json["code"] != 0:
                 retry_count += 1
-                print(f"[BiliVideoUtil-__init_params]第{retry_count}次获取{self.bv}的cid失败，错误信息：{r_json['message']}")
+                print(
+                    f"[BiliVideoUtil-__init_params]第{retry_count}次获取{self.bv}的cid失败，错误信息：{r_json['message']}")
                 time.sleep(Config.RETRY_DELAY)
             else:
                 self.cid = r_json["data"][0]["cid"]  # 目前这个似乎只适用于单P视频，暂未验证

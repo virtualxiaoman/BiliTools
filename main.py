@@ -3,7 +3,8 @@
 # 示例代码一般以视频BV1ov42117yC为例。up主：蔚蓝档案。标题：动画小剧场《补习部的一天》第4集：烟火
 
 
-from Tools.bili_tools import biliVideo
+from src.bili_tools import biliVideo
+
 
 class Example:
     def __init__(self):
@@ -26,11 +27,9 @@ class Example:
 
 
 if __name__ == '__main__':
-    pass
+    # pass
     # 这是一个快速开始示例，请依次取消下面的注释，运行即可
-    # quick_start = Example()
+    quick_start = Example()
     # quick_start.download_video()  # 下载视频BV1ov42117yC到output文件夹里
     # quick_start.download_audio()  # 下载音频BV1ov42117yC到output文件夹里
-    # quick_start.download_video_with_audio()  # 下载视频BV1ov42117yC到output文件夹里
-
-
+    quick_start.download_video_with_audio()  # 下载视频BV1ov42117yC到output文件夹里

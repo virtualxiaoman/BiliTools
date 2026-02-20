@@ -9,9 +9,9 @@ from functools import partial
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QFileDialog, QComboBox
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 
-from Tools.bili_tools import biliVideo, biliFav, biliLogin
-from Tools.bili_util import BV2AV
-from Tools.config import useragent
+from src.bili_tools import biliVideo, biliFav, BiliLogin
+from src.bili_util import BV2AV
+from src.config import UserAgent
 
 from UI.config import Config, Button_css, Input_css, Text_css, ComboBox_css
 Button_css = Button_css()
@@ -99,11 +99,11 @@ class CheckLoginThread(QThread):
             self.login_state.emit(False)
         else:
             headers = {
-                "User-Agent": useragent().pcChrome,
+                "User-Agent": UserAgent().pcChrome,
                 "Cookie": open(self.cookie_path, "r").read(),
                 'referer': "https://www.bilibili.com"
             }
-            login_msg = biliLogin(headers).get_login_state()  # 获取登录信息
+            login_msg = BiliLogin(headers).get_login_state()  # 获取登录信息
             login_state = login_msg["data"]["isLogin"]  # True or False
             self.login_state.emit(login_state)
 
@@ -483,7 +483,7 @@ class Win_Download(QWidget):
                 print("[__transform_bv]用户输入的URL不合法")
                 self.Label_download_video_tip.setText(f"无法获取URL，请检查后重新输入")
                 return False
-            r = requests.get(bvORav, headers={"User-Agent": useragent().pcChrome})
+            r = requests.get(bvORav, headers={"User-Agent": UserAgent().pcChrome})
             if r.status_code == 200:
                 url = r.url
                 bv = re.findall(r"BV[0-9a-zA-Z]{10}", url)
@@ -520,7 +520,7 @@ class Win_Download(QWidget):
                 print("[__transform_fav]用户输入的URL不合法")
                 self.Label_download_fav_tip.setText(f"无法获取URL，请检查后重新输入")
                 return False
-            r = requests.get(fidORurl, headers={"User-Agent": useragent().pcChrome})
+            r = requests.get(fidORurl, headers={"User-Agent": UserAgent().pcChrome})
             if r.status_code == 200:
                 url = r.url
                 fid = re.findall(r"fid=\d+", url)

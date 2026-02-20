@@ -5,9 +5,9 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
-from Tools.bili_tools import biliLogin
-from Tools.config import useragent
-from Tools.config import bilicookies as cookies
+from src.bili_tools import BiliLogin
+from src.config import UserAgent
+from src.config import bilicookies as cookies
 
 from UI.config import Config, Button_css
 
@@ -24,7 +24,7 @@ class LoginThread(QThread):
 
     def run(self):
         # 扫码登录，登录cookie存入COOKIE_PATH
-        login_success = biliLogin().qr_login(img_show=False, full_path=self.cookie_path)  # 返回登录结果, True of False
+        login_success = BiliLogin().qr_login(img_show=False, full_path=self.cookie_path)  # 返回登录结果, True of False
         self.login_finish_state.emit(login_success)
 
 # 检查登录状态
@@ -41,11 +41,11 @@ class CheckLoginThread(QThread):
             self.login_state.emit(False)
         else:
             headers = {
-                "User-Agent": useragent().pcChrome,
+                "User-Agent": UserAgent().pcChrome,
                 "Cookie": cookies(path=self.cookie_path).bilicookie,
                 'referer': "https://www.bilibili.com"
             }
-            login_msg = biliLogin(headers).get_login_state()  # 获取登录信息
+            login_msg = BiliLogin(headers).get_login_state()  # 获取登录信息
             login_state = login_msg["data"]["isLogin"]  # True or False
             self.login_state.emit(login_state)
 

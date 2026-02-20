@@ -3,9 +3,10 @@ import time
 from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton, QStackedLayout,\
     QLabel, QSplashScreen
 from PyQt6.QtGui import QPixmap, QFont
-from PyQt6.QtCore import QTimer, Qt, QBasicTimer, QThread, pyqtSignal
+from PyQt6.QtCore import QTimer, Qt, QBasicTimer, QThread, pyqtSignal, QCoreApplication
+from PyQt6 import QtCore
 
-from Tools.bili_tools import biliVideo
+from src.bili_tools import biliVideo
 
 from UI.main_ui import Win_Main
 from UI.download_ui import Win_Download
@@ -149,6 +150,7 @@ class LoadWin(QWidget):
         self.main_win.show()
 
 if __name__ == "__main__":
+    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)  # 设置高DPI缩放因子
     app = QApplication(sys.argv)
     load_win = LoadWin()
     sys.exit(app.exec())
