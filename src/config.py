@@ -2,15 +2,14 @@ import os
 
 
 class Config:
-    def __init__(self):
-        self.LOGIN_COOKIE_PATH = "./assets/cookie/qr_login.txt"
-        self.LOGIN_QR_PATH = "./assets/cookie/qr_login.png"
-        self.MAX_RETRY = 3  # 最大重试次数3次
-        self.RETRY_DELAY = 1.2  # 重试延迟1.2秒
+    COOKIE_PATH = "./assets/cookie/qr_login.txt"
+    # LOGIN_QR_PATH = "./assets/cookie/qr_login.png"
+    MAX_RETRY = 3  # 最大重试次数3次
+    RETRY_DELAY = 0.712  # 重试延迟0.712秒
 
 
-class bilicookies:
-    def __init__(self, path=Config().LOGIN_COOKIE_PATH):
+class BiliCookies:
+    def __init__(self, path=Config.COOKIE_PATH):
         try:
             with open(path, "r") as file:
                 self.bilicookie = file.read()  # 读取cookie文件

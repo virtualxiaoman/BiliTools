@@ -9,8 +9,10 @@ from functools import partial
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QFileDialog, QComboBox
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 
-from src.bili_tools import BiliVideo, biliFav, BiliLogin
-from src.bili_util import BV2AV
+from src.video import BiliVideo
+from src.archive import BiliFav
+from src.login import BiliLogin
+from src.utils import BV2AV
 from src.config import UserAgent
 
 from UI.config import Config, Button_css, Input_css, Text_css, ComboBox_css
@@ -362,7 +364,7 @@ class Win_Download(QWidget):
             return False
         print("[__on_download_fav_clicked]用户输入的收藏夹FID为：", self.fid)  # 如2525700378
         self.Label_download_fav_tip.setText(f"正在获取收藏夹{self.fid}的视频BV号，别急")
-        biliF = biliFav()
+        biliF = BiliFav()
         bvids = biliF.get_fav_bv(self.fid)
         if bvids is None:
             self.Label_download_fav_tip.setText(f"获取收藏夹{self.fid}的视频BV号失败，可能是你没有访问权限，请注意是否登录的是收藏夹所属账号")

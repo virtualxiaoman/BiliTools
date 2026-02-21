@@ -6,7 +6,7 @@ from PyQt6.QtGui import QPixmap, QFont
 from PyQt6.QtCore import QTimer, Qt, QBasicTimer, QThread, pyqtSignal, QCoreApplication
 from PyQt6 import QtCore
 
-from src.bili_tools import BiliVideo
+from src.video import BiliVideo
 
 from UI.main_ui import Win_Main
 from UI.download_ui import Win_Download

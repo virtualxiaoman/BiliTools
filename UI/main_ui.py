@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QLabel
 
-from src import bili_tools as bt
+from src import video as bt
 
 class Win_Main(QWidget):
     def __init__(self):

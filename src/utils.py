@@ -5,12 +5,13 @@ import random
 import time
 import os
 import requests
+from functools import reduce
+from hashlib import md5
+import urllib.parse
 
 from src.config import UserAgent  # User-Agent
-from src.config import bilicookies as cookies  # B站cookie
+from src.config import BiliCookies as Cookies  # B站cookie
 from src.config import Config  # 配置文件
-
-Config = Config()
 
 
 # BV号和AV号的转换
@@ -92,6 +93,69 @@ class AuthUtil:
         """
         return int(time.time())
 
+    def get_Wbi(self):
+        img_key, sub_key = self._getWbiKeys()
+        signed_params = self._encWbi(
+            params={
+                'foo': '114',
+                'bar': '514',
+                'baz': 1919810
+            },
+            img_key=img_key,
+            sub_key=sub_key
+        )
+        wts = signed_params.get('wts')
+        w_rid = signed_params.get('w_rid')
+        # 如果希望 wts 是整数：
+        if wts is not None:
+            wts = int(wts)
+        return wts, w_rid
+
+    @staticmethod
+    def _getMixinKey(orig: str):
+        """对 imgKey 和 subKey 进行字符顺序打乱编码"""
+        mixinKeyEncTab = [
+            46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
+            33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
+            61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11,
+            36, 20, 34, 44, 52
+        ]
+        return reduce(lambda s, i: s + orig[i], mixinKeyEncTab, '')[:32]
+
+    def _encWbi(self, params: dict, img_key: str, sub_key: str):
+        """为请求参数进行 wbi 签名"""
+        mixin_key = self._getMixinKey(img_key + sub_key)
+        curr_time = round(time.time())
+        params['wts'] = curr_time  # 添加 wts 字段
+        params = dict(sorted(params.items()))  # 按照 key 重排参数
+        # 过滤 value 中的 "!'()*" 字符
+        params = {
+            k: ''.join(filter(lambda chr: chr not in "!'()*", str(v)))
+            for k, v
+            in params.items()
+        }
+        query = urllib.parse.urlencode(params)  # 序列化参数
+        wbi_sign = md5((query + mixin_key).encode()).hexdigest()  # 计算 w_rid
+        params['w_rid'] = wbi_sign
+        return params
+
+    @staticmethod
+    def _getWbiKeys() -> tuple[str, str]:
+        """获取最新的 img_key 和 sub_key"""
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/58.0.3029.110 Safari/537.3',
+            'Referer': 'https://www.bilibili.com/'
+        }
+        resp = requests.get('https://api.bilibili.com/x/web-interface/nav', headers=headers)
+        resp.raise_for_status()
+        json_content = resp.json()
+        img_url: str = json_content['data']['wbi_img']['img_url']
+        sub_url: str = json_content['data']['wbi_img']['sub_url']
+        img_key = img_url.rsplit('/', 1)[1].split('.')[0]
+        sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
+        return img_key, sub_key
+
 
 # B站视频信息工具
 class BiliVideoUtil:
@@ -112,7 +176,8 @@ class BiliVideoUtil:
         self.url = "https://www.bilibili.com/"  # 主站链接
         self.__init_params(bv, av, headers)
 
-    def merge_video_audio(self, video_path, audio_path, save_path=None):
+    @staticmethod
+    def merge_video_audio(video_path, audio_path, save_path=None):
         """
         [子函数]合并视频和音频
         [Tips]:
@@ -129,7 +194,8 @@ class BiliVideoUtil:
             # 为了防止路径中有空格等ffmpeg不支持字符，使用双引号
             os.system(f'ffmpeg -i "{video_path}" -i "{audio_path}" -c:v copy -c:a flac "{save_path}"')
 
-    def check_path(self, path):
+    @staticmethod
+    def check_path(path):
         """
         [子函数]检查路径是否存在，不存在则创建
         :param path: 路径
@@ -244,7 +310,7 @@ class BiliVideoUtil:
         if headers is None:
             self.headers = {
                 "User-Agent": UserAgent().pcChrome,
-                "Cookie": cookies().bilicookie,
+                "Cookie": Cookies().bilicookie,
                 'referer': self.url
             }
         else:

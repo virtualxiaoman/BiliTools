@@ -5,9 +5,9 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
-from src.bili_tools import BiliLogin
+from src.login import BiliLogin
 from src.config import UserAgent
-from src.config import bilicookies as cookies
+from src.config import BiliCookies as cookies
 
 from UI.config import Config, Button_css
 
