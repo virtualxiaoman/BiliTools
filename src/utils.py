@@ -93,7 +93,7 @@ class AuthUtil:
         """
         return int(time.time())
 
-    def get_Wbi(self):
+    def get_wbi(self):
         img_key, sub_key = self._getWbiKeys()
         signed_params = self._encWbi(
             params={

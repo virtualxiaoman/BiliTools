@@ -1,8 +1,7 @@
 # Author: virtual小满
 # BiliTools是一个py操控B站的小工具
 # 示例代码一般以视频BV1ov42117yC为例。up主：蔚蓝档案。标题：动画小剧场《补习部的一天》第4集：烟火
-
-
+from src.up import BiliContract
 from src.video import BiliVideo
 from src.message import BiliMessage
 from src.login import BiliLogin
@@ -39,10 +38,17 @@ class Example:
         # biliM.send_msg(sender_uid=506925078, receiver_uid=334642728, content="煮波什么时候更新？")
         biliM.send_msg(receiver_uid=381978872, content="你好，请问是千年的爱丽丝同学吗？")
 
+    @staticmethod
+    def add_contract():
+        bilic = BiliContract()
+        bilic.add_contract(up_mid=47261023)
+
 
 if __name__ == '__main__':
-    biliV = BiliVideo("BV16HzyBWESt")
-    biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
+    bilic = BiliContract()
+    bilic.add_contract(up_mid=47261023)
+    # biliV = BiliVideo("BV16HzyBWESt")
+    # biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
     # # 这是一个快速开始示例，请依次取消下面的注释，运行即可
     # quick_start = Example()
     # # quick_start.login_qr()  # 扫码登录，登录成功后会在assets/cookie/qr_login.txt里保存cookie信息
