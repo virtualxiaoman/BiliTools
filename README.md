@@ -1,7 +1,15 @@
 ## 一、项目描述
-**通过代码运行(src)**：`main.py`提供了quickstart，亦可通过查看函数里的注释来运行项目中的各个功能。
+本项目尽量提供了简单易用的接口，例如下载视频只需要：
+```python
+biliLogin = BiliLogin()
+biliLogin.qr_login(full_path="./assets/cookie/qr_login.txt")  # 这一步是扫码登录，只需要执行一次
+biliV = BiliVideo("BV1ov42117yC")
+biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')  # 下载视频
+```
+你可以通过`main.py`来执行这个quickstart。亦可通过查看函数里的注释来运行项目中的各个功能。
 
 **构建UI项目(UI)**：运行`UI/ui.py`。或者使用`pyinstaller -F --noconsole UI/ui.py`构建项目。如需图标，请使用`pyinstaller -F --noconsole --icon=UI/data/arona.ico UI/ui.py`
+当然你可以直接使用`release`中发布的.exe程序。
 
 **注意**：UI项目依赖于src项目，但是src项目不依赖于UI项目。同样的，src项目与UI的config相互独立。因为src是方便开发者使用的，而UI界面是方便普通用户使用的。
 
