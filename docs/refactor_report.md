@@ -488,7 +488,41 @@ service.download_cover("BV1ov42117yC", Path("output/cover"))
 
 # 4. 进度回调
 service.download_video("BV1ov42117yC", progress_cb=lambda done, total: print(done, total))
+
+# 5. 多P视频（BV1Q43w6QETb 是 9 分P视频，含音频）
+service.download_video_with_audio("BV1Q43w6QETb", page=2)   # 只下第2P，文件名 [标题]-P02-[part](BV号).mp4
+service.download_all_pages("BV1Q43w6QETb")                   # 下载全部分P
+
+# 6. 合集下载：bvid 或 sid 任选其一
+service.download_season("BV1Q43w6QETb")                  # 从合集内任意一个视频进入
+service.download_season(season_id=8683221)                # 按 sid 直接下载（洛天依·纯蓝幻乐）
+service.download_season(season_id=1717000, mid=506925078) # 下载他人合集（明日方舟）
 ```
+
+### 多P与合集下载（2026-08-10 扩展）
+
+针对「分P视频」与「合集（season）」下载需求新增：
+
+- **模型**：`VideoInfo.pages`（全部分P，`VideoPage`）、`VideoInfo.season`（所属合集，`VideoSeason`，含合集内全部稿件 `episodes`）。
+- **分P下载**：`download_video/audio/video_with_audio` 新增 `page` 参数（指定第几P）；多P文件名 `[标题]-P{序号:02d}-[part](BV号).ext`（`build_multi_page_filename`）；`download_all_pages` 批量下载全部分P。
+- **合集下载（bvid/sid 双通道）**：
+  - `fetch_season(bvid=...)`：从合集内任意视频反查合集结构（`ugc_season`）；
+  - `fetch_season(season_id=..., mid=...)`：按 sid 直接获取合集（`seasons_archives_list` 接口，需完整 `page_num`/`page_size` 参数；**不限登录用户**，任意 UP 主的合集都能查）；
+  - `download_season(bvid=...)` / `download_season(season_id=...)`：下载整个合集，多P稿件逐P，保存到 `<dir>/<合集标题>/`。
+- **接口修正**：`seasons_archives_list` 并非失效——缺 `page_num`/`page_size` 才返回 -400；`ArchiveService` 重写为按 sid 查询（可查他人合集，明日方舟 18 个稿件 vs 旧 `seasons_series_list` 只能查自己且分页不全）。
+- **测试**：新增单测（多P/season 解析、分P文件名、fetch_season bvid/sid 双通道 mock）+ 网络测试（sid 获取合集、他人合集、分P音频下载）；实测 `download_season(season_id=1717000)` 下载明日方舟前 2 个稿件成功。
+
+### 下载进度显示（2026-08-10 新增）
+
+- 新增 `src/util/progress.py` 的 `BatchProgress`：批量下载进度，格式 `[i/n] [名字]: a/bMB (p%)`（`a` 已下载、`b` 总大小=各流 Content-Length 之和、`p` 百分比；无 Content-Length 时显示 `--%`）。
+- 单视频（视频流+音频流+ffmpeg合成）字节跨流累计：视频/音频下载阶段显示字节进度，合成阶段单独状态提示。
+- `download_all_pages` / `download_season` 自动创建共享 `BatchProgress` 驱动，无需手动传参；细粒度接口（`download_video/audio/video_with_audio/cover`）支持 `progress=` 参数传入。
+
+### 统一下载接口（2026-08-10 新增）
+
+- `VideoService.download(bvid)`：**只接受 bvid** 的统一入口——属于合集则下载整个合集（含分P），否则下载该视频（含分P）；默认最高清晰度 HD4K；自动显示进度。
+- 需要微调（清晰度/目录/单P等）的场景仍用细粒度接口（`download_video_with_audio(quality=...)` 等）。
+- 实测 `service.download("BV1ov42117yC")` 进度正确输出（0.2/4.7MB (5.3%) → ... → 4.7/4.7MB (100.0%)）。
 
 ### 验证结果（测试视频 BV1ov42117yC）
 

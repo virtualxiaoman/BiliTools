@@ -2,7 +2,12 @@
 
 import pytest
 
-from src.util.filename import build_download_filename, sanitize_filename, resolve_save_path
+from src.util.filename import (
+    build_download_filename,
+    build_multi_page_filename,
+    resolve_save_path,
+    sanitize_filename,
+)
 
 
 class TestSanitize:
@@ -49,6 +54,24 @@ class TestBuildFilename:
 
     def test_invalid_chars_cleaned_in_title(self):
         assert build_download_filename('标题/含:非法?', "BV1ov42117yC") == "标题含非法(BV1ov42117yC).mp4"
+
+
+class TestBuildMultiPageFilename:
+    def test_standard(self):
+        assert build_multi_page_filename("演唱会", "BV1Q43w6QETb", 2, "反乌托邦pt2") == \
+            "演唱会-P02-反乌托邦pt2(BV1Q43w6QETb).mp4"
+
+    def test_zero_padded_page(self):
+        assert build_multi_page_filename("演唱会", "BV1Q43w6QETb", 9) == \
+            "演唱会-P09(BV1Q43w6QETb).mp4"
+
+    def test_custom_ext(self):
+        assert build_multi_page_filename("演唱会", "BV1Q43w6QETb", 1, "第一P", "m4a") == \
+            "演唱会-P01-第一P(BV1Q43w6QETb).m4a"
+
+    def test_invalid_chars_in_part(self):
+        assert build_multi_page_filename("演唱会", "BV1Q43w6QETb", 1, "标题/含:非法?") == \
+            "演唱会-P01-标题含非法(BV1Q43w6QETb).mp4"
 
 
 def test_resolve_save_path(tmp_path):

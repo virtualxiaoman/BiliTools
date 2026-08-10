@@ -12,6 +12,7 @@ WEB_BASE = "https://www.bilibili.com"
 SPACE_BASE = "https://space.bilibili.com"
 MESSAGE_BASE = "https://message.bilibili.com"
 
+
 # ---- 请求头 ----
 class UserAgent:
     def __init__(self):

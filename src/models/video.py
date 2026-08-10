@@ -69,12 +69,91 @@ class VideoUserAction:
 
 
 @dataclass
-class VideoInfo:
-    """视频信息（旧 BiliVideo 重构后的数据主体）。"""
+class VideoPage:
+    """分P视频的单个分P（view 接口 pages 数组的一项）。"""
+
+    page: int = 1  # 分P序号，从1开始
+    cid: int = 0  # 该P的cid（playurl 鉴权参数）
+    part: str = ""  # 该P的标题（part 字段）
+    duration: int = 0  # 该P时长（秒）
+    width: int = 0  # 分辨率宽
+    height: int = 0  # 分辨率高
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoPage":
+        dim = data.get("dimension") or {}
+        return cls(
+            page=data.get("page", 1),
+            cid=data.get("cid", 0),
+            part=data.get("part", ""),
+            duration=data.get("duration", 0),
+            width=dim.get("width", 0),
+            height=dim.get("height", 0),
+        )
+
+
+@dataclass
+class VideoSeason:
+    """视频所属的合集（ugc_season）信息。"""
+
+    id: int = 0  # season_id
+    title: str = ""  # 合集标题
+    mid: int = 0  # 合集创建者UID
+    ep_count: int = 0  # 合集内稿件数
+    episodes: list = field(default_factory=list)  # 合集内全部稿件（VideoSeasonEpisode 列表）
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoSeason":
+        episodes = []
+        for section in data.get("sections") or []:
+            for ep in section.get("episodes") or []:
+                ep_bvid = ep.get("bvid") or ""
+                ep_aid = ep.get("aid") or 0
+                pages = [VideoPage.from_dict(p) for p in (ep.get("pages") or [])]
+                first_cid = pages[0].cid if pages else 0
+                episodes.append(VideoSeasonEpisode(
+                    bvid=ep_bvid,
+                    aid=ep_aid,
+                    cid=first_cid,
+                    title=ep.get("title", ""),
+                    section=section.get("title", ""),
+                    pages=pages,
+                ))
+        return cls(
+            id=data.get("id", 0),
+            title=data.get("title", ""),
+            mid=data.get("mid", 0),
+            ep_count=data.get("ep_count", 0),
+            episodes=episodes,
+        )
+
+
+@dataclass
+class VideoSeasonEpisode:
+    """合集内的单个稿件（一个视频，可能含多P）。"""
 
     bvid: str = ""
     aid: int = 0
-    cid: Optional[int] = None  # 分P cid（鉴权参数，单P视频）
+    cid: int = 0  # 首个分P的cid
+    title: str = ""  # 稿件标题
+    section: str = ""  # 所在分区（如「正片」）
+    pages: list = field(default_factory=list)  # 该稿件分P（VideoPage 列表）
+
+    @property
+    def is_multi_page(self) -> bool:
+        return len(self.pages) > 1
+
+
+@dataclass
+class VideoInfo:
+    """视频信息（旧 BiliVideo 重构后的数据主体）。
+
+    对于多P视频，`pages` 保存全部分P；`cid` 为首个分P的 cid（兼容单P场景）。
+    """
+
+    bvid: str = ""
+    aid: int = 0
+    cid: Optional[int] = None  # 分P cid（鉴权参数，默认取第一个分P）
 
     title: str = ""  # 视频标题
     pic: str = ""  # 封面地址
@@ -90,18 +169,27 @@ class VideoInfo:
     owner: Optional[VideoOwner] = None  # 作者信息
     user_action: Optional[VideoUserAction] = None  # 观众互动状态（需要时另行获取）
 
+    pages: list = field(default_factory=list)  # 全部分P（VideoPage 列表，多P视频有多个）
+    season: Optional[VideoSeason] = None  # 所属合集（ugc_season），不属于合集时为 None
+
     dash: Optional[DashStreams] = None  # DASH 下载流信息（请求 playurl 后填充）
+
+    @property
+    def is_multi_page(self) -> bool:
+        """是否为多P视频。"""
+        return len(self.pages) > 1
 
     @classmethod
     def from_view_json(cls, data: dict) -> "VideoInfo":
         """从视频信息接口（x/web-interface/view）的 data 字段构造。
 
         :param data: view 接口返回的 data 字典
-        :return: VideoInfo（cid 从 pages[0] 取，单 P 视频适用）
+        :return: VideoInfo（cid 取第一个分P；pages 保存全部分P；season 保存所属合集）
         """
         pages = data.get("pages") or []
         first_page = pages[0] if pages else {}
         owner_data = data.get("owner") or {}
+        season_data = data.get("ugc_season")
         return cls(
             bvid=data.get("bvid", ""),
             aid=data.get("aid", 0),
@@ -114,4 +202,6 @@ class VideoInfo:
             tname=data.get("tname", ""),
             stat=VideoStat.from_dict(data.get("stat") or {}),
             owner=VideoOwner.from_view_dict(owner_data),
+            pages=[VideoPage.from_dict(p) for p in pages],
+            season=VideoSeason.from_dict(season_data) if season_data else None,
         )

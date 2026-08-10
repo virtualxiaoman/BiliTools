@@ -32,6 +32,34 @@ class VideoQuality(IntEnum):
     DOLBY = 126  # 杜比视界（需 fnval&512=512）
     HD8K = 127  # 8K 超高清
 
+    @property
+    def display_name(self) -> str:
+        """清晰度的展示名称（如 `4K`、`1080P`），用于进度条等。"""
+        return {
+            self.P360: "360P",
+            self.P480: "480P",
+            self.P720: "720P",
+            self.P720_60: "720P60",
+            self.P1080: "1080P",
+            self.P1080_PLUS: "1080P+",
+            self.P1080_60: "1080P60",
+            self.HD4K: "4K",
+            self.HDR: "HDR",
+            self.DOLBY: "杜比",
+            self.HD8K: "8K",
+        }[self]
+
+    @classmethod
+    def from_qn(cls, qn: int) -> Optional["VideoQuality"]:
+        """将 playurl 流里的 qn(id) 值映射回清晰度枚举；未知值返回 None。
+
+        实际挑选出的流清晰度可能低于请求值（回退），用于进度条显示真实清晰度。
+        """
+        try:
+            return cls(qn)
+        except ValueError:
+            return None
+
 
 @dataclass
 class DownloadResult:

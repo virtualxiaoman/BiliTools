@@ -9,7 +9,15 @@ M0/M1 阶段先建立包骨架，M2 起逐步填充：
 
 from src.models.download import AudioStream, DashStreams, DownloadResult, VideoQuality, VideoStream
 from src.models.login import LoginUser
-from src.models.video import VideoInfo, VideoOwner, VideoStat, VideoUserAction
+from src.models.video import (
+    VideoInfo,
+    VideoOwner,
+    VideoPage,
+    VideoSeason,
+    VideoSeasonEpisode,
+    VideoStat,
+    VideoUserAction,
+)
 from src.models.user import UserInfo
 
 __all__ = [
@@ -21,6 +29,9 @@ __all__ = [
     "LoginUser",
     "VideoInfo",
     "VideoOwner",
+    "VideoPage",
+    "VideoSeason",
+    "VideoSeasonEpisode",
     "VideoStat",
     "VideoUserAction",
     "UserInfo",

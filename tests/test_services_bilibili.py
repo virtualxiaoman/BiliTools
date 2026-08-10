@@ -25,6 +25,7 @@ TEST_BVID = "BV1ov42117yC"  # 动画小剧场《补习部的一天》第4集：�
 TEST_UP_MID = 3493265644980448  # 蔚蓝档案官方
 TEST_FAV_MEDIA_ID = 827560778  # 用户自己的默认收藏夹（需登录）
 TEST_SEASON_ID = 1717000  # 合集·明日方舟（属当前登录用户）
+TEST_MULTI_PAGE_BVID = "BV1Q43w6QETb"  # 多P视频（9P），属于合集「洛天依·纯蓝幻乐」
 
 
 def test_fetch_info(video_service: VideoService):
@@ -108,3 +109,39 @@ def test_archive_list():
     # 合集「明日方舟」属于当前登录用户，mid=0 时自动解析为登录用户 mid
     bvs = ArchiveService().get_archives_list(TEST_SEASON_ID, mid=0)
     assert len(bvs) > 0
+
+
+def test_fetch_season_by_sid(video_service: VideoService):
+    """按 sid 获取合集结构（不依赖 bvid）。"""
+    season = video_service.fetch_season(season_id=8683221)  # 洛天依·纯蓝幻乐
+    assert season is not None
+    assert season.title
+    assert len(season.episodes) >= 1
+    # episodes 应补全分P信息
+    ep = season.episodes[0]
+    assert ep.bvid
+    assert len(ep.pages) >= 1
+
+
+def test_fetch_season_by_sid_other(video_service: VideoService):
+    """按 sid 获取他人合集。"""
+    season = video_service.fetch_season(season_id=1717000, mid=506925078)  # 明日方舟
+    assert season is not None
+    assert len(season.episodes) > 1
+
+
+def test_fetch_season_multi_page(video_service: VideoService):
+    """多P视频应解析出全部分P + 所属合集。"""
+    info = video_service.fetch_info(TEST_MULTI_PAGE_BVID)
+    assert info.is_multi_page is True
+    assert len(info.pages) > 1
+    assert info.season is not None
+    assert info.season.title
+    assert len(info.season.episodes) >= 1
+
+
+def test_download_multi_page_audio(tmp_path, video_service: VideoService):
+    """多P视频指定分P下载音频，文件名应含 P 序号。"""
+    result = video_service.download_audio(TEST_MULTI_PAGE_BVID, tmp_path, page=2)
+    assert result.path.exists()
+    assert "-P02-" in result.path.name

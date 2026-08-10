@@ -1,6 +1,8 @@
 """数据模型（dataclass）的单元测试。"""
 
-from src.models import LoginUser, VideoInfo, VideoOwner, VideoStat
+import pytest
+
+from src.models import LoginUser, VideoInfo, VideoOwner, VideoSeason, VideoStat
 from src.models.download import DashStreams, VideoQuality, VideoStream
 from src.models.history import HistoryItem, HistoryPage
 
@@ -39,6 +41,83 @@ class TestVideoInfo:
     def test_from_view_json_no_pages(self):
         info = VideoInfo.from_view_json({"bvid": "BV1xx411c7mD"})
         assert info.cid is None
+        assert info.pages == []
+        assert info.is_multi_page is False
+        assert info.season is None
+
+
+class TestMultiPageAndSeason:
+    def test_from_view_json_multi_page(self):
+        data = {
+            "bvid": "BV1Q43w6QETb", "aid": 1,
+            "title": "多P视频",
+            "pages": [
+                {"page": 1, "cid": 111, "part": "第一P", "duration": 100,
+                 "dimension": {"width": 1920, "height": 1080}},
+                {"page": 2, "cid": 222, "part": "第二P", "duration": 200,
+                 "dimension": {"width": 1920, "height": 1080}},
+            ],
+            "ugc_season": {
+                "id": 8683221, "title": "测试合集", "mid": 506925078, "ep_count": 1,
+                "sections": [{"title": "正片", "episodes": [
+                    {"bvid": "BV1Q43w6QETb", "aid": 1, "title": "多P视频", "pages": [
+                        {"page": 1, "cid": 111, "part": "第一P", "duration": 100},
+                        {"page": 2, "cid": 222, "part": "第二P", "duration": 200},
+                    ]},
+                ]}],
+            },
+        }
+        info = VideoInfo.from_view_json(data)
+        assert info.is_multi_page is True
+        assert len(info.pages) == 2
+        assert info.pages[0].cid == 111
+        assert info.pages[1].part == "第二P"
+        assert info.season.id == 8683221
+        assert info.season.title == "测试合集"
+        assert len(info.season.episodes) == 1
+        ep = info.season.episodes[0]
+        assert ep.bvid == "BV1Q43w6QETb"
+        assert ep.is_multi_page is True
+
+    def test_season_no_episodes(self):
+        season = VideoSeason.from_dict({"id": 1, "title": "空合集", "sections": []})
+        assert season.episodes == []
+        assert season.ep_count == 0
+
+
+class TestFetchSeason:
+    """VideoService.fetch_season 的 bvid/sid 双通道逻辑（mock ArchiveService）。"""
+
+    def test_season_id_requires_param(self):
+        from src.services import VideoService
+        s = VideoService()
+        with pytest.raises(ValueError):
+            s.fetch_season()  # 两个参数都没有
+
+    def test_season_id_builds_episodes(self):
+        from unittest.mock import MagicMock, patch
+        from src.services import VideoService
+        from src.models import VideoInfo, VideoPage
+
+        s = VideoService()
+        fake_arch_service = MagicMock()
+        fake_arch_service.get_season_by_id.return_value = {
+            "meta": {"season_id": 8683221, "title": "洛天依·纯蓝幻乐", "mid": 1, "total": 2},
+            "archives": [{"bvid": "BV1A", "aid": 1, "title": "稿件A"}, {"bvid": "BV1B", "aid": 2, "title": "稿件B"}],
+        }
+
+        def fake_fetch_info(bvid):
+            return VideoInfo(bvid=bvid, pages=[VideoPage(page=1, cid=1, part="唯一")])
+
+        with patch("src.services.video.ArchiveService", return_value=fake_arch_service):
+            s.fetch_info = fake_fetch_info
+            season = s.fetch_season(season_id=8683221)
+
+        assert season is not None
+        assert season.title == "洛天依·纯蓝幻乐"
+        assert len(season.episodes) == 2
+        assert season.episodes[0].bvid == "BV1A"
+        assert season.episodes[0].pages[0].cid == 1  # fetch_info 补全分P
 
 
 class TestDownloadModels:
@@ -58,6 +137,17 @@ class TestDownloadModels:
         """枚举值应按清晰度升序排列（用于排序比较）。"""
         values = [q.value for q in VideoQuality]
         assert values == sorted(values)
+
+    def test_quality_display_name(self):
+        assert VideoQuality.HD4K.display_name == "4K"
+        assert VideoQuality.P1080.display_name == "1080P"
+        assert VideoQuality.HDR.display_name == "HDR"
+        assert VideoQuality.DOLBY.display_name == "杜比"
+
+    def test_quality_from_qn(self):
+        assert VideoQuality.from_qn(120) == VideoQuality.HD4K
+        assert VideoQuality.from_qn(80) == VideoQuality.P1080
+        assert VideoQuality.from_qn(999) is None
 
     def test_video_stream_ext(self):
         assert VideoStream(url="http://x/1.mp4").ext == "mp4"
@@ -120,3 +210,31 @@ class TestLoginUser:
         user = LoginUser.from_nav_json({"isLogin": False})
         assert user.is_login is False
         assert user.mid is None
+
+
+class TestUnifiedDownload:
+    """VideoService.download(bvid) 统一下载接口的分流逻辑。"""
+
+    def test_dispatch_to_season_or_pages(self):
+        from unittest.mock import patch
+        from src.services import VideoService
+        from src.models import VideoInfo, VideoPage, VideoSeason, VideoSeasonEpisode
+
+        s = VideoService()
+        info_in_season = VideoInfo(
+            bvid="BV1A",
+            season=VideoSeason(id=1, title="A", episodes=[VideoSeasonEpisode(bvid="BV1A")]),
+        )
+        info_single = VideoInfo(bvid="BV1B", pages=[VideoPage(page=1, cid=1)], season=None)
+
+        with patch.object(s, "fetch_info", side_effect=[info_in_season, info_single]), \
+             patch.object(s, "download_season", return_value=["r1"]) as m_season, \
+             patch.object(s, "download_all_pages", return_value=["r2"]) as m_pages:
+            assert s.download("BV1A") == ["r1"]
+            assert m_season.call_count == 1
+            assert s.download("BV1B") == ["r2"]
+            assert m_pages.call_count == 1
+            # 默认使用最高清晰度 HD4K
+            from src.models import VideoQuality
+            assert m_season.call_args.kwargs["quality"] == VideoQuality.HD4K
+            assert m_pages.call_args.kwargs["quality"] == VideoQuality.HD4K

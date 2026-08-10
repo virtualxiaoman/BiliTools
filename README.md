@@ -20,6 +20,21 @@ print(info.title, info.owner.name, info.stat.num_dm)
 # 3. 下载视频（文件名自动为 [标题](BV号).mp4）
 result = service.download_video_with_audio("BV1ov42117yC", quality=VideoQuality.P1080)
 print(result.path)
+
+# 4. 统一下载入口：只传 bvid，自动决定下载范围 + 最高清晰度 + 进度显示
+#    - 属于合集 → 下载整个合集（含分P）
+#    - 单视频 → 下载该视频（含分P）
+service.download("BV1ov42117yC")     # 单视频
+service.download("BV1Q43w6QETb")     # 属于合集 → 下载整个合集
+
+# 5. 多P视频：指定分P下载 / 下载全部分P（文件名含 P 序号）
+service.download_video_with_audio("BV1Q43w6QETb", page=2)          # 只下第2P
+service.download_all_pages("BV1Q43w6QETb")                          # 下载全部分P
+
+# 6. 合集下载：bvid 或 sid 任选其一
+service.download_season("BV1Q43w6QETb")                  # 从合集内任意一个视频进入
+service.download_season(season_id=8683221)                # 按 sid 直接下载（洛天依·纯蓝幻乐）
+service.download_season(season_id=1717000, mid=506925078) # 下载他人合集（明日方舟）
 ```
 
 更多示例见 `examples/quick_start.py`，命令行入口见 `main.py`。
@@ -28,7 +43,7 @@ print(result.path)
 
 | 模块 | 服务类 | 功能 |
 |------|--------|------|
-| 视频 | `VideoService` | 获取信息 / 下载视频 / 音频 / 封面 / 音视频合成（ffmpeg） |
+| 视频 | `VideoService` | 获取信息 / 下载视频 / 音频 / 封面 / 音视频合成（ffmpeg）/ **分P下载 / 合集下载** |
 | 登录 | `LoginService` | 扫码登录 / 登录状态查询 |
 | 历史 | `HistoryService` | 历史记录分页 / 失效视频查找 / 导出 xlsx |
 | 用户 | `UserService` / `ContractService` | 用户信息 / 老粉签约 |

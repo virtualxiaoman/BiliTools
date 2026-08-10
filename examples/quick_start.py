@@ -53,7 +53,7 @@ def download_video():
 def download_cover():
     """下载封面。"""
     service = VideoService()
-    result = service.download_cover("BV1ov42117yC", Path("output/video"))
+    result = service.download_cover("BV1ov42117yC")
     print(f"封面：{result.path}")
 
 
@@ -93,6 +93,42 @@ def get_archive():
     print(f"合集视频 {len(bvs)} 个")
 
 
+def download_multi_page():
+    """下载多P视频的指定分P（BV1Q43w6QETb 是 9 分P视频，含音频）。"""
+    service = VideoService()
+    # 指定第 2 个分P：文件名形如 [标题]-P02-[part](BV号).mp4
+    result = service.download_video_with_audio("BV1Q43w6QETb", page=2, quality=VideoQuality.P1080)
+    print(f"分P下载：{result.path}")
+    # 下载全部分P
+    # results = service.download_all_pages("BV1Q43w6QETb", quality=VideoQuality.P1080)
+    # print(f"已下载 {len(results)} 个分P")
+
+
+def download_season():
+    """下载整个合集。bvid 与 sid 任选其一。"""
+    service = VideoService()
+    # 方式1：从合集内任意一个视频进入
+    # results = service.download_season("BV1Q43w6QETb", quality=VideoQuality.P1080)
+    # 方式2：按 sid 直接下载（洛天依·纯蓝幻乐 / 他人合集 明日方舟）
+    # results = service.download_season(season_id=8683221, quality=VideoQuality.P1080)
+    # results = service.download_season(season_id=1717000, mid=506925078, quality=VideoQuality.P1080)
+    # 先查看合集结构
+    season = service.fetch_season(season_id=8683221)
+    print(f"合集「{season.title}」共 {len(season.episodes)} 个稿件")
+    # results = service.download_season(season_id=season.id, quality=VideoQuality.P1080)
+    # print(f"合集下载完成，共 {len(results)} 个文件")
+
+
+def unified_download():
+    """统一下载入口：只传 bvid，自动决定范围（合集/单视频）+ 最高清晰度 + 进度显示。"""
+    service = VideoService()
+    results = service.download("BV1ov42117yC")  # 单视频
+    # results = service.download("BV1Q43w6QETb")  # 属于合集 → 下载整个合集
+    print(f"下载完成，共 {len(results)} 个文件")
+    for r in results:
+        print("  ", r.path.name)
+
+
 def send_reply():
     """发表评论（注意：会真实发布，谨慎运行）。"""
     service = ReplyService()
@@ -103,7 +139,7 @@ def send_reply():
 def send_message():
     """发送私信（注意：会真实发送，谨慎运行）。"""
     service = MessageService()
-    service.send_msg(receiver_uid=381978872, content="你好，请问是千年的爱丽丝同学吗？")
+    service.send_msg(receiver_uid=3493133776062465, content="你好，请问是千年的爱丽丝同学吗？")
     print("私信已发送")
 
 
@@ -111,13 +147,16 @@ if __name__ == "__main__":
     # 依次取消注释运行
     # login_qr()
     get_video_info()
-    download_video()
-    download_cover()
-    get_user_info()
-    get_rank()
-    get_history()
-    get_fav()
-    get_archive()
-    send_reply()
-    send_message()
+    # download_video()
+    # download_cover()
+    # get_user_info()
+    # get_rank()
+    # get_history()
+    # get_fav()
+    # get_archive()
+    # download_multi_page()
+    # download_season()
+    # unified_download()
+    # send_reply()
+    # send_message()
     pass

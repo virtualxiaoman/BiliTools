@@ -70,6 +70,26 @@ def build_download_filename(title: str, bvid: str, ext: str = "mp4") -> str:
     return f"{safe_title}({bvid}).{ext.lstrip('.')}"
 
 
+def build_multi_page_filename(title: str, bvid: str, page: int, part: str = "", ext: str = "mp4") -> str:
+    """按统一规则生成分P视频的文件名：`[标题]-P{序号}-[该P标题](BV号).{扩展名}`。
+
+    [使用方法]:
+        build_multi_page_filename("演唱会", "BV1Q43w6QETb", 2, "反乌托邦pt2")
+        # "演唱会-P02-反乌托邦pt2(BV1Q43w6QETb).mp4"
+    :param title: 视频主标题
+    :param bvid: BV号
+    :param page: 分P序号（从1开始）
+    :param part: 该P的标题（part 字段），为空时省略
+    :param ext: 扩展名（不含点）
+    :return: 完整文件名
+    """
+    safe_title = sanitize_filename(title)
+    safe_part = sanitize_filename(part) if part else ""
+    page_tag = f"-P{page:02d}"
+    part_tag = f"-{safe_part}" if safe_part else ""
+    return f"{safe_title}{page_tag}{part_tag}({bvid}).{ext.lstrip('.')}"
+
+
 def resolve_save_path(directory, filename: str) -> Path:
     """拼接保存目录与文件名，并确保目录存在（幂等）。"""
     directory = Path(directory)
