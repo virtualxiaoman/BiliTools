@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 
 class VideoQuality(IntEnum):
@@ -87,13 +88,18 @@ class VideoStream:
 
     @property
     def ext(self) -> str:
-        """推断扩展名：优先取 URL 后缀，av1/hevc 取 m4s，否则 m4s/mp4。"""
-        suffix = Path(self.url).suffix.lower().lstrip(".")
-        if suffix in ("mp4", "flv", "m4s"):
-            return suffix
-        if "av1" in self.codecs or "hev" in self.codecs:
-            return "m4s"
-        return "m4s"
+        """推断视频流的实际格式扩展名。
+
+        DASH 流的 URL 后缀基本都是 `.m4s`（含查询串），真实编码在 codecs 字段：
+        - `avc1`/`avc3`（H.264）、`hev1`/`hvc1`（H.265）、`av01`（AV1）→ `mp4`
+        - 其余（罕见）→ `m4s`
+        """
+        codecs = self.codecs.lower()
+        if codecs.startswith(("avc1", "avc3", "hev1", "hvc1", "av01")):
+            return "mp4"
+        # 兜底：从 URL 路径后缀解析（正确剥离查询串）
+        path_suffix = Path(urlparse(self.url).path).suffix.lower().lstrip(".")
+        return path_suffix if path_suffix in ("mp4", "flv", "m4s") else "m4s"
 
 
 @dataclass
@@ -107,10 +113,20 @@ class AudioStream:
 
     @property
     def ext(self) -> str:
-        suffix = Path(self.url).suffix.lower().lstrip(".")
-        if suffix in ("m4a", "mp3", "flac", "aac", "mp4"):
-            return suffix
-        return "m4a"
+        """推断音频流的实际格式扩展名。
+
+        DASH 音频流 URL 后缀基本都是 `.m4s`（含查询串），真实编码在 codecs 字段：
+        - `mp4a.*`（AAC）→ `m4a`
+        - 含 `opus` → `opus`
+        - 其余 → 从 URL 路径后缀解析，兜底 `m4a`
+        """
+        codecs = self.codecs.lower()
+        if codecs.startswith("mp4a"):
+            return "m4a"
+        if "opus" in codecs:
+            return "opus"
+        path_suffix = Path(urlparse(self.url).path).suffix.lower().lstrip(".")
+        return path_suffix if path_suffix in ("m4a", "mp3", "flac", "aac", "mp4") else "m4a"
 
 
 @dataclass

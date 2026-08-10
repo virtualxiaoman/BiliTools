@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.models import LoginUser, VideoInfo, VideoOwner, VideoSeason, VideoStat
+from src.models import AudioStream, LoginUser, VideoInfo, VideoOwner, VideoSeason, VideoStat
 from src.models.download_model import DashStreams, VideoQuality, VideoStream
 from src.models.history_model import HistoryItem, HistoryPage
 
@@ -150,14 +150,21 @@ class TestDownloadModels:
         assert VideoQuality.from_qn(999) is None
 
     def test_video_stream_ext(self):
-        assert VideoStream(url="http://x/1.mp4").ext == "mp4"
-        assert VideoStream(url="http://x/1.flv").ext == "flv"
-        assert VideoStream(url="http://x/1", codecs="avc1").ext == "m4s"
-        assert VideoStream(url="http://x/1", codecs="hev1").ext == "m4s"
-        assert VideoStream(url="http://x/1", codecs="av01").ext == "m4s"
+        # 真实 DASH 流：codecs 决定格式（URL 后缀是 .m4s 带查询串）
+        assert VideoStream(url="http://x/1.m4s?e=abc", codecs="avc1.640032").ext == "mp4"
+        assert VideoStream(url="http://x/1.m4s?e=abc", codecs="hev1.1.6.L150.90").ext == "mp4"
+        assert VideoStream(url="http://x/1.m4s?e=abc", codecs="av01.0.08M").ext == "mp4"
+        # 未知 codecs：从 URL 路径后缀解析
+        assert VideoStream(url="http://x/1.flv", codecs="").ext == "flv"
+        assert VideoStream(url="http://x/1", codecs="").ext == "m4s"
 
     def test_audio_stream_ext(self):
-        assert DashStreams().best_audio() is None
+        # 真实 DASH 音频流：mp4a.* = AAC → m4a（URL 是 .m4s 带查询串）
+        assert AudioStream(url="http://x/1.m4s?e=abc", codecs="mp4a.40.2").ext == "m4a"
+        assert AudioStream(url="http://x/1.m4s?e=abc", codecs="opus").ext == "opus"
+        # 未知 codecs：从 URL 路径后缀解析，兜底 m4a
+        assert AudioStream(url="http://x/1.mp3", codecs="").ext == "mp3"
+        assert AudioStream(url="http://x/1", codecs="").ext == "m4a"
 
     def test_dash_pick_video(self):
         dash = DashStreams(video=[
@@ -187,6 +194,9 @@ class TestDownloadModels:
         assert dash.pick_video(VideoQuality.P1080).url == "1080"  # 不被拉到 4K
         assert dash.pick_video(VideoQuality.HD4K).url == "4k"      # 默认(HD4K)取最高
         assert dash.pick_video(VideoQuality.P720).url == "720"
+        # 空流
+        assert DashStreams().best_video() is None
+        assert DashStreams().best_audio() is None
 
 
 class TestHistoryModels:
