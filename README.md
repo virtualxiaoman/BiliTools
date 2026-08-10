@@ -17,9 +17,13 @@ service = VideoService()
 info = service.fetch_info("BV1ov42117yC")
 print(info.title, info.owner.name, info.stat.num_dm)
 
-# 3. 下载视频（文件名自动为 [标题](BV号).mp4）
-result = service.download_video_with_audio("BV1ov42117yC", quality=VideoQuality.P1080)
+# 3. 下载视频（默认最高清晰度 4K；文件名自动为 [标题](BV号).mp4）
+result = service.download_video_with_audio("BV1ov42117yC")
 print(result.path)
+
+#    指定清晰度：精确匹配目标档位，该档不存在时回退到最高可用
+result = service.download_video_with_audio("BV1ov42117yC", quality=VideoQuality.P1080)
+#    P1080 在有 4K 的视频上会下 1080P（不会被拉到 4K）；无 1080P 档时回退到最高可用
 
 # 4. 统一下载入口：只传 bvid，自动决定下载范围 + 最高清晰度 + 进度显示
 #    - 属于合集 → 下载整个合集（含分P）

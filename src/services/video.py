@@ -183,7 +183,7 @@ class VideoService:
         dir: Optional[Path] = None,
         *,
         page: int = 1,
-        quality: VideoQuality = VideoQuality.P1080,
+        quality: VideoQuality = VideoQuality.HD4K,
         progress_cb: Optional[ProgressCallback] = None,
         progress: Optional[BatchProgress] = None,
         filename: Optional[str] = None,
@@ -193,7 +193,7 @@ class VideoService:
         :param bvid: BV号
         :param dir: 保存目录。None 时使用默认下载目录
         :param page: 分P序号（从1开始），多P视频指定要下载的P
-        :param quality: 期望的最小清晰度
+        :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
         :param progress_cb: 进度回调 (downloaded, total)
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由批量接口传入）
         :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
@@ -287,7 +287,7 @@ class VideoService:
         :param bvid: BV号
         :param dir: 保存目录。None 时使用默认下载目录
         :param page: 分P序号（从1开始），多P视频指定要下载的P
-        :param quality: 期望的最小清晰度
+        :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
         :param keep_parts: 是否保留合成前的视频/音频临时文件（默认删除）
         :param progress_cb: 进度回调 (downloaded, total)。传入时将进度转发给回调
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由批量接口传入）
@@ -409,7 +409,7 @@ class VideoService:
         bvid: str,
         dir: Optional[Path] = None,
         *,
-        quality: VideoQuality = VideoQuality.P1080,
+        quality: VideoQuality = VideoQuality.HD4K,
         media_type: str = "video_with_audio",
         progress_cb: Optional[ProgressCallback] = None,
         progress: Optional[BatchProgress] = None,
@@ -418,7 +418,7 @@ class VideoService:
 
         :param bvid: BV号
         :param dir: 保存目录。None 时使用默认下载目录
-        :param quality: 期望的最小清晰度
+        :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
         :param media_type: 下载类型：video / audio / video_with_audio / cover
         :param progress_cb: 进度回调 (downloaded, total)
         :param progress: BatchProgress 进度显示；None 时自动创建
@@ -502,7 +502,7 @@ class VideoService:
         *,
         season_id: Optional[int] = None,
         mid: int = 0,
-        quality: VideoQuality = VideoQuality.P1080,
+        quality: VideoQuality = VideoQuality.HD4K,
         media_type: str = "video_with_audio",
         progress_cb: Optional[ProgressCallback] = None,
         progress: Optional[BatchProgress] = None,
@@ -518,7 +518,7 @@ class VideoService:
         :param dir: 保存根目录。None 时使用默认下载目录
         :param season_id: 合集 sid
         :param mid: season_id 方式下合集所属用户UID，0 时尝试用当前登录用户
-        :param quality: 期望的最小清晰度
+        :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
         :param media_type: 下载类型：video / audio / video_with_audio / cover
         :param progress_cb: 进度回调 (downloaded, total)
         :param progress: BatchProgress 进度显示；None 时自动创建

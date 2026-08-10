@@ -40,12 +40,15 @@ def get_video_info():
 
 
 def download_video():
-    """下载视频到 output/video/，文件名自动为 [标题](BV号).mp4。"""
+    """下载视频到 output/video/，文件名自动为 [标题](BV号).mp4。
+
+    默认最高清晰度(4K)。指定 quality 时精确匹配该档位，匹配不到回退到最高可用。
+    """
     service = VideoService()
     result = service.download_video_with_audio(
         "BV1ov42117yC",
-        Path("output/video"),
-        quality=VideoQuality.P1080,
+        # 不传 quality 默认 4K；传 P1080 则精确下载 1080P（有 4K 也不会被拉高）
+        # quality=VideoQuality.P1080,
     )
     print(f"已下载：{result.path}")
 
@@ -75,7 +78,7 @@ def get_history():
     """获取历史记录并导出 xlsx。"""
     service = HistoryService()
     items = service.get_history_all(max_iter=2, ps=10)
-    service.save_video_history_df(items, save_path=Path("output/history"), save_name="history")
+    service.save_video_history_df(items, save_name="history")
     print(f"历史记录 {len(items)} 条已导出")
 
 

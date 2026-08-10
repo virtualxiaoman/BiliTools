@@ -530,6 +530,17 @@ service.download_season(season_id=1717000, mid=506925078) # 下载他人合集�
 - `download_stream` 支持网络中断后的**断点续传**：中断（IncompleteRead/ConnectionError）时用 `Range` 头从已下载位置继续，默认最多重试 3 次。
 - 实测：下载明日方舟合集视频时网络中断（读到 17MB），重试后续传完成，最终文件完整（79MB+76MB）。
 
+### 清晰度语义（2026-08-10 设计确定）
+
+`quality` 参数采用**精确目标**语义：
+
+- **默认 `HD4K`（最高）**：不传 quality 时下载最高可用清晰度（4K→无4K自动回退）。
+- **传具体档位 = 精确目标**：`P1080` 在有 4K 的视频上会下载 **1080P**（不会被拉到 4K）；`P720` 只下 720P。
+- **匹配不到回退**：视频没有该档位（如请求 4K 但视频最高 1080P）时，回退到最高可用流。
+
+`DashStreams.pick_video` 实现：先按降序精确匹配 `==quality` 的流，找不到则返回最高可用流。
+实测（BV1ov42117yC，可用 360/480/720/1080 四档）：P360→360P、P480→480P、P720→720P、P1080→1080P、HD4K→1080P（回退）。
+
 ### 验证结果（测试视频 BV1ov42117yC）
 
 - 旧模块 `src.video/utils/history/login/up/archive/rank/reply/message` 全部可导入（shim 生效）。

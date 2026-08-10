@@ -166,14 +166,27 @@ class TestDownloadModels:
             VideoStream(url="c", quality=80),  # 1080P
         ])
         assert dash.best_video().url == "c"
-        # 要求 720P：应命中 1080P（不低于目标的第一档）
-        assert dash.pick_video(VideoQuality.P720).url == "c"
-        # 要求 1080P：精确命中
+        # 精确目标：要求 1080P → 命中 1080P
         assert dash.pick_video(VideoQuality.P1080).url == "c"
-        # 要求 4K（无此档）：回退到最高
+        # 要求 720P → 命中 720P（不再上取更高）
+        assert dash.pick_video(VideoQuality.P720).url == "b"
+        # 要求 360P → 命中 360P
+        assert dash.pick_video(VideoQuality.P360).url == "a"
+        # 视频没有 4K 流 → 回退到最高可用
         assert dash.pick_video(VideoQuality.HD4K).url == "c"
         # 空流
         assert DashStreams().pick_video(VideoQuality.P1080) is None
+
+    def test_pick_video_precise_target_not_higher(self):
+        """关键语义：视频有 4K(120) 与 1080P(80)，要求 1080P 必须取 1080P 而非 4K。"""
+        dash = DashStreams(video=[
+            VideoStream(url="4k", quality=120),
+            VideoStream(url="1080", quality=80),
+            VideoStream(url="720", quality=64),
+        ])
+        assert dash.pick_video(VideoQuality.P1080).url == "1080"  # 不被拉到 4K
+        assert dash.pick_video(VideoQuality.HD4K).url == "4k"      # 默认(HD4K)取最高
+        assert dash.pick_video(VideoQuality.P720).url == "720"
 
 
 class TestHistoryModels:

@@ -132,17 +132,21 @@ class DashStreams:
         """返回清晰度最高的视频流。"""
         return self.video[0] if self.video else None
 
-    def pick_video(self, min_quality: VideoQuality) -> Optional[VideoStream]:
-        """按最小清晰度要求挑选视频流：取不低于 min_quality 的最高清晰度流。
+    def pick_video(self, quality: VideoQuality) -> Optional[VideoStream]:
+        """按**目标清晰度**挑选视频流。
 
-        若全部流低于要求，退回清晰度最高的一条。
+        语义（精确目标）：优先返回清晰度**恰好等于** quality 的流；
+        若视频没有该清晰度（未提供/无权限），回退到**最高可用**流。
+
+        示例：`P1080` 时视频有 4K+1080P → 选 1080P（不会被拉到 4K）；
+              视频只有 720P → 回退到 720P。
         """
         if not self.video:
             return None
         for stream in self.video:  # 已按 quality 降序
-            if stream.quality >= min_quality:
+            if stream.quality == quality:
                 return stream
-        return self.video[0]
+        return self.video[0]  # 无精确匹配 → 回退到最高可用
 
     def best_audio(self) -> Optional[AudioStream]:
         """返回码率最高的音频流。"""
