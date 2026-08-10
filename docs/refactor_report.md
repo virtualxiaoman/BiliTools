@@ -539,6 +539,13 @@ service.download_season(season_id=1717000, mid=506925078) # 下载他人合集�
 - `VideoService.download_fav(media_id 或 URL, mode="video"/"audio")`：逐个下载收藏夹全部视频（含音频合成）或仅音频（本地缓存听歌），保存到 `output/video/<收藏夹名>/`，自动逐P、带进度显示。
 - 实测：fid=3953119978（4 个视频，其中 1 个双P）下载全部音频成功（5 个 m4a）。
 
+### UP主空间下载（2026-08-10 新增）
+
+- `VideoService.list_up_videos(mid 或空间URL)`：分页获取 UP 主全部视频 bvid（`x/space/wbi/arc/search`，需 wbi 签名，翻页到底）。
+- `VideoService.download_up(mid 或空间URL, mode="video"/"audio")`：逐个下载该 UP 主全部视频或仅音频，保存到 `output/video/<UP主昵称>/`，自动逐P、带进度显示。
+- `_resolve_mid(mid 或 URL)`：从空间 URL 解析 mid（如 `space.bilibili.com/249056021`）。
+- 实测：UP主「星末绫初」(mid=249056021，3 个短视频) 下载全部音频成功（3 个 mp3）。
+
 ### 清晰度语义（2026-08-10 设计确定）
 
 `quality` 参数采用**精确目标**语义：

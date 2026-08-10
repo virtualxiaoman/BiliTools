@@ -43,9 +43,14 @@ service.download_season(season_id=1717000, mid=506925078) # 下载他人合集�
 # 7. 收藏夹下载：全部视频（有声音）或仅音频（缓存听歌），URL 或 media_id 均可
 service.download_fav("https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create")
 service.download_fav(3953119978, mode="audio")            # 仅下载音频到 output/video/<收藏夹名>/
+
+# 8. UP主空间下载：全部视频或仅音频，URL 或 mid 均可
+service.download_up("https://space.bilibili.com/249056021")
+service.download_up(249056021, mode="audio")              # 仅下载音频到 output/video/<UP主昵称>/
 ```
 
 收藏夹视频列表获取：`FavService().get_fav_bv(media_id 或 URL)`、`get_fav_info(media_id 或 URL)`。
+UP主视频列表获取：`service.list_up_videos(mid 或 URL)`。
 
 更多示例见 `examples/quick_start.py`，命令行入口见 `main.py`。
 
@@ -53,7 +58,7 @@ service.download_fav(3953119978, mode="audio")            # 仅下载音频到 o
 
 | 模块 | 服务类 | 功能 |
 |------|--------|------|
-| 视频 | `VideoService` | 获取信息 / 下载视频 / 音频 / 封面 / 音视频合成（ffmpeg）/ **分P下载 / 合集下载** |
+| 视频 | `VideoService` | 获取信息 / 下载视频 / 音频 / 封面 / 音视频合成（ffmpeg）/ **分P下载 / 合集下载 / 收藏夹下载 / UP主下载** |
 | 登录 | `LoginService` | 扫码登录 / 登录状态查询 |
 | 历史 | `HistoryService` | 历史记录分页 / 失效视频查找 / 导出 xlsx |
 | 用户 | `UserService` / `ContractService` | 用户信息 / 老粉签约 |

@@ -600,7 +600,7 @@ class VideoService:
 
     def download_fav(
         self,
-        media_id: Optional[Union[int, str]] = None,
+        fid: Optional[Union[int, str]] = None,
         dir: Optional[Path] = None,
         *,
         mode: str = "video",
@@ -619,7 +619,7 @@ class VideoService:
             # 仅下载音频（本地缓存听歌）
             service.download_fav(3953119978, mode="audio")
 
-        :param media_id: 收藏夹 media_id 或收藏夹页面 URL
+        :param fid: 收藏夹 media_id 或收藏夹页面 URL
         :param dir: 保存根目录。None 时使用默认下载目录
         :param mode: video（下载视频+音频合成，默认）或 audio（仅下载音频流）
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
@@ -628,8 +628,8 @@ class VideoService:
         from src.services.fav import FavService
 
         fav = FavService(self.session)
-        info = fav.get_fav_info(media_id)
-        bvids = fav.get_fav_bv(media_id)
+        info = fav.get_fav_info(fid)
+        bvids = fav.get_fav_bv(fid)
         if not bvids:
             raise ValueError(f"收藏夹「{info.title}」没有视频。")
 
@@ -639,6 +639,101 @@ class VideoService:
         results = []
         for bvid in bvids:
             logger.info("[VideoService] 收藏夹「%s」下载：%s", info.title, bvid)
+            if mode == "audio":
+                results.extend(self.download_all_pages(bvid, save_dir, quality=quality, media_type="audio"))
+            else:  # video
+                results.extend(self.download_all_pages(bvid, save_dir, quality=quality))
+        return results
+
+    # ---- UP主空间 ----
+
+    def _resolve_mid(self, mid: Optional[Union[int, str]]) -> int:
+        """接受 mid 或 UP主空间 URL，统一返回 mid。"""
+        if mid is None:
+            raise ValueError("需要提供 mid 或 UP主空间 URL")
+        s = str(mid).strip()
+        # https://space.bilibili.com/249056021 或带路径
+        if s.startswith("http://") or s.startswith("https://"):
+            import re
+            match = re.search(r"space\.bilibili\.com/(\d+)", s)
+            if not match:
+                raise ValueError(f"无法从空间 URL 解析 mid：{s}")
+            return int(match.group(1))
+        return int(s)
+
+    def list_up_videos(self, mid: Optional[Union[int, str]] = None, ps: int = 30) -> list:
+        """获取某个 UP 主空间的全部视频 BV 号列表（分页翻到底）。
+
+        [使用方法]:
+            service = VideoService()
+            bvs = service.list_up_videos(249056021)
+            bvs = service.list_up_videos("https://space.bilibili.com/249056021")
+
+        :param mid: UP主 mid 或空间 URL
+        :param ps: 每页数量（最大 50）
+        :return: 视频bv号列表
+        """
+        from src.api.auth import get_wbi
+        from src.urls.user_urls import UserUrls
+
+        mid = self._resolve_mid(mid)
+        bvids = []
+        pn = 1
+        while True:
+            params = {"mid": mid, "pn": pn, "ps": ps, "order": "pubdate"}
+            get_wbi(params)  # 原地追加 wts 与 w_rid
+            data = self.session.get(UserUrls.SPACE_ARC_SEARCH, params=params)
+            vlist = data.get("list", {}).get("vlist", [])
+            bvids.extend(v.get("bvid") for v in vlist)
+            total = data.get("page", {}).get("count", 0)
+            if len(bvids) >= total or not vlist:
+                break
+            pn += 1
+            import time
+            time.sleep(0.3)  # 避免风控
+        return bvids
+
+    def download_up(
+        self,
+        mid: Optional[Union[int, str]] = None,
+        dir: Optional[Path] = None,
+        *,
+        mode: str = "video",
+        quality: VideoQuality = VideoQuality.HD4K,
+    ) -> list:
+        """下载某个 UP 主空间的全部视频（有声音）或仅音频。
+
+        逐个下载该 UP 主的所有投稿，保存到 `<dir>/<UP主昵称>/`（默认 `output/video/<昵称>/`）。
+        每个视频若有分P则逐P下载，带进度显示。
+
+        [使用方法]
+            service = VideoService()
+            # 下载 UP 主全部视频（含音频合成），URL 或 mid 均可
+            service.download_up("https://space.bilibili.com/249056021")
+            service.download_up(249056021)
+            # 仅下载音频
+            service.download_up(249056021, mode="audio")
+
+        :param mid: UP主 mid 或空间 URL
+        :param dir: 保存根目录。None 时使用默认下载目录
+        :param mode: video（下载视频+音频合成，默认）或 audio（仅下载音频流）
+        :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
+        :return: DownloadResult 列表
+        """
+        from src.services.user import UserService
+
+        mid = self._resolve_mid(mid)
+        bvids = self.list_up_videos(mid)
+        if not bvids:
+            raise ValueError(f"UP主 {mid} 没有视频。")
+
+        up_name = UserService(self.session).get_name(mid) or f"up_{mid}"
+        save_dir = (Path(dir) if dir is not None else self.default_dir) / up_name
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        results = []
+        for bvid in bvids:
+            logger.info("[VideoService] UP主「%s」下载：%s", up_name, bvid)
             if mode == "audio":
                 results.extend(self.download_all_pages(bvid, save_dir, quality=quality, media_type="audio"))
             else:  # video

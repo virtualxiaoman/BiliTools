@@ -112,6 +112,25 @@ def download_fav():
         print("  ", r.path.name)
 
 
+def download_up():
+    """下载某 UP 主空间全部视频（有声音）或仅音频。
+
+    URL 或 mid 均可；保存到 output/video/<UP主昵称>/。
+    """
+    service = VideoService()
+    up_url = "https://space.bilibili.com/249056021"
+    # 先查看 UP 主的视频列表
+    bvs = service.list_up_videos(up_url)
+    print(f"UP主共 {len(bvs)} 个视频：{bvs}")
+    # 下载全部视频（含音频合成）
+    # results = service.download_up(up_url)
+    # 仅下载音频
+    results = service.download_up(up_url, mode="audio")
+    print(f"UP主下载完成，共 {len(results)} 个文件")
+    for r in results:
+        print("  ", r.path.name)
+
+
 def download_multi_page():
     """下载多P视频的指定分P（BV1Q43w6QETb 是 9 分P视频，含音频）。"""
     service = VideoService()
@@ -174,6 +193,7 @@ if __name__ == "__main__":
     # get_fav()
     # get_archive()
     # download_fav()
+    # download_up()
     # download_multi_page()
     # download_season()
     # unified_download()

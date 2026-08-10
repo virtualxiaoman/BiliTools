@@ -172,3 +172,22 @@ def test_download_fav_first_audio(tmp_path, video_service: VideoService):
     result = video_service.download_audio(bvs[0], tmp_path)
     assert result.path.exists()
     assert result.size > 0
+
+
+TEST_UP_MID_SPACE = 249056021  # 星末绫初，3 个短视频
+
+
+def test_list_up_videos(video_service: VideoService):
+    """获取 UP 主全部视频 bvid。"""
+    bvs = video_service.list_up_videos(TEST_UP_MID_SPACE)
+    assert len(bvs) >= 1
+    assert all(b.startswith("BV") for b in bvs)
+
+
+def test_download_up_first_audio(tmp_path, video_service: VideoService):
+    """UP主下载：仅取第一个视频的音频验证链路。"""
+    bvs = video_service.list_up_videos(TEST_UP_MID_SPACE)
+    assert bvs
+    result = video_service.download_audio(bvs[0], tmp_path)
+    assert result.path.exists()
+    assert result.size > 0
