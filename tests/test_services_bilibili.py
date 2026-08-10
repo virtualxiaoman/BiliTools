@@ -145,3 +145,30 @@ def test_download_multi_page_audio(tmp_path, video_service: VideoService):
     result = video_service.download_audio(TEST_MULTI_PAGE_BVID, tmp_path, page=2)
     assert result.path.exists()
     assert "-P02-" in result.path.name
+
+
+def test_fav_get_bv():
+    """收藏夹 bvid 列表（支持 URL 与 media_id）。"""
+    from src.services import FavService
+    fav = FavService()
+    bvs = fav.get_fav_bv("https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create")
+    assert len(bvs) >= 1
+    assert all(b.startswith("BV") for b in bvs)
+
+
+def test_fav_get_info():
+    from src.services import FavService
+    info = FavService().get_fav_info(3953119978)
+    assert info.title
+    assert info.media_count >= 1
+
+
+def test_download_fav_first_audio(tmp_path, video_service: VideoService):
+    """收藏夹下载：仅取第一个视频的音频验证链路（避免下载整个收藏夹）。"""
+    from src.services import FavService
+    fav = FavService()
+    bvs = fav.get_fav_bv(3953119978)
+    assert bvs, "收藏夹为空"
+    result = video_service.download_audio(bvs[0], tmp_path)
+    assert result.path.exists()
+    assert result.size > 0

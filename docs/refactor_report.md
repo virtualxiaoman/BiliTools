@@ -530,6 +530,15 @@ service.download_season(season_id=1717000, mid=506925078) # 下载他人合集�
 - `download_stream` 支持网络中断后的**断点续传**：中断（IncompleteRead/ConnectionError）时用 `Range` 头从已下载位置继续，默认最多重试 3 次。
 - 实测：下载明日方舟合集视频时网络中断（读到 17MB），重试后续传完成，最终文件完整（79MB+76MB）。
 
+### 收藏夹下载（2026-08-10 新增）
+
+- `FavService` 增强：
+  - `get_fav_bv(media_id 或 URL)`：收藏夹全部 bvid（`x/v3/fav/resource/ids` 一次性返回，175 个收藏实测不截断）；
+  - `get_fav_info(media_id 或 URL)`：收藏夹名/数量（用于下载目录）；
+  - `parse_fav_url(url)`：从收藏夹页面 URL 提取 fid（如 `space.bilibili.com/x/favlist?fid=3953119978`）。
+- `VideoService.download_fav(media_id 或 URL, mode="video"/"audio")`：逐个下载收藏夹全部视频（含音频合成）或仅音频（本地缓存听歌），保存到 `output/video/<收藏夹名>/`，自动逐P、带进度显示。
+- 实测：fid=3953119978（4 个视频，其中 1 个双P）下载全部音频成功（5 个 m4a）。
+
 ### 清晰度语义（2026-08-10 设计确定）
 
 `quality` 参数采用**精确目标**语义：

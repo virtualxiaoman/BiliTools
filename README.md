@@ -39,7 +39,13 @@ service.download_all_pages("BV1Q43w6QETb")                          # 下载全�
 service.download_season("BV1Q43w6QETb")                  # 从合集内任意一个视频进入
 service.download_season(season_id=8683221)                # 按 sid 直接下载（洛天依·纯蓝幻乐）
 service.download_season(season_id=1717000, mid=506925078) # 下载他人合集（明日方舟）
+
+# 7. 收藏夹下载：全部视频（有声音）或仅音频（缓存听歌），URL 或 media_id 均可
+service.download_fav("https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create")
+service.download_fav(3953119978, mode="audio")            # 仅下载音频到 output/video/<收藏夹名>/
 ```
+
+收藏夹视频列表获取：`FavService().get_fav_bv(media_id 或 URL)`、`get_fav_info(media_id 或 URL)`。
 
 更多示例见 `examples/quick_start.py`，命令行入口见 `main.py`。
 
@@ -54,7 +60,7 @@ service.download_season(season_id=1717000, mid=506925078) # 下载他人合集�
 | 评论 | `ReplyService` | 发表评论 |
 | 私信 | `MessageService` | 发送私信 |
 | 排行 | `RankService` | 综合热门 / 排行榜 |
-| 收藏 | `FavService` | 收藏夹视频列表 |
+| 收藏 | `FavService` | 收藏夹视频列表 / 收藏夹全部视频·音频下载 |
 | 合集 | `ArchiveService` | 视频合集列表 |
 
 ## 项目结构

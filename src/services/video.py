@@ -15,7 +15,7 @@
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from src.api.auth import get_wbi
 from src.api.errors import FFmpegNotFoundError
@@ -597,3 +597,50 @@ class VideoService:
             return self.download_season(bvid=bvid, dir=dir, quality=VideoQuality.HD4K)
         # 单视频（含多P）：下载全部分P
         return self.download_all_pages(bvid, dir, quality=VideoQuality.HD4K)
+
+    def download_fav(
+        self,
+        media_id: Optional[Union[int, str]] = None,
+        dir: Optional[Path] = None,
+        *,
+        mode: str = "video",
+        quality: VideoQuality = VideoQuality.HD4K,
+    ) -> list:
+        """下载整个收藏夹的全部视频（有声音）或仅音频。
+
+        逐个下载收藏夹内的视频，保存到 `<dir>/<收藏夹名称>/`（默认 `output/video/<收藏夹名称>/`）。
+        每个视频若有分P则逐P下载。下载带进度显示（含清晰度标签）。
+
+        [使用方法]
+            service = VideoService()
+            # 下载收藏夹全部视频（含音频合成），URL 或 media_id 均可
+            service.download_fav("https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create")
+            service.download_fav(3953119978)
+            # 仅下载音频（本地缓存听歌）
+            service.download_fav(3953119978, mode="audio")
+
+        :param media_id: 收藏夹 media_id 或收藏夹页面 URL
+        :param dir: 保存根目录。None 时使用默认下载目录
+        :param mode: video（下载视频+音频合成，默认）或 audio（仅下载音频流）
+        :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
+        :return: DownloadResult 列表
+        """
+        from src.services.fav import FavService
+
+        fav = FavService(self.session)
+        info = fav.get_fav_info(media_id)
+        bvids = fav.get_fav_bv(media_id)
+        if not bvids:
+            raise ValueError(f"收藏夹「{info.title}」没有视频。")
+
+        save_dir = (Path(dir) if dir is not None else self.default_dir) / info.title
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        results = []
+        for bvid in bvids:
+            logger.info("[VideoService] 收藏夹「%s」下载：%s", info.title, bvid)
+            if mode == "audio":
+                results.extend(self.download_all_pages(bvid, save_dir, quality=quality, media_type="audio"))
+            else:  # video
+                results.extend(self.download_all_pages(bvid, save_dir, quality=quality))
+        return results

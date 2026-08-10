@@ -96,6 +96,22 @@ def get_archive():
     print(f"合集视频 {len(bvs)} 个")
 
 
+def download_fav():
+    """下载收藏夹全部视频（有声音）或仅音频（缓存听歌）。
+
+    URL 或 media_id 均可；保存到 output/video/<收藏夹名>/。
+    """
+    service = VideoService()
+    fav_url = "https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create"
+    # 下载全部视频（含音频合成）
+    # results = service.download_fav(fav_url)
+    # 仅下载音频（本地缓存听歌）
+    results = service.download_fav(fav_url, mode="audio")
+    print(f"收藏夹下载完成，共 {len(results)} 个文件")
+    for r in results:
+        print("  ", r.path.name)
+
+
 def download_multi_page():
     """下载多P视频的指定分P（BV1Q43w6QETb 是 9 分P视频，含音频）。"""
     service = VideoService()
@@ -157,6 +173,7 @@ if __name__ == "__main__":
     # get_history()
     # get_fav()
     # get_archive()
+    # download_fav()
     # download_multi_page()
     # download_season()
     # unified_download()
