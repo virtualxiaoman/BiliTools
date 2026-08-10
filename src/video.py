@@ -3,11 +3,22 @@ import requests
 import os
 
 from src.login import BiliLogin
-from src.util.Colorful_Console import ColoredText as CT  # 用于控制台的彩色输出
-from src.utils import BiliVideoUtil  # B站视频工具
+# from src.util.Colorful_Console import ColoredText as CT  # 用于控制台的彩色输出
+from src.utils import BiliVideoUtil, AuthUtil  # B站视频工具
 from src.config import UserAgent  # User-Agent
 from src.config import BiliCookies as cookies  # B站cookie
 from src.config import Config  # 加载配置信息
+
+
+class VideoUrls:
+    PLAY = "https://api.bilibili.com/x/player/wbi/playurl"
+    VIEW = "https://api.bilibili.com/x/web-interface/view"
+    VIEW_DETAIL = "https://api.bilibili.com/x/web-interface/view/detail"
+    TAG = "https://api.bilibili.com/x/tag/archive/tags"
+
+    @staticmethod
+    def video(bvid: str) -> str:
+        return f"https://www.bilibili.com/video/{bvid}"
 
 
 # 获取b站视频信息(目前已实现获取视频信息，下载视频、音频、封面、快照功能)
@@ -56,6 +67,9 @@ class BiliVideo(BiliVideoUtil):
         """
         # 初始化信息
         super().__init__(bv=bv, av=av)
+
+        self.wts, self.w_rid = AuthUtil().get_wbi()
+
         if cookie_path is None:
             cookie_path = Config.COOKIE_PATH
             # warning_text = "[此警告可忽略] cookie_path参数未指定，默认为 'cookie/qr_login.txt' ，请注意是否是所需要的cookie。"
@@ -68,15 +82,18 @@ class BiliVideo(BiliVideoUtil):
         self.url_stat_detail = f"https://api.bilibili.com/x/web-interface/view/detail?bvid={self.bv}"  # 视频详细信息
         self.url_tag = "https://api.bilibili.com/x/tag/archive/tags"  # 视频标签
         self.url_up = "https://api.bilibili.com/x/web-interface/card"  # up主信息(简略)
+        self.videoshot_url = "https://api.bilibili.com/x/player/videoshot"
 
         self.headers = {
             "User-Agent": UserAgent().pcChrome,
             "Cookie": cookies(path=cookie_path).bilicookie,
-            'referer': self.url_bv
+            # 'referer': self.url_bv,
+            'referer': "https://www.bilibili.com",
+            "Origin": "https://www.bilibili.com",
+            "Accept": "*/*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
         }
-
-        # # 网页文本
-        # self.rtext = None  # 网页的文本，也就是r.text(因为后面基本使用api，所以这个属性已经废弃)
+        # print(self.headers)
 
         # 基本信息
         self.title = None  # 视频的标题
@@ -108,28 +125,6 @@ class BiliVideo(BiliVideoUtil):
         self.user_like = None  # 用户是否点赞 0,1
         self.user_coin = None  # 用户投币数量 0,1,2
         self.user_fav = None  # 用户是否收藏 0,1
-
-        # 自动调用的方法
-        # self.get_html()  # 自动获取html(因为后面基本使用api，所以这个方法已经废弃)
-
-    # [×]这个方法已经废弃，因为后面基本使用api。用于获取html
-    def get_html(self):
-        """
-        获取html
-        [使用方法]:
-            biliV = BiliVideo("BV1ov42117yC")
-            biliV.get_html()
-        :return:
-        """
-        # BiliLogin(self.headers).get_login_state()  # 为了防止检查次数过多，这里注释掉了，需要时可以取消注释
-        r = requests.get(url=self.url_bv, headers=self.headers)
-        r.encoding = 'utf-8'
-        self.rtext = r.text
-        # if self.html_path is not None:
-        #     if not os.path.exists(self.html_path):
-        #         os.makedirs(self.html_path)
-        #     with open(f"{self.html_path}{self.bv}.html", 'w', encoding='utf-8') as f:
-        #         f.write(self.rtext)
 
     # 用于获取视频信息
     def get_content(self, stat=True, tag=True, up=True):
@@ -228,6 +223,11 @@ class BiliVideo(BiliVideoUtil):
             "platform": "pc",  # 平台。pc或html5
             "high_quality": 1,  # 当platform=html5时，此值为1可使画质为1080p
         }
+        wts, w_rid = AuthUtil().get_wbi(params)
+        print(f"params: {params}")
+        print(wts, w_rid)
+        print(self.wts, self.w_rid)
+
         r = requests.get(url=self.url_play, headers=self.headers, params=params)
         self.down_video_json = r.json()
         # print(self.down_video_json)
@@ -259,7 +259,9 @@ class BiliVideo(BiliVideoUtil):
             params = {
                 "bvid": self.bv,
                 "cid": self.cid,
-                "fnval": fnval
+                "fnval": fnval,
+                "wts": self.wts,
+                "w_rid": self.w_rid,
             }
             r = requests.get(url=self.url_play, headers=self.headers, params=params)
             self.down_video_json = r.json()
@@ -348,7 +350,6 @@ class BiliVideo(BiliVideoUtil):
         :param index: 是否需要视频快照的索引。默认为0表示不需要。
         :return: (list)视频快照地址
         """
-        self.videoshot_url = "https://api.bilibili.com/x/player/videoshot"
         params = {
             "bvid": self.bv,
             "index": index
@@ -450,31 +451,31 @@ class BiliVideo(BiliVideoUtil):
         df = pd.DataFrame(data)
         return df
 
-    # 显示视频信息
-    def show_values(self):
-        print(CT('av号: ').blue() + f"{self.av}")
-        print(CT('bv号: ').blue() + f"{self.bv}")
-        print(CT('标题: ').blue() + f"{self.title}")
-        print(CT('图片地址: ').blue() + f"{self.pic}")
-        print(CT('简介: ').blue() + f"{self.desc}")
-        print(CT('播放量: ').blue() + f"{self.view}")
-        print(CT('弹幕数: ').blue() + f"{self.dm}")
-        print(CT('评论数: ').blue() + f"{self.reply}")
-        print(CT('发布时间: ').blue() + f"{self.time}")
-        print(CT('点赞数: ').blue() + f"{self.like}")
-        print(CT('硬币数: ').blue() + f"{self.coin}")
-        print(CT('收藏数: ').blue() + f"{self.fav}")
-        print(CT('分享数: ').blue() + f"{self.share}")
-        print(CT('标签: ').blue() + f"{self.tag}")
-        print(CT('分区tid: ').blue() + f"{self.tid}")
-        print(CT('子分区名称: ').blue() + f"{self.tname}")
-        print(CT('up主: ').blue() + f"{self.up}")
-        print(CT('up主mid: ').blue() + f"{self.up_mid}")
-        print(CT('是否关注up主: ').blue() + f"{self.up_follow}")
-        print(CT('up主粉丝数: ').blue() + f"{self.up_followers}")
-        print(CT('是否点赞: ').blue() + f"{self.user_like}")
-        print(CT('投币数量: ').blue() + f"{self.user_coin}")
-        print(CT('是否收藏: ').blue() + f"{self.user_fav}")
+    # # 显示视频信息
+    # def show_values(self):
+    #     print(CT('av号: ').blue() + f"{self.av}")
+    #     print(CT('bv号: ').blue() + f"{self.bv}")
+    #     print(CT('标题: ').blue() + f"{self.title}")
+    #     print(CT('图片地址: ').blue() + f"{self.pic}")
+    #     print(CT('简介: ').blue() + f"{self.desc}")
+    #     print(CT('播放量: ').blue() + f"{self.view}")
+    #     print(CT('弹幕数: ').blue() + f"{self.dm}")
+    #     print(CT('评论数: ').blue() + f"{self.reply}")
+    #     print(CT('发布时间: ').blue() + f"{self.time}")
+    #     print(CT('点赞数: ').blue() + f"{self.like}")
+    #     print(CT('硬币数: ').blue() + f"{self.coin}")
+    #     print(CT('收藏数: ').blue() + f"{self.fav}")
+    #     print(CT('分享数: ').blue() + f"{self.share}")
+    #     print(CT('标签: ').blue() + f"{self.tag}")
+    #     print(CT('分区tid: ').blue() + f"{self.tid}")
+    #     print(CT('子分区名称: ').blue() + f"{self.tname}")
+    #     print(CT('up主: ').blue() + f"{self.up}")
+    #     print(CT('up主mid: ').blue() + f"{self.up_mid}")
+    #     print(CT('是否关注up主: ').blue() + f"{self.up_follow}")
+    #     print(CT('up主粉丝数: ').blue() + f"{self.up_followers}")
+    #     print(CT('是否点赞: ').blue() + f"{self.user_like}")
+    #     print(CT('投币数量: ').blue() + f"{self.user_coin}")
+    #     print(CT('是否收藏: ').blue() + f"{self.user_fav}")
 
 
 if __name__ == '__main__':

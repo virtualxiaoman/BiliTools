@@ -23,7 +23,7 @@ biliV.download_video_with_audio(save_video_path='output', save_audio_path='outpu
 如果你只需要实现基本功能，**只需**查看`main.py`或者单独查看每个类对应的函数的注释即可，或者使用`release`中发布的.exe程序，以下内容无需过多关注。
 
 ### 1.2 项目依赖
-- 本项目依赖以下库：`pandas, request`。
+- 本项目依赖以下库：`pandas, request, pillow, qrcode`（详见requirements.txt）。
 个人建议使用`ffmpeg`，如果没有`ffmpeg`，可以在[ffmpeg官网](https://ffmpeg.org/download.html)下载，然后将ffmpeg.exe放到系统环境变量中。
 可以参考视频[BV1qw4m1d7hx](https://www.bilibili.com/video/BV1qw4m1d7hx/)。 注：原先音视频合成的`moviepy`代码已经删除，现**仅可使用**`ffmpeg`进行音视频合成。
 

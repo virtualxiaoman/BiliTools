@@ -8,12 +8,12 @@ from PyQt6 import QtCore
 
 from src.video import BiliVideo
 
-from UI.main_ui import Win_Main
-from UI.download_ui import Win_Download
-from UI.login_ui import Win_Login
+from frontend.main_ui import Win_Main
+from frontend.download_ui import Win_Download
+from frontend.login_ui import Win_Login
 
-from UI.config import Text as Text_config
-from UI.config import Background_css, Button_css
+from frontend.config import Text as Text_config
+from frontend.config import Background_css, Button_css
 Text_config = Text_config()
 Background_css = Background_css()
 Button_css = Button_css()

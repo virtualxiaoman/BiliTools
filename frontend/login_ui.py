@@ -9,7 +9,7 @@ from src.login import BiliLogin
 from src.config import UserAgent
 from src.config import BiliCookies as cookies
 
-from UI.config import Config, Button_css
+from frontend.config import Config, Button_css
 
 UI_Config = Config()
 Button_css = Button_css()

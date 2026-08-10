@@ -8,6 +8,12 @@ import requests
 from src.config import UserAgent, Config
 
 
+class LoginUrls:
+    LOGIN_STATE = "https://api.bilibili.com/x/web-interface/nav"
+    QR_GENERATE = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
+    QR_LOGIN = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
+
+
 # b站登录(目前能获取登录状态以及扫码登录)
 # todo buvid3的获取暂时没有实现，https://github.com/SocialSisterYi/bilibili-API-collect/issues/795中有相关讨论
 # todo 获取视频点赞、投币等信息的接口可能是https://api.bilibili.com/x/web-interface/archive/relation?aid=589849008&bvid=BV1nq4y1S7s3
@@ -20,9 +26,9 @@ class BiliLogin:
             self.headers = headers
         else:
             self.headers = {"User-Agent": UserAgent().pcChrome}
-        self.login_state_url = 'https://api.bilibili.com/x/web-interface/nav'
-        self.qr_generate_url = 'https://passport.bilibili.com/x/passport-login/web/qrcode/generate'
-        self.qr_login_url = 'https://passport.bilibili.com/x/passport-login/web/qrcode/poll'
+        self.login_state_url = LoginUrls.LOGIN_STATE
+        self.qr_generate_url = LoginUrls.QR_GENERATE
+        self.qr_login_url = LoginUrls.QR_LOGIN
 
         self.login_msg = None
 
@@ -171,6 +177,7 @@ class BiliLogin:
             print(f"[BiliLogin-_save_cookie]目录 {os.path.abspath(dirname)} 不存在，已创建。")
 
         file_path = full_path
+        print(cookie)
         # if full_path is not None:
         #     # 检查路径是否存在，不存在则创建
         #     dirname = os.path.dirname(full_path)
@@ -205,6 +212,7 @@ class BiliLogin:
             sid = re.search(pattern_sid, cookie).group(1)
             cookie_string = (f"SESSDATA={SESSDATA}; bili_jct={bili_jct}; DedeUserID={DedeUserID}; "
                              f"DedeUserID__ckMd5={DedeUserID__ckMd5}; sid={sid}")
+            print("\n" + cookie_string)
         except Exception as e:
             # 如果正则提取失败，则降级为直接写入原始 cookie（适用于格式不同的情况）
             print(f"[BiliLogin-_save_cookie]正则解析 cookie 失败: {e}，将原始 cookie 写入文件以便调试")

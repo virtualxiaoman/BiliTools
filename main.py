@@ -45,8 +45,12 @@ class Example:
 
 
 if __name__ == '__main__':
-    bilic = BiliContract()
-    bilic.add_contract(up_mid=47261023)
+    # biliLogin = BiliLogin()
+    # biliLogin.qr_login(full_path="./assets/cookie/qr_login.txt")
+    biliV = BiliVideo("BV1i43J61Ec9")
+    biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
+    # bilic = BiliContract()
+    # bilic.add_contract(up_mid=356278099)
     # biliV = BiliVideo("BV16HzyBWESt")
     # biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
     # # 这是一个快速开始示例，请依次取消下面的注释，运行即可

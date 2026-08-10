@@ -15,7 +15,7 @@ from src.login import BiliLogin
 from src.utils import BV2AV
 from src.config import UserAgent
 
-from UI.config import Config, Button_css, Input_css, Text_css, ComboBox_css
+from frontend.config import Config, Button_css, Input_css, Text_css, ComboBox_css
 Button_css = Button_css()
 Input_css = Input_css()
 Text_css = Text_css()
