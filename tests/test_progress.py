@@ -131,8 +131,8 @@ class TestAutoProgress:
         from pathlib import Path
         from unittest.mock import patch
         from src.services import VideoService
-        from src.models.download import DashStreams, VideoStream, AudioStream
-        from src.models.video import VideoInfo
+        from src.models.download_model import DashStreams, VideoStream, AudioStream
+        from src.models.video_model import VideoInfo
 
         s = VideoService()
         info = VideoInfo(bvid="BV1A", title="测试视频", cid=123)

@@ -3,8 +3,8 @@
 import pytest
 
 from src.models import LoginUser, VideoInfo, VideoOwner, VideoSeason, VideoStat
-from src.models.download import DashStreams, VideoQuality, VideoStream
-from src.models.history import HistoryItem, HistoryPage
+from src.models.download_model import DashStreams, VideoQuality, VideoStream
+from src.models.history_model import HistoryItem, HistoryPage
 
 
 class TestVideoStat:

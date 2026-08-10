@@ -7,7 +7,7 @@ import logging
 from typing import Optional
 
 from src.api.session import BiliSession
-from src.urls.fav import FavUrls
+from src.urls.fav_urls import FavUrls
 
 logger = logging.getLogger(__name__)
 

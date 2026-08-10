@@ -12,9 +12,9 @@ import logging
 from typing import Optional
 
 from src.api.session import BiliSession
-from src.models.user import UserInfo
-from src.urls.user import UserUrls
-from src.urls.contract import ContractUrls
+from src.models.user_model import UserInfo
+from src.urls.user_urls import UserUrls
+from src.urls.contract_urls import ContractUrls
 
 logger = logging.getLogger(__name__)
 

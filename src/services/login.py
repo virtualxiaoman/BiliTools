@@ -22,8 +22,8 @@ from typing import Optional, Tuple
 from src.api.session import BiliSession
 from src.config.cookie import BiliCookies
 from src.config.path import DEFAULT_COOKIE_PATH, QR_IMAGE_PATH
-from src.models.login import LoginUser
-from src.urls.login import LoginUrls
+from src.models.login_model import LoginUser
+from src.urls.login_urls import LoginUrls
 
 logger = logging.getLogger(__name__)
 

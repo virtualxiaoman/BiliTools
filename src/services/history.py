@@ -14,8 +14,8 @@ from typing import Optional
 
 from src.api.session import BiliSession
 from src.config.path import HISTORY_OUTPUT_DIR
-from src.models.history import HistoryPage
-from src.urls.history import HistoryUrls
+from src.models.history_model import HistoryPage
+from src.urls.history_urls import HistoryUrls
 from src.util.filename import resolve_save_path
 
 logger = logging.getLogger(__name__)

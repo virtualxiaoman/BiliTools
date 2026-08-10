@@ -7,7 +7,7 @@ import logging
 from typing import Optional
 
 from src.api.session import BiliSession
-from src.urls.rank import RankUrls
+from src.urls.rank_urls import RankUrls
 
 logger = logging.getLogger(__name__)
 

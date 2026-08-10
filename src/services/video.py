@@ -22,16 +22,16 @@ from src.api.errors import FFmpegNotFoundError
 from src.api.session import BiliSession
 from src.config.constants import DASH_FNVAL
 from src.config.path import VIDEO_OUTPUT_DIR
-from src.models.download import (
+from src.models.download_model import (
     AudioStream,
     DashStreams,
     DownloadResult,
     VideoQuality,
     VideoStream,
 )
-from src.models.video import VideoInfo, VideoPage, VideoSeason, VideoSeasonEpisode
+from src.models.video_model import VideoInfo, VideoPage, VideoSeason, VideoSeasonEpisode
 from src.services.archive import ArchiveService
-from src.urls.video import VideoUrls
+from src.urls.video_urls import VideoUrls
 from src.util.downloader import ProgressCallback, download_stream, ffmpeg_available, merge_video_audio
 from src.util.filename import build_download_filename, build_multi_page_filename
 from src.util.progress import BatchProgress

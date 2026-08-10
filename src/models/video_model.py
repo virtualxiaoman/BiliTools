@@ -10,7 +10,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from src.models.download import DashStreams
+from src.models.download_model import DashStreams
 
 
 @dataclass

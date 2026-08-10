@@ -8,7 +8,7 @@ from typing import Optional
 
 from src.api.session import BiliSession
 from src.config.cookie import BiliCookies
-from src.urls.comment import CommentUrls
+from src.urls.comment_urls import CommentUrls
 from src.util.bvid import bv2av
 
 logger = logging.getLogger(__name__)

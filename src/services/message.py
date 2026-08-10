@@ -11,7 +11,7 @@ from src.api.auth import get_dev_id, get_timestamp
 from src.api.session import BiliSession
 from src.config.cookie import BiliCookies
 from src.services.login import LoginService
-from src.urls.message import MessageUrls
+from src.urls.message_urls import MessageUrls
 
 logger = logging.getLogger(__name__)
 

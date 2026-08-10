@@ -10,7 +10,7 @@ import logging
 from typing import Optional
 
 from src.api.session import BiliSession
-from src.urls.archive import ArchiveUrls
+from src.urls.archive_urls import ArchiveUrls
 
 logger = logging.getLogger(__name__)
 

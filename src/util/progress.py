@@ -17,7 +17,7 @@
 
 from typing import Callable, List, Optional
 
-from src.models.download import VideoQuality
+from src.models.download_model import VideoQuality
 
 # 进度回调签名：已下载字节数, 总字节数（总字节数可能为 None）
 StreamProgressCallback = Callable[[int, Optional[int]], None]
