@@ -1,5 +1,37 @@
+# ---- 构建产物 ----
 /build/
+/dist/
+*.spec
+
+# ---- 运行输出 ----
 /output/
+/src/output/
+/examples/output/
+
+# ---- 虚拟环境 ----
+/venv/
+.venv/
+
+# ---- IDE 配置 ----
+/.idea/
+.vscode/
+
+# ---- Python 缓存 ----
+__pycache__/
+*.py[cod]
+
+# ---- 临时/调试文件 ----
+*.tmp
+/temp/
+
+# ---- 文档与资料（个人整理，不入库） ----
 /其他信息/
 /无水印下载方法/
-/src/output/
+
+# ---- cookie 与登录敏感文件（只提交占位说明，不提交真实凭据） ----
+# 注：本地开发时 assets/cookie/qr_login.txt 需要自己生成（扫码登录）
+/assets/cookie/*
+!/assets/cookie/.gitkeep
+
+# 旧前端遗留的 cookie 目录（前端重写后不再使用，绝不提交凭据）
+/frontend/cookie/

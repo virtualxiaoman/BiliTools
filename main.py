@@ -1,62 +1,69 @@
-# Author: virtual小满
-# BiliTools是一个py操控B站的小工具
-# 示例代码一般以视频BV1ov42117yC为例。up主：蔚蓝档案。标题：动画小剧场《补习部的一天》第4集：烟火
-from src.up import BiliContract
-from src.video import BiliVideo
-from src.message import BiliMessage
-from src.login import BiliLogin
+"""BiliTools 命令行入口（简洁版）。
+
+用法：
+    python main.py <command> [args]
+
+可用命令（示例）：
+    info   BV号       获取视频信息
+    video  BV号       下载视频（含音频）
+    cover  BV号       下载封面
+    rank              获取热门视频
+
+完整示例见 examples/quick_start.py
+"""
+
+import sys
+
+from src.services import RankService, VideoService
 
 
-class Example:
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def login_qr():
-        biliLogin = BiliLogin()
-        biliLogin.qr_login(full_path="./assets/cookie/qr_login.txt")
-
-    @staticmethod
-    def download_video():
-        biliV = BiliVideo("BV1ov42117yC")
-        biliV.download_video(save_video_path="output")
-
-    @staticmethod
-    def download_audio():
-        biliV = BiliVideo("BV1ov42117yC")
-        biliV.download_audio(save_audio_path="output")
-
-    @staticmethod
-    def download_video_with_audio():
-        biliV = BiliVideo("BV1ov42117yC")
-        biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
-
-    @staticmethod
-    def send_message():
-        biliM = BiliMessage()
-        # biliM.send_msg(sender_uid=506925078, receiver_uid=3493133776062465, content="催更[doge]")
-        # biliM.send_msg(sender_uid=506925078, receiver_uid=334642728, content="煮波什么时候更新？")
-        biliM.send_msg(receiver_uid=381978872, content="你好，请问是千年的爱丽丝同学吗？")
-
-    @staticmethod
-    def add_contract():
-        bilic = BiliContract()
-        bilic.add_contract(up_mid=47261023)
+def cmd_info(bvid: str):
+    service = VideoService()
+    info = service.fetch_info_with_tags(bvid)
+    print(f"标题：{info.title}")
+    print(f"UP主：{info.owner.name}（mid={info.owner.mid}）")
+    print(f"播放/弹幕/评论：{info.stat.num_view}/{info.stat.num_dm}/{info.stat.num_reply}")
+    print(f"标签：{info.tags}")
 
 
-if __name__ == '__main__':
-    # biliLogin = BiliLogin()
-    # biliLogin.qr_login(full_path="./assets/cookie/qr_login.txt")
-    biliV = BiliVideo("BV1i43J61Ec9")
-    biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
-    # bilic = BiliContract()
-    # bilic.add_contract(up_mid=356278099)
-    # biliV = BiliVideo("BV16HzyBWESt")
-    # biliV.download_video_with_audio(save_video_path='output', save_audio_path='output', save_path='output')
-    # # 这是一个快速开始示例，请依次取消下面的注释，运行即可
-    # quick_start = Example()
-    # # quick_start.login_qr()  # 扫码登录，登录成功后会在assets/cookie/qr_login.txt里保存cookie信息
-    # # # quick_start.download_video()  # 下载视频BV1ov42117yC到output文件夹里
-    # # # quick_start.download_audio()  # 下载音频BV1ov42117yC到output文件夹里
-    # # quick_start.download_video_with_audio()  # 下载视频BV1ov42117yC到output文件夹里
-    # quick_start.send_message()  # 给up主(传参mid)发送消息，内容是"催更[doge]"
+def cmd_video(bvid: str):
+    service = VideoService()
+    result = service.download_video_with_audio(bvid)
+    print(f"已下载：{result.path}")
+
+
+def cmd_cover(bvid: str):
+    service = VideoService()
+    result = service.download_cover(bvid)
+    print(f"封面：{result.path}")
+
+
+def cmd_rank():
+    service = RankService()
+    bvs = service.get_popular(pn=1, ps=10)
+    print(f"热门视频 {len(bvs)} 个：{bvs}")
+
+
+COMMANDS = {
+    "info": cmd_info,
+    "video": cmd_video,
+    "cover": cmd_cover,
+    "rank": cmd_rank,
+}
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+        print(__doc__)
+        return
+    command = sys.argv[1]
+    if command not in COMMANDS:
+        print(f"未知命令：{command}\n")
+        print(__doc__)
+        return
+    args = sys.argv[2:]
+    COMMANDS[command](*args)
+
+
+if __name__ == "__main__":
+    main()
