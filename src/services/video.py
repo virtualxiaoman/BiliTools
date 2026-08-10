@@ -165,6 +165,18 @@ class VideoService:
         target = self._resolve_page(info, page)
         return build_multi_page_filename(info.title, bvid, target.page, target.part, ext)
 
+    def _auto_progress(self, name: str, progress: Optional[BatchProgress] = None,
+                       progress_cb: Optional[ProgressCallback] = None):
+        """单独调用下载方法时，若调用方未传 progress/progress_cb，则自动创建一个进度条。
+
+        :return: (progress, 是否自动创建)。自动创建的调用方需在完成后调用 finish()。
+        """
+        if progress is None and progress_cb is None:
+            p = BatchProgress(n=1, label="下载")
+            p.start(1, name)
+            return p, True
+        return progress, False
+
     def download_video(
         self,
         bvid: str,
@@ -198,6 +210,9 @@ class VideoService:
             filename = self._default_filename(info, bvid, page, stream.ext)
         save_path = save_dir / filename
 
+        # 单独调用时自动显示进度条
+        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
+
         if progress:
             picked = VideoQuality.from_qn(stream.quality)
             if picked is not None:
@@ -206,6 +221,8 @@ class VideoService:
             stream.url, save_path, self.session.session.headers,
             progress_cb=progress.make_stream_callback() if progress else progress_cb,
         )
+        if auto_progress:
+            progress.finish()
         return DownloadResult(path=save_path, media_type="video", size=size)
 
     def download_audio(
@@ -239,10 +256,15 @@ class VideoService:
             filename = self._default_filename(info, bvid, page, stream.ext)
         save_path = save_dir / filename
 
+        # 单独调用时自动显示进度条
+        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
+
         size = download_stream(
             stream.url, save_path, self.session.session.headers,
             progress_cb=progress.make_stream_callback() if progress else progress_cb,
         )
+        if auto_progress:
+            progress.finish()
         return DownloadResult(path=save_path, media_type="audio", size=size)
 
     def download_video_with_audio(
@@ -251,7 +273,7 @@ class VideoService:
         dir: Optional[Path] = None,
         *,
         page: int = 1,
-        quality: VideoQuality = VideoQuality.P1080,
+        quality: VideoQuality = VideoQuality.HD4K,
         keep_parts: bool = False,
         progress_cb: Optional[ProgressCallback] = None,
         progress: Optional[BatchProgress] = None,
@@ -290,6 +312,9 @@ class VideoService:
         if filename is None:
             filename = self._default_filename(info, bvid, page, "mp4")
         save_path = save_dir / filename
+
+        # 单独调用时自动显示进度条
+        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
 
         if progress:
             picked = VideoQuality.from_qn(video_stream.quality)
@@ -333,6 +358,8 @@ class VideoService:
                 video_tmp.replace(save_dir / f"{save_path.stem}.video.{video_stream.ext}")
                 audio_tmp.replace(save_dir / f"{save_path.stem}.audio.{audio_stream.ext}")
 
+        if auto_progress:
+            progress.finish()
         return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size)
 
     def download_cover(
@@ -364,12 +391,17 @@ class VideoService:
             filename = build_download_filename(info.title, bvid, ext)
         save_path = save_dir / filename
 
+        # 单独调用时自动显示进度条
+        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
+
         content = self.session.get_raw(info.pic)
         save_path.write_bytes(content)
         if progress:
             progress.update(len(content), len(content))
         elif progress_cb:
             progress_cb(len(content), len(content))
+        if auto_progress:
+            progress.finish()
         return DownloadResult(path=save_path, media_type="cover", size=len(content))
 
     def download_all_pages(

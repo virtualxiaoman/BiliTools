@@ -96,3 +96,60 @@ class TestBatchProgress:
         p.add(1, 100, stream_id=0)
         p.add(2, 100, stream_id=0)  # 同流，total 相同
         assert p._grand_total() == 100  # 不是 200
+
+
+class TestAutoProgress:
+    """VideoService._auto_progress：单独调用下载方法时自动创建进度条。"""
+
+    def test_creates_when_nothing_passed(self):
+        from src.services import VideoService
+        s = VideoService()
+        progress, auto = s._auto_progress("a.mp4")
+        assert auto is True
+        assert isinstance(progress, BatchProgress)
+        assert progress.current_index == 1
+
+    def test_uses_external_progress(self):
+        from src.services import VideoService
+        s = VideoService()
+        p = BatchProgress(n=1)
+        progress, auto = s._auto_progress("a.mp4", progress=p)
+        assert auto is False
+        assert progress is p
+
+    def test_no_progress_when_cb_passed(self):
+        from src.services import VideoService
+        s = VideoService()
+        progress, auto = s._auto_progress("a.mp4", progress_cb=lambda d, t: None)
+        assert auto is False
+        assert progress is None
+
+    def test_download_video_with_audio_auto_progress(self, capsys):
+        """单独调用 download_video_with_audio（不传 progress）应自动输出进度行。"""
+        import os
+        import stat as stat_mod
+        from pathlib import Path
+        from unittest.mock import patch
+        from src.services import VideoService
+        from src.models.download import DashStreams, VideoStream, AudioStream
+        from src.models.video import VideoInfo
+
+        s = VideoService()
+        info = VideoInfo(bvid="BV1A", title="测试视频", cid=123)
+        dash = DashStreams(video=[VideoStream(url="http://v", quality=80)],
+                           audio=[AudioStream(url="http://a")])
+
+        # st_mode 用 S_IFDIR：让 mkdir 的 is_dir 判断通过
+        dir_mode = stat_mod.S_IFDIR | 0o755
+        fake_stat = os.stat_result((dir_mode, 0, 0, 0, 0, 0, 123, 0, 0, 0))
+
+        with patch.object(s, "_fetch_streams", return_value=(info, dash)), \
+             patch("src.services.video.download_stream", return_value=1), \
+             patch("src.services.video.merge_video_audio"), \
+             patch.object(Path, "stat", return_value=fake_stat):
+            s.download_video_with_audio("BV1A")
+        out = capsys.readouterr().out
+        assert "[1/1]" in out
+        assert "测试视频(BV1A).mp4" in out
+        assert "[1080P]" in out  # 清晰度标签
+
