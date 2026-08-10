@@ -116,3 +116,62 @@ def test_download_stream_request_failure(tmp_path):
     with patch("requests.get", return_value=BadResp()):
         with pytest.raises(DownloadError):
             dl.download_stream("http://x", tmp_path / "f.bin")
+
+
+def test_download_stream_resume_after_interrupt(tmp_path):
+    """网络中断后应从已下载位置断点续传，最终得到完整文件。"""
+    import requests
+
+    FULL = b"hello world"
+
+    class FakeResp:
+        def __init__(self, body):
+            self._body = body
+            self.headers = {"Content-Length": str(len(body))}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size):
+            yield self._body
+
+    def fake_get(url, headers=None, stream=False, timeout=None):
+        rng = (headers or {}).get("Range", "")
+        if rng:
+            # 断点续传：返回剩余部分
+            start = int(rng.split("=")[1].split("-")[0])
+            return FakeResp(FULL[start:])
+        # 首次：读到一半抛 IncompleteRead，模拟断流
+        resp = FakeResp(FULL)
+        def _iter(chunk_size):
+            yield FULL[:5]
+            raise requests.exceptions.ConnectionError(
+                "IncompleteRead(5 bytes read, 6 more expected)"
+            )
+        resp.iter_content = _iter
+        return resp
+
+    with patch("requests.get", side_effect=fake_get) as mock_get:
+        target = tmp_path / "f.bin"
+        size = dl.download_stream("http://x", target, max_retries=2)
+        assert size == 11
+        assert target.read_bytes() == FULL
+        assert mock_get.call_count == 2  # 首次 + 1 次续传
+        # 第二次请求带 Range 头
+        assert mock_get.call_args_list[1].kwargs["headers"]["Range"] == "bytes=5-"
+
+
+def test_download_stream_gives_up_after_retries(tmp_path):
+    """连续失败达到重试上限后应抛 DownloadError。"""
+    import requests
+
+    class BadResp:
+        headers = {}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size):
+            raise requests.exceptions.ConnectionError("broken")
+
+    with patch("requests.get", return_value=BadResp()):
+        with pytest.raises(DownloadError):
+            dl.download_stream("http://x", tmp_path / "f.bin", max_retries=2)

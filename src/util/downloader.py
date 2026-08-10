@@ -42,6 +42,7 @@ def download_stream(
     *,
     progress_cb: Optional[ProgressCallback] = None,
     chunk_size: int = 1024 * 256,
+    max_retries: int = 3,
 ) -> int:
     """
     下载单个媒体流（如 DASH 视频/音频流）到本地文件。
@@ -49,34 +50,58 @@ def download_stream(
     [注意]
     下载响应必须带正确的 Referer（B 站要求 referer 为 https://www.bilibili.com）。
 
+    网络中断（连接断开/读取不完整）时会自动**断点续传**：用 Range 头从已下载位置
+    继续，最多重试 `max_retries` 次。
+
     :param url: 媒体直链
     :param save_path: 保存路径（父目录需已存在）
     :param headers: 请求头（用于补充 Cookie/Referer）
     :param progress_cb: 进度回调 (downloaded, total)
     :param chunk_size: 分块大小（字节）
+    :param max_retries: 断点续传的最大重试次数
     :return: 下载的文件大小（字节）
-    :raises DownloadError: 请求或写入失败
+    :raises DownloadError: 下载失败（重试后仍失败）
     """
     import requests
 
     save_path = Path(save_path)
-    try:
-        resp = requests.get(url, headers=headers, stream=True, timeout=30)
-        resp.raise_for_status()
-        total = int(resp.headers.get("Content-Length", 0)) or None
-        downloaded = 0
-        with open(save_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if progress_cb:
-                        progress_cb(downloaded, total)
-        return downloaded
-    except requests.RequestException as e:
-        raise DownloadError(f"下载失败：{url}，原因：{e}") from e
-    except OSError as e:
-        raise DownloadError(f"写入文件失败：{save_path}，原因：{e}") from e
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    total: Optional[int] = None
+    last_error: Optional[Exception] = None
+
+    for attempt in range(max_retries + 1):
+        downloaded = save_path.stat().st_size if save_path.exists() else 0
+        req_headers = dict(headers) if headers else {}
+        if downloaded > 0:
+            # 断点续传：从已下载位置继续
+            req_headers["Range"] = f"bytes={downloaded}-"
+        try:
+            resp = requests.get(url, headers=req_headers, stream=True, timeout=30)
+            resp.raise_for_status()
+            if total is None:
+                total = int(resp.headers.get("Content-Length", 0)) or None
+                if downloaded > 0 and total is not None:
+                    # 响应的是剩余部分，补上已下载的偏移
+                    total += downloaded
+            with open(save_path, "ab" if downloaded > 0 else "wb") as f:
+                for chunk in resp.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if progress_cb:
+                            progress_cb(downloaded, total)
+            return downloaded
+        except (requests.RequestException, OSError) as e:
+            last_error = e
+            logger.warning(
+                "[download_stream]第%d次下载%s失败（已下载%d字节）：%s",
+                attempt + 1, url, downloaded, e,
+            )
+            if attempt >= max_retries:
+                break
+            # 继续循环：从 save_path 当前大小续传
+    raise DownloadError(f"下载失败：{url}，原因：{last_error}") from last_error
 
 
 def merge_video_audio(

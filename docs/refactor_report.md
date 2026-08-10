@@ -514,15 +514,21 @@ service.download_season(season_id=1717000, mid=506925078) # 下载他人合集�
 
 ### 下载进度显示（2026-08-10 新增）
 
-- 新增 `src/util/progress.py` 的 `BatchProgress`：批量下载进度，格式 `[i/n] [名字]: a/bMB (p%)`（`a` 已下载、`b` 总大小=各流 Content-Length 之和、`p` 百分比；无 Content-Length 时显示 `--%`）。
+- 新增 `src/util/progress.py` 的 `BatchProgress`：批量下载进度，格式 `[i/n] [名字] [清晰度]: a/bMB (p%)`（`a` 已下载、`b` 总大小=各流 Content-Length 之和、`p` 百分比；无 Content-Length 时显示 `--%`）。
 - 单视频（视频流+音频流+ffmpeg合成）字节跨流累计：视频/音频下载阶段显示字节进度，合成阶段单独状态提示。
 - `download_all_pages` / `download_season` 自动创建共享 `BatchProgress` 驱动，无需手动传参；细粒度接口（`download_video/audio/video_with_audio/cover`）支持 `progress=` 参数传入。
+- **清晰度标签**：进度条名称与 MB 之间显示实际清晰度（如 `[4K]`、`[1080P]`），来自 `VideoQuality.display_name`；显示的是**实际挑选出的流**清晰度（`from_qn` 映射，请求 HD4K 但只有 1080P 时显示 `[1080P]` 而非 `[4K]`）。
 
 ### 统一下载接口（2026-08-10 新增）
 
 - `VideoService.download(bvid)`：**只接受 bvid** 的统一入口——属于合集则下载整个合集（含分P），否则下载该视频（含分P）；默认最高清晰度 HD4K；自动显示进度。
 - 需要微调（清晰度/目录/单P等）的场景仍用细粒度接口（`download_video_with_audio(quality=...)` 等）。
 - 实测 `service.download("BV1ov42117yC")` 进度正确输出（0.2/4.7MB (5.3%) → ... → 4.7/4.7MB (100.0%)）。
+
+### 下载断点续传（2026-08-10 新增）
+
+- `download_stream` 支持网络中断后的**断点续传**：中断（IncompleteRead/ConnectionError）时用 `Range` 头从已下载位置继续，默认最多重试 3 次。
+- 实测：下载明日方舟合集视频时网络中断（读到 17MB），重试后续传完成，最终文件完整（79MB+76MB）。
 
 ### 验证结果（测试视频 BV1ov42117yC）
 
