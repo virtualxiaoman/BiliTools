@@ -16,10 +16,15 @@ import time
 import random
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from src.api.auth import get_wbi
-from src.api.errors import FFmpegNotFoundError, BiliAPIError
+from src.api.errors import (
+    BiliAPIError,
+    BiliForbiddenError,
+    BiliRiskError,
+    FFmpegNotFoundError,
+)
 from src.api.session import BiliSession
 from src.config.constants import DASH_FNVAL
 from src.config.path import VIDEO_OUTPUT_DIR
@@ -179,7 +184,78 @@ class VideoService:
         return progress, False
 
     def _is_video_unavailable_error(self, exc: Exception) -> bool:
-        return isinstance(exc, BiliAPIError) and exc.code == 62002
+        """视频不存在或不可见（-404 不存在 / 62002 稿件不可见），批量下载时跳过该视频即可。"""
+        return isinstance(exc, BiliAPIError) and exc.code in (-404, 62002)
+
+    def _is_risk_control_error(self, exc: Exception) -> bool:
+        """是否触发风控（-412 触发风控 / -403 被拒绝访问），这类错误稍作等待后重试通常可恢复。"""
+        return isinstance(exc, (BiliRiskError, BiliForbiddenError))
+
+    def _execute_batch_download(
+            self,
+            bvid: str,
+            action: Callable[[], Any],
+            *,
+            label: str = "",
+            retries: int = 3,
+    ) -> Any:
+        """执行批量下载中单个视频（稿件）的下载动作，统一处理异常。
+
+        - 视频不可见（-404 不存在 / 62002 稿件不可见）：记录日志并返回 None（跳过）；
+        - 触发风控（-412 / -403）：随机退避等待后重试，最多 retries 次，仍失败则抛出；
+        - 其余异常：原样抛出。
+
+        :param bvid: 视频BV号（仅用于日志）
+        :param action: 无参可调用对象，完成该视频（稿件）的下载
+        :param label: 批量任务描述（收藏夹/合集/UP主名称），仅用于日志
+        :param retries: 触发风控后的最大重试次数
+        :return: action 的返回值；视频不可见被跳过时返回 None
+        """
+        last_error: Optional[Exception] = None
+        for attempt in range(retries + 1):
+            try:
+                return action()
+            except Exception as e:
+                if self._is_video_unavailable_error(e):
+                    logger.warning("[VideoService] 视频 %s 不可见，跳过（%s）。", bvid, label)
+                    return None
+                if self._is_risk_control_error(e):
+                    last_error = e
+                    wait = random.uniform(3, 8) * (attempt + 1)
+                    logger.warning("[VideoService] 视频 %s 触发风控（第 %d/%d 次尝试），等待 %.1fs 后重试（%s）。",
+                                   bvid, attempt + 1, retries + 1, wait, label)
+                    time.sleep(wait)
+                    continue
+                raise
+        logger.error("[VideoService] 视频 %s 连续 %d 次触发风控，已放弃（%s）。", bvid, retries + 1, label)
+        if last_error is not None:
+            raise last_error
+        raise BiliRiskError(f"视频 {bvid} 触发风控，已放弃（{label}）。")
+
+    def _report_bvid_download(
+            self,
+            bvid: str,
+            new_results: list,
+            download_count: int,
+            index: int,
+            total: int,
+    ) -> int:
+        """报告单个视频的缓存命中/下载情况，并做防风控节流，返回累计的未命中缓存下载次数。
+
+        - 全部命中本地缓存：提示跳过网络请求，不节流；
+        - 有新下载：提示文件数，短停 0.3s；每累计 10 个未命中缓存的视频再随机休息 1~3s，降低风控风险。
+        """
+        all_cached = bool(new_results) and all(result.cached for result in new_results)
+        if all_cached:
+            print(f"{bvid} 命中缓存，跳过网络请求。")
+        else:
+            print(f"{bvid} 未命中缓存，已下载 {len(new_results)} 个文件。")
+            download_count += 1
+            time.sleep(0.3)  # 避免风控
+            if download_count % 10 == 0:
+                time.sleep(random.uniform(1, 3))  # 每10个未命中缓存的视频随机休息1~3秒，降低风控风险
+        print(f"[VideoService] 已下载 {index}/{total} 个视频。")
+        return download_count
 
     def _find_downloaded_file(self, bvid: str, extensions: set[str],
                               page: Optional[int] = None,
@@ -566,6 +642,48 @@ class VideoService:
             return self.fetch_info(bvid).season
         raise ValueError("fetch_season 需要 bvid 或 season_id 至少一个参数")
 
+    def _download_episode(
+            self,
+            episode: VideoSeasonEpisode,
+            save_dir: Path,
+            *,
+            media_type: str,
+            quality: VideoQuality,
+            file_idx: int,
+            progress: Optional[BatchProgress] = None,
+            progress_cb: Optional[ProgressCallback] = None,
+    ) -> tuple[list, int]:
+        """下载合集内单个稿件（多P稿件逐P下载），返回 (新增结果列表, 更新后的累计文件序号)。
+
+        文件序号用于合集级进度条 `[file_idx/N]` 的累计显示；
+        各分P的下载方法内部会先检查本地缓存，命中的分P直接返回 cached 结果，不再请求网络。
+        """
+        info = self.fetch_info(episode.bvid)
+        new_results = []
+        page_objs = episode.pages if episode.is_multi_page else [
+            VideoPage(page=1, cid=info.cid or 0, part=info.title)]
+        for page_obj in page_objs:
+            file_idx += 1
+            display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
+            display_name = self._default_filename(info, episode.bvid, page_obj.page, display_ext)
+            progress.start(file_idx, display_name)
+            if media_type == "video":
+                result = self.download_video(episode.bvid, save_dir, page=page_obj.page, quality=quality,
+                                             progress_cb=progress_cb, progress=progress)
+            elif media_type == "audio":
+                result = self.download_audio(episode.bvid, save_dir, page=page_obj.page,
+                                             progress_cb=progress_cb, progress=progress)
+            elif media_type == "cover":
+                result = self.download_cover(episode.bvid, save_dir,
+                                             progress_cb=progress_cb, progress=progress)
+            else:  # video_with_audio
+                result = self.download_video_with_audio(episode.bvid, save_dir, page=page_obj.page,
+                                                        quality=quality, progress_cb=progress_cb,
+                                                        progress=progress)
+            new_results.append(result)
+            progress.finish()
+        return new_results, file_idx
+
     def download_season(
             self,
             bvid: Optional[str] = None,
@@ -607,46 +725,30 @@ class VideoService:
         # 计算总共要下载的文件数（多P稿件按分P数计），驱动进度
         file_count = sum(len(ep.pages) if ep.is_multi_page else 1 for ep in season.episodes)
         progress = progress or BatchProgress(n=file_count, label=f"合集「{season.title}」")
+
+        label = f"合集「{season.title}」"
         results = []
+        download_count = 0
         file_idx = 0
-        for episode in season.episodes:
+        total = len(season.episodes)
+        for i, episode in enumerate(season.episodes, 1):
             logger.info("[VideoService] 合集「%s」下载：%s", season.title, episode.title)
-            try:
-                info = self.fetch_info(episode.bvid)
-            except Exception as e:
-                if self._is_video_unavailable_error(e):
-                    logger.warning("[VideoService] 视频 %s 不可见，跳过。", bvid)
-                    continue
-                raise
-            if episode.is_multi_page:
-                # 合集内多P稿件：逐P下载
-                for page_obj in episode.pages:
-                    file_idx += 1
-                    display_name = self._default_filename(info, episode.bvid, page_obj.page, "mp4")
-                    progress.start(file_idx, display_name)
-                    results.append(self.download_video_with_audio(
-                        episode.bvid, save_dir, page=page_obj.page, quality=quality,
-                        progress_cb=progress_cb, progress=progress,
-                    ))
-                    progress.finish()
-            else:
-                file_idx += 1
-                display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
-                display_name = self._default_filename(info, episode.bvid, 1, display_ext)
-                progress.start(file_idx, display_name)
-                if media_type == "video":
-                    results.append(self.download_video(episode.bvid, save_dir, quality=quality,
-                                                       progress_cb=progress_cb, progress=progress))
-                elif media_type == "audio":
-                    results.append(self.download_audio(episode.bvid, save_dir,
-                                                       progress_cb=progress_cb, progress=progress))
-                elif media_type == "cover":
-                    results.append(self.download_cover(episode.bvid, save_dir,
-                                                       progress_cb=progress_cb, progress=progress))
-                else:  # video_with_audio
-                    results.append(self.download_video_with_audio(episode.bvid, save_dir, quality=quality,
-                                                                  progress_cb=progress_cb, progress=progress))
-                progress.finish()
+            # 起始文件序号在闭包里固定：风控重试会重新执行整个动作，不能捕获到已更新的 file_idx
+            outcome = self._execute_batch_download(
+                episode.bvid,
+                lambda ep=episode, start_idx=file_idx: self._download_episode(
+                    ep, save_dir, media_type=media_type, quality=quality,
+                    file_idx=start_idx, progress=progress, progress_cb=progress_cb,
+                ),
+                label=label,
+            )
+            if outcome is None:
+                continue  # 视频不可见：_execute_batch_download 已记录日志
+            new_results, file_idx = outcome
+            results.extend(new_results)
+            download_count = self._report_bvid_download(
+                episode.bvid, new_results, download_count, i, total,
+            )
         return results
 
     # ---- 统一下载接口 ----
@@ -714,32 +816,22 @@ class VideoService:
 
         results = []
         download_count = 0
+        media_type = "audio" if mode == "audio" else "video_with_audio"
+        label = f"收藏夹「{info.title}」"
         for i, bvid in enumerate(bvids):
-            result_start = len(results)
             logger.info("[VideoService] 收藏夹「%s」下载：%s", info.title, bvid)
-            try:
-                if mode == "audio":
-                    results.extend(self.download_all_pages(bvid, save_dir,
-                                                           quality=quality, media_type="audio"))
-                else:  # video
-                    results.extend(self.download_all_pages(bvid, save_dir,
-                                                           quality=quality, media_type="video_with_audio"))
-            except Exception as e:
-                if self._is_video_unavailable_error(e):
-                    print(f"[VideoService] 跳过不可见视频 {bvid}，进度 {i + 1}/{len(bvids)}")
-                    continue
-                raise
-            new_results = results[result_start:]
-            all_cached = bool(new_results) and all(result.cached for result in new_results)
-            if all_cached:
-                print(f"{bvid} 命中缓存，跳过网络请求。")
-            else:
-                print(f"{bvid} 未命中缓存，已下载 {len(new_results)} 个文件。")
-                download_count += 1  # 统计未命中缓存的下载次数
-                time.sleep(0.3)  # 避免风控
-                if download_count % 10 == 0:
-                    time.sleep(random.uniform(1, 3))  # 每10个未命中缓存的视频随机休息1~3秒，降低风控风险
-            print(f"[VideoService] 已下载 {i + 1}/{len(bvids)} 个视频。")
+            new_results = self._execute_batch_download(
+                bvid,
+                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type),
+                label=label,
+            )
+            if new_results is None:
+                print(f"[VideoService] 跳过不可见视频 {bvid}，进度 {i + 1}/{len(bvids)}")
+                continue
+            results.extend(new_results)
+            download_count = self._report_bvid_download(
+                bvid, new_results, download_count, i + 1, len(bvids),
+            )
         return results
 
     # ---- UP主空间 ----
@@ -828,16 +920,21 @@ class VideoService:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         results = []
-        for bvid in bvids:
+        download_count = 0
+        media_type = "audio" if mode == "audio" else "video_with_audio"
+        label = f"UP主「{up_name}」"
+        for i, bvid in enumerate(bvids):
             logger.info("[VideoService] UP主「%s」下载：%s", up_name, bvid)
-            try:
-                if mode == "audio":
-                    results.extend(self.download_all_pages(bvid, save_dir, quality=quality, media_type="audio"))
-                else:  # video
-                    results.extend(self.download_all_pages(bvid, save_dir, quality=quality))
-            except Exception as e:
-                if self._is_video_unavailable_error(e):
-                    logger.warning("[VideoService] 视频 %s 不可见，跳过。", bvid)
-                    continue
-                raise
+            new_results = self._execute_batch_download(
+                bvid,
+                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type),
+                label=label,
+            )
+            if new_results is None:
+                logger.warning("[VideoService] 视频 %s 不可见，跳过。", bvid)
+                continue
+            results.extend(new_results)
+            download_count = self._report_bvid_download(
+                bvid, new_results, download_count, i + 1, len(bvids),
+            )
         return results
