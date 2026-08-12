@@ -12,13 +12,14 @@
     result = service.download_video_with_audio("BV1ov42117yC")
     print(result.path)
 """
-
+import time
+import random
 import logging
 from pathlib import Path
 from typing import Optional, Union
 
 from src.api.auth import get_wbi
-from src.api.errors import FFmpegNotFoundError
+from src.api.errors import FFmpegNotFoundError, BiliAPIError
 from src.api.session import BiliSession
 from src.config.constants import DASH_FNVAL
 from src.config.path import VIDEO_OUTPUT_DIR
@@ -43,9 +44,9 @@ class VideoService:
     """B 站视频的获取与下载服务。"""
 
     def __init__(
-        self,
-        session: Optional[BiliSession] = None,
-        default_dir: Path = VIDEO_OUTPUT_DIR,
+            self,
+            session: Optional[BiliSession] = None,
+            default_dir: Path = VIDEO_OUTPUT_DIR,
     ):
         """
         :param session: BiliSession 实例，None 时创建（使用默认 cookie）
@@ -177,16 +178,50 @@ class VideoService:
             return p, True
         return progress, False
 
+    def _is_video_unavailable_error(self, exc: Exception) -> bool:
+        return isinstance(exc, BiliAPIError) and exc.code == 62002
+
+    def _find_downloaded_file(self, bvid: str, extensions: set[str],
+                              page: Optional[int] = None,
+                              root: Optional[Path] = None) -> Optional[Path]:
+        root = root or self.default_dir
+
+        if not root.exists():
+            return None
+
+        extensions = {ext.lower().lstrip(".") for ext in extensions}
+        # 只有需要区分分P时才生成 page_tag，page_tag与 _default_filename 的命名规则保持一致
+        if page is not None and page > 1:
+            page_tag = f"-P{page:02d}".lower()  # 单P也不需要判断
+        else:
+            page_tag = None
+
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            stem = path.stem.lower()
+            # 基础条件：BV号 + 文件扩展名
+            if bvid.lower() not in stem:
+                continue
+            if path.suffix.lower().lstrip(".") not in extensions:
+                continue
+            # 视频/音频需要进一步匹配 P 序号
+            if page_tag is not None and page_tag not in stem:
+                continue
+            return path
+
+        return None
+
     def download_video(
-        self,
-        bvid: str,
-        dir: Optional[Path] = None,
-        *,
-        page: int = 1,
-        quality: VideoQuality = VideoQuality.HD4K,
-        progress_cb: Optional[ProgressCallback] = None,
-        progress: Optional[BatchProgress] = None,
-        filename: Optional[str] = None,
+            self,
+            bvid: str,
+            dir: Optional[Path] = None,
+            *,
+            page: int = 1,
+            quality: VideoQuality = VideoQuality.HD4K,
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
+            filename: Optional[str] = None,
     ) -> DownloadResult:
         """下载视频流（无音频）。文件名为 `[标题](BV号).{实际格式}`，多P时含 P 序号。
 
@@ -199,6 +234,12 @@ class VideoService:
         :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
         :return: DownloadResult
         """
+        # 下载前先递归检查默认下载目录，避免已经下载过的视频再次请求网络
+        # todo: 后缀名应该统一存储
+        existing = self._find_downloaded_file(bvid, {"mp4", "flv", "m4s"}, page=page,
+                                              root=dir or self.default_dir)
+        if existing is not None:
+            return DownloadResult(path=existing, media_type="video", size=existing.stat().st_size, cached=True)
         info, dash = self._fetch_streams(bvid, page)
         stream = dash.pick_video(quality)
         if stream is None:
@@ -209,6 +250,9 @@ class VideoService:
         if filename is None:
             filename = self._default_filename(info, bvid, page, stream.ext)
         save_path = save_dir / filename
+
+        if save_path.exists():
+            return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size, cached=True)
 
         # 单独调用时自动显示进度条
         progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
@@ -226,14 +270,14 @@ class VideoService:
         return DownloadResult(path=save_path, media_type="video", size=size)
 
     def download_audio(
-        self,
-        bvid: str,
-        dir: Optional[Path] = None,
-        *,
-        page: int = 1,
-        progress_cb: Optional[ProgressCallback] = None,
-        progress: Optional[BatchProgress] = None,
-        filename: Optional[str] = None,
+            self,
+            bvid: str,
+            dir: Optional[Path] = None,
+            *,
+            page: int = 1,
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
+            filename: Optional[str] = None,
     ) -> DownloadResult:
         """下载音频流。文件名为 `[标题](BV号).{实际格式}`，多P时含 P 序号。
 
@@ -245,6 +289,12 @@ class VideoService:
         :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
         :return: DownloadResult
         """
+        existing = self._find_downloaded_file(bvid, {"m4a", "mp3", "flac", "aac", "mp4"}, page=page,
+                                              root=dir or self.default_dir)
+        # print(f"existing:{existing}")
+        if existing is not None:
+            return DownloadResult(path=existing, media_type="audio", size=existing.stat().st_size, cached=True)
+
         info, dash = self._fetch_streams(bvid, page)
         stream = dash.best_audio()
         if stream is None:
@@ -255,6 +305,10 @@ class VideoService:
         if filename is None:
             filename = self._default_filename(info, bvid, page, stream.ext)
         save_path = save_dir / filename
+
+        # 修改：如果文件已经存在，则跳过下载
+        if save_path.exists():
+            return DownloadResult(path=save_path, media_type="audio", size=save_path.stat().st_size, cached=True)
 
         # 单独调用时自动显示进度条
         progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
@@ -268,16 +322,16 @@ class VideoService:
         return DownloadResult(path=save_path, media_type="audio", size=size)
 
     def download_video_with_audio(
-        self,
-        bvid: str,
-        dir: Optional[Path] = None,
-        *,
-        page: int = 1,
-        quality: VideoQuality = VideoQuality.HD4K,
-        keep_parts: bool = False,
-        progress_cb: Optional[ProgressCallback] = None,
-        progress: Optional[BatchProgress] = None,
-        filename: Optional[str] = None,
+            self,
+            bvid: str,
+            dir: Optional[Path] = None,
+            *,
+            page: int = 1,
+            quality: VideoQuality = VideoQuality.HD4K,
+            keep_parts: bool = False,
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
+            filename: Optional[str] = None,
     ) -> DownloadResult:
         """下载视频流 + 音频流，并用 ffmpeg 合成为一个文件。
 
@@ -295,6 +349,12 @@ class VideoService:
         :return: DownloadResult
         :raises FFmpegNotFoundError: 系统未安装 ffmpeg
         """
+        # 修改：下载前先检查是否已经存在最终视频
+        existing = self._find_downloaded_file(bvid, {"mp4", "flv", "m4s"}, page=page,
+                                              root=dir or self.default_dir)
+        if existing is not None:
+            return DownloadResult(path=existing, media_type="video", size=existing.stat().st_size, cached=True)
+
         import tempfile
 
         # 预检 ffmpeg：避免下载完几十 MB 后才报错
@@ -312,6 +372,9 @@ class VideoService:
         if filename is None:
             filename = self._default_filename(info, bvid, page, "mp4")
         save_path = save_dir / filename
+
+        if save_path.exists():
+            return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size, cached=True)
 
         # 单独调用时自动显示进度条
         progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
@@ -363,13 +426,13 @@ class VideoService:
         return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size)
 
     def download_cover(
-        self,
-        bvid: str,
-        dir: Optional[Path] = None,
-        *,
-        progress_cb: Optional[ProgressCallback] = None,
-        progress: Optional[BatchProgress] = None,
-        filename: Optional[str] = None,
+            self,
+            bvid: str,
+            dir: Optional[Path] = None,
+            *,
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
+            filename: Optional[str] = None,
     ) -> DownloadResult:
         """下载视频封面。文件名为 `[标题](BV号).jpg/png`。
 
@@ -380,6 +443,11 @@ class VideoService:
         :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
         :return: DownloadResult
         """
+        existing = self._find_downloaded_file(bvid, {"jpg", "jpeg", "png", "webp"},
+                                              root=dir or self.default_dir)
+        if existing is not None:
+            return DownloadResult(path=existing, media_type="cover", size=existing.stat().st_size, cached=True)
+
         info = self.fetch_info(bvid)
         if not info.pic:
             raise ValueError(f"视频 {bvid} 的封面地址获取失败。")
@@ -390,6 +458,9 @@ class VideoService:
             ext = "png" if info.pic.endswith(".png") else "jpg"
             filename = build_download_filename(info.title, bvid, ext)
         save_path = save_dir / filename
+
+        if save_path.exists():
+            return DownloadResult(path=save_path, media_type="cover", size=save_path.stat().st_size, cached=True)
 
         # 单独调用时自动显示进度条
         progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
@@ -405,14 +476,14 @@ class VideoService:
         return DownloadResult(path=save_path, media_type="cover", size=len(content))
 
     def download_all_pages(
-        self,
-        bvid: str,
-        dir: Optional[Path] = None,
-        *,
-        quality: VideoQuality = VideoQuality.HD4K,
-        media_type: str = "video_with_audio",
-        progress_cb: Optional[ProgressCallback] = None,
-        progress: Optional[BatchProgress] = None,
+            self,
+            bvid: str,
+            dir: Optional[Path] = None,
+            *,
+            quality: VideoQuality = VideoQuality.HD4K,
+            media_type: str = "video_with_audio",
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
     ) -> list:
         """下载多P视频的全部分P（单P视频等价于 download_video_with_audio）。
 
@@ -467,7 +538,7 @@ class VideoService:
         """
         if season_id is not None:
             try:
-                data = ArchiveService(self.session).get_season_by_id(season_id, mid)
+                data = ArchiveService(self.session).get_season_by_sid(season_id, mid)
             except ValueError:
                 return None
             meta = data.get("meta") or {}
@@ -496,16 +567,16 @@ class VideoService:
         raise ValueError("fetch_season 需要 bvid 或 season_id 至少一个参数")
 
     def download_season(
-        self,
-        bvid: Optional[str] = None,
-        dir: Optional[Path] = None,
-        *,
-        season_id: Optional[int] = None,
-        mid: int = 0,
-        quality: VideoQuality = VideoQuality.HD4K,
-        media_type: str = "video_with_audio",
-        progress_cb: Optional[ProgressCallback] = None,
-        progress: Optional[BatchProgress] = None,
+            self,
+            bvid: Optional[str] = None,
+            dir: Optional[Path] = None,
+            *,
+            season_id: Optional[int] = None,
+            mid: int = 0,
+            quality: VideoQuality = VideoQuality.HD4K,
+            media_type: str = "video_with_audio",
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
     ) -> list:
         """下载整个合集。`bvid` 与 `season_id` 任选其一。
 
@@ -540,11 +611,17 @@ class VideoService:
         file_idx = 0
         for episode in season.episodes:
             logger.info("[VideoService] 合集「%s」下载：%s", season.title, episode.title)
+            try:
+                info = self.fetch_info(episode.bvid)
+            except Exception as e:
+                if self._is_video_unavailable_error(e):
+                    logger.warning("[VideoService] 视频 %s 不可见，跳过。", bvid)
+                    continue
+                raise
             if episode.is_multi_page:
                 # 合集内多P稿件：逐P下载
                 for page_obj in episode.pages:
                     file_idx += 1
-                    info = self.fetch_info(episode.bvid)
                     display_name = self._default_filename(info, episode.bvid, page_obj.page, "mp4")
                     progress.start(file_idx, display_name)
                     results.append(self.download_video_with_audio(
@@ -554,7 +631,6 @@ class VideoService:
                     progress.finish()
             else:
                 file_idx += 1
-                info = self.fetch_info(episode.bvid)
                 display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
                 display_name = self._default_filename(info, episode.bvid, 1, display_ext)
                 progress.start(file_idx, display_name)
@@ -599,12 +675,12 @@ class VideoService:
         return self.download_all_pages(bvid, dir, quality=VideoQuality.HD4K)
 
     def download_fav(
-        self,
-        fid: Optional[Union[int, str]] = None,
-        dir: Optional[Path] = None,
-        *,
-        mode: str = "video",
-        quality: VideoQuality = VideoQuality.HD4K,
+            self,
+            fid: Optional[Union[int, str]] = None,
+            dir: Optional[Path] = None,
+            *,
+            mode: str = "video",
+            quality: VideoQuality = VideoQuality.HD4K,
     ) -> list:
         """下载整个收藏夹的全部视频（有声音）或仅音频。
 
@@ -637,12 +713,33 @@ class VideoService:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         results = []
-        for bvid in bvids:
+        download_count = 0
+        for i, bvid in enumerate(bvids):
+            result_start = len(results)
             logger.info("[VideoService] 收藏夹「%s」下载：%s", info.title, bvid)
-            if mode == "audio":
-                results.extend(self.download_all_pages(bvid, save_dir, quality=quality, media_type="audio"))
-            else:  # video
-                results.extend(self.download_all_pages(bvid, save_dir, quality=quality))
+            try:
+                if mode == "audio":
+                    results.extend(self.download_all_pages(bvid, save_dir,
+                                                           quality=quality, media_type="audio"))
+                else:  # video
+                    results.extend(self.download_all_pages(bvid, save_dir,
+                                                           quality=quality, media_type="video_with_audio"))
+            except Exception as e:
+                if self._is_video_unavailable_error(e):
+                    print(f"[VideoService] 跳过不可见视频 {bvid}，进度 {i + 1}/{len(bvids)}")
+                    continue
+                raise
+            new_results = results[result_start:]
+            all_cached = bool(new_results) and all(result.cached for result in new_results)
+            if all_cached:
+                print(f"{bvid} 命中缓存，跳过网络请求。")
+            else:
+                print(f"{bvid} 未命中缓存，已下载 {len(new_results)} 个文件。")
+                download_count += 1  # 统计未命中缓存的下载次数
+                time.sleep(0.3)  # 避免风控
+                if download_count % 10 == 0:
+                    time.sleep(random.uniform(1, 3))  # 每10个未命中缓存的视频随机休息1~3秒，降低风控风险
+            print(f"[VideoService] 已下载 {i + 1}/{len(bvids)} 个视频。")
         return results
 
     # ---- UP主空间 ----
@@ -675,7 +772,7 @@ class VideoService:
         """
         from src.api.auth import get_wbi
         from src.urls.user_urls import UserUrls
-
+        import time
         mid = self._resolve_mid(mid)
         bvids = []
         pn = 1
@@ -689,17 +786,16 @@ class VideoService:
             if len(bvids) >= total or not vlist:
                 break
             pn += 1
-            import time
             time.sleep(0.3)  # 避免风控
         return bvids
 
     def download_up(
-        self,
-        mid: Optional[Union[int, str]] = None,
-        dir: Optional[Path] = None,
-        *,
-        mode: str = "video",
-        quality: VideoQuality = VideoQuality.HD4K,
+            self,
+            mid: Optional[Union[int, str]] = None,
+            dir: Optional[Path] = None,
+            *,
+            mode: str = "video",
+            quality: VideoQuality = VideoQuality.HD4K,
     ) -> list:
         """下载某个 UP 主空间的全部视频（有声音）或仅音频。
 
@@ -734,8 +830,14 @@ class VideoService:
         results = []
         for bvid in bvids:
             logger.info("[VideoService] UP主「%s」下载：%s", up_name, bvid)
-            if mode == "audio":
-                results.extend(self.download_all_pages(bvid, save_dir, quality=quality, media_type="audio"))
-            else:  # video
-                results.extend(self.download_all_pages(bvid, save_dir, quality=quality))
+            try:
+                if mode == "audio":
+                    results.extend(self.download_all_pages(bvid, save_dir, quality=quality, media_type="audio"))
+                else:  # video
+                    results.extend(self.download_all_pages(bvid, save_dir, quality=quality))
+            except Exception as e:
+                if self._is_video_unavailable_error(e):
+                    logger.warning("[VideoService] 视频 %s 不可见，跳过。", bvid)
+                    continue
+                raise
         return results

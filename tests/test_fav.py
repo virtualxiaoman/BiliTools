@@ -8,17 +8,17 @@ from src.services.fav import FavService
 
 class TestParseFavUrl:
     def test_standard_url(self):
-        fid = FavService.parse_fav_url(
+        fid = FavService._parse_fav_url(
             "https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create"
         )
         assert fid == 3953119978
 
     def test_url_without_ftype(self):
-        assert FavService.parse_fav_url("https://space.bilibili.com/1/favlist?fid=123") == 123
+        assert FavService._parse_fav_url("https://space.bilibili.com/1/favlist?fid=123") == 123
 
     def test_invalid_url_raises(self):
         with pytest.raises(ValueError):
-            FavService.parse_fav_url("https://space.bilibili.com/506925078/")
+            FavService._parse_fav_url("https://space.bilibili.com/506925078/")
 
     def test_resolve_media_id_int(self):
         s = FavService()

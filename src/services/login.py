@@ -21,7 +21,7 @@ from typing import Optional, Tuple
 
 from src.api.session import BiliSession
 from src.config.cookie import BiliCookies
-from src.config.path import DEFAULT_COOKIE_PATH, QR_IMAGE_PATH
+from src.config.path import DEFAULT_COOKIE_PATH, DEFAULT_QR_IMAGE_PATH
 from src.models.login_model import LoginUser
 from src.urls.login_urls import LoginUrls
 
@@ -79,7 +79,7 @@ class LoginService:
             logger.warning("[LoginService] 未安装 qrcode 库，跳过二维码图片生成，仅返回登录 url。")
             return url, qrcode_key
 
-        save_path = Path(save_qr_path) if save_qr_path is not None else QR_IMAGE_PATH
+        save_path = Path(save_qr_path) if save_qr_path is not None else DEFAULT_QR_IMAGE_PATH
         save_path.parent.mkdir(parents=True, exist_ok=True)
         qr = qrcode.QRCode()
         qr.add_data(url)
@@ -132,7 +132,7 @@ class LoginService:
             try:
                 from PIL import Image
                 # 二维码图片由 generate_qr 保存到 QR_IMAGE_PATH（或自定义路径），这里打开同一份
-                qr_img_path = QR_IMAGE_PATH
+                qr_img_path = DEFAULT_QR_IMAGE_PATH
                 if not qr_img_path.exists():
                     logger.warning("[LoginService] 二维码图片不存在：%s", qr_img_path)
                 else:

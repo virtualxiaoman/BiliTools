@@ -31,6 +31,12 @@ class UserService:
         使用用户卡片接口（x/web-interface/card，数据较全且无需 wbi 签名）。
         （旧实现用的 /x/space/wbi/acc/info 需要 dm_img_* 等易过期的风控参数，已弃用。）
 
+        返回示例：
+        UserInfo(mid='506925078', name='virtual小满',
+                face='https://i0.hdslb.com/bfs/face/ab7b6b46a2c358e914140a0d62ac3322cad44d4f.jpg',
+                sign='Hi！关注了就是朋友啦nya~ 主推天依、白子 记录日常中的有趣点滴',
+                num_following=157, num_follower=4218, level=6)
+
         :param mid: 用户UID
         :return: UserInfo
         """
@@ -45,13 +51,13 @@ class UserService:
             logger.warning("[UserService] 获取用户 %s 昵称失败：%s", mid, e)
             return None
 
-    def fetch_card(self, mid: int) -> dict:
-        """获取用户卡片信息（含粉丝数/关注状态/投稿数等，接口返回较全）。
-
-        :param mid: 用户UID
-        :return: card 接口的 data 字典
-        """
-        return self.session.get(UserUrls.CARD, params={"mid": mid})
+    # def fetch_card(self, mid: int) -> dict:
+    #     """获取用户卡片信息（含粉丝数/关注状态/投稿数等，接口返回较全）。
+    #
+    #     :param mid: 用户UID
+    #     :return: card 接口的 data 字典
+    #     """
+    #     return self.session.get(UserUrls.CARD, params={"mid": mid})
 
 
 class ContractService:

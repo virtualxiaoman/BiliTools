@@ -94,9 +94,7 @@ class BiliSession:
             except (requests.RequestException, ValueError) as e:
                 # 传输层/解析错误：记录并重试
                 last_error = e
-                logger.warning(
-                    "[BiliSession-%s]第%d次请求%s失败：%s", method, attempt + 1, url, e
-                )
+                logger.warning("[BiliSession-%s]第%d次请求%s失败：%s", method, attempt + 1, url, e)
             if attempt < self.max_retry:
                 time.sleep(RETRY_DELAY)
         raise last_error if last_error is not None else RuntimeError(f"请求失败：{url}")

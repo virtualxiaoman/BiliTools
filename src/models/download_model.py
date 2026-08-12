@@ -15,8 +15,9 @@ from urllib.parse import urlparse
 class VideoQuality(IntEnum):
     """视频清晰度（qn 参数）。具体值对应 BAC 文档清晰度定义。
 
-    注意：DASH 格式下 qn 不决定返回哪一档，而是返回全部可用流，
-    由调用方按清晰度从高到低挑选（见 DashStreams.pick_video）。
+    注意：DASH 格式下 qn 不决定返回哪一档，而是返回全部可用流，由调用方按清晰度从高到低挑选（见 DashStreams.pick_video）。
+    但可以通过传入 qn 请求具体的某一档，若该档不可用则回退到首个可用流。
+    例如：视频有4K源，但请求 qn=80（1080P）时，返回的流仍然是 1080P，而不是 4K。
 
     参考：https://socialsisteryi.github.io/bilibili-API-collect/docs/video/videostream_url.html
     """
@@ -69,6 +70,7 @@ class DownloadResult:
     path: Path  # 文件完整路径
     media_type: str = "video"  # video / audio / cover / videoshot
     size: Optional[int] = None  # 文件字节数（下载完成后回填）
+    cached: bool = False  # 是否直接使用本地已有文件
 
     def __str__(self) -> str:
         return f"DownloadResult(path={self.path}, media_type={self.media_type})"
@@ -151,8 +153,8 @@ class DashStreams:
     def pick_video(self, quality: VideoQuality) -> Optional[VideoStream]:
         """按**目标清晰度**挑选视频流。
 
-        语义（精确目标）：优先返回清晰度**恰好等于** quality 的流；
-        若视频没有该清晰度（未提供/无权限），回退到**最高可用**流。
+        语义（精确目标）：优先返回清晰度 "恰好等于" quality 的流；
+        若视频没有该清晰度（未提供/无权限），回退到 "最高可用" 流。
 
         示例：`P1080` 时视频有 4K+1080P → 选 1080P（不会被拉到 4K）；
               视频只有 720P → 回退到 720P。

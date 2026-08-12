@@ -10,4 +10,4 @@ class CommentUrls:
     """评论接口。"""
 
     ADD = f"{API_BASE}/x/v2/reply/add"  # 发表评论
-    LIST = f"{API_BASE}/x/v2/reply"  # 评论列表（爬取评论用，暂未实现）
+    LIST = f"{API_BASE}/x/v2/reply"  # 评论列表（#todo 爬取评论用，暂未实现）

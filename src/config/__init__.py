@@ -10,7 +10,6 @@ BiliTools 配置包
 通过 `legacy_shim.py` 提供兼容导入，方便过渡期迁移。
 """
 
-from src.config.legacy_shim import Config
 from src.config.constants import UserAgent
 from src.config.cookie import BiliCookies
 from src.config.path import (
@@ -21,12 +20,11 @@ from src.config.path import (
     VIDEO_OUTPUT_DIR,
     HISTORY_OUTPUT_DIR,
     DEFAULT_COOKIE_PATH,
-    QR_IMAGE_PATH,
+    DEFAULT_QR_IMAGE_PATH,
     ensure_dirs,
 )
 
 __all__ = [
-    "Config",
     "UserAgent",
     "BiliCookies",
     "PROJECT_ROOT",
@@ -36,6 +34,6 @@ __all__ = [
     "VIDEO_OUTPUT_DIR",
     "HISTORY_OUTPUT_DIR",
     "DEFAULT_COOKIE_PATH",
-    "QR_IMAGE_PATH",
+    "DEFAULT_QR_IMAGE_PATH",
     "ensure_dirs",
 ]

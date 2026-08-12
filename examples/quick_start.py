@@ -92,7 +92,7 @@ def get_fav():
 def get_archive():
     """获取视频合集视频。"""
     service = ArchiveService()
-    bvs = service.get_archives_list(1717000, mid=506925078)  # 合集·明日方舟
+    bvs = service.get_bvlist_by_sid(1717000, mid=506925078)  # 合集·明日方舟
     print(f"合集视频 {len(bvs)} 个")
 
 

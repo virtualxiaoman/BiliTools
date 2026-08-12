@@ -107,7 +107,7 @@ def test_fav_bv():
 
 def test_archive_list():
     # 合集「明日方舟」属于当前登录用户，mid=0 时自动解析为登录用户 mid
-    bvs = ArchiveService().get_archives_list(TEST_SEASON_ID, mid=0)
+    bvs = ArchiveService().get_bvlist_by_sid(TEST_SEASON_ID, mid=0)
     assert len(bvs) > 0
 
 

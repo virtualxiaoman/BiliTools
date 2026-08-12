@@ -24,7 +24,7 @@ class FavService:
         self.session = session if session is not None else BiliSession()
 
     @staticmethod
-    def parse_fav_url(url: str) -> int:
+    def _parse_fav_url(url: str) -> int:
         """从收藏夹页面 URL 解析 media_id（fid）。
 
         [使用方法]:
@@ -46,11 +46,53 @@ class FavService:
             raise ValueError("需要提供 media_id 或收藏夹 URL")
         s = str(media_id).strip()
         if s.startswith("http://") or s.startswith("https://"):
-            return self.parse_fav_url(s)
+            return self._parse_fav_url(s)
         return int(s)
 
     def get_fav_info(self, media_id: Optional[Union[int, str]] = None) -> FavInfo:
         """获取收藏夹详情（名称/视频数量）。
+        请求示例：
+        https://api.bilibili.com/x/v3/fav/folder/info?media_id=3953119978
+        返回值示例：
+            {
+              "code": 0,
+              "message": "OK",
+              "ttl": 1,
+              "data": {
+                "id": 3953119978,
+                "fid": 39531199,
+                "mid": 506925078,
+                "attr": 22,
+                "title": "走不出来的那些日子",
+                "cover": "http://i2.hdslb.com/bfs/archive/577e9ad0937b46ae3c52601aeee517fd7f5876de.jpg",
+                "upper": {
+                  "mid": 506925078,
+                  "name": "virtual小满",
+                  "face": "https://i0.hdslb.com/bfs/face/ab7b6b46a2c358e914140a0d62ac3322cad44d4f.jpg",
+                  "followed": false,
+                  "vip_type": 1,
+                  "vip_statue": 0
+                },
+                "cover_type": 2,
+                "cnt_info": {
+                  "collect": 0,
+                  "play": 0,
+                  "thumb_up": 0,
+                  "share": 0
+                },
+                "type": 11,
+                "intro": "",  # 收藏夹简介(这里没有简介)
+                "ctime": 1768138225,
+                "mtime": 1768138225,
+                "state": 0,
+                "fav_state": 0,
+                "like_state": 0,
+                "media_count": 4,  # 收藏夹内的视频数量
+                "is_top": false,
+                "is_kid_playlist": false,
+                "kid_playlist_desc": ""
+              }
+            }
 
         :param media_id: media_id 或收藏夹 URL
         :return: FavInfo
@@ -61,7 +103,41 @@ class FavService:
 
     def get_fav_bv(self, media_id: Optional[Union[int, str]] = None) -> list:
         """获取收藏夹内的视频 BV 号列表（一次性返回全部，不截断）。
-
+        请求示例：
+        https://api.bilibili.com/x/v3/fav/resource/ids?media_id=3953119978
+        （对应网址是https://space.bilibili.com/506925078/favlist?fid=3953119978）
+        返回值示例：
+            {
+              "code": 0,
+              "message": "OK",
+              "ttl": 1,
+              "data": [
+                {
+                  "id": 115972119724128,
+                  "type": 2,
+                  "bv_id": "BV1hr6EBBEAV",
+                  "bvid": "BV1hr6EBBEAV"
+                },
+                {
+                  "id": 761518527,
+                  "type": 2,
+                  "bv_id": "BV1z64y1b7H4",
+                  "bvid": "BV1z64y1b7H4"
+                },
+                {
+                  "id": 5306111,
+                  "type": 2,
+                  "bv_id": "BV1ts411y7FY",
+                  "bvid": "BV1ts411y7FY"
+                },
+                {
+                  "id": 114829893307654,
+                  "type": 2,
+                  "bv_id": "BV1AWGVztE8W",
+                  "bvid": "BV1AWGVztE8W"
+                }
+              ]
+            }
         [使用方法]:
             service = FavService()
             bvs = service.get_fav_bv(3953119978)                      # 直接给 media_id

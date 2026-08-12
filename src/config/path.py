@@ -20,7 +20,7 @@ HISTORY_OUTPUT_DIR = OUTPUT_DIR / "history"  # 历史记录等表格/数据文�
 
 # 默认 cookie 与二维码图片路径
 DEFAULT_COOKIE_PATH = COOKIE_DIR / "qr_login.txt"
-QR_IMAGE_PATH = COOKIE_DIR / "qr_login.png"
+DEFAULT_QR_IMAGE_PATH = COOKIE_DIR / "qr_login.png"
 
 
 def ensure_dirs() -> None:
