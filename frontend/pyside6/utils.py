@@ -1,0 +1,115 @@
+"""输入归一化与登录状态工具（UI 层，不改 src 语义）。
+
+所有下载入口都支持「直接传参数」或「传完整 URL」两种方式，统一归一化为规范 id，
+既保证任务去重 key 稳定，也让非法输入在开线程之前就报错。
+"""
+import re
+
+import requests
+
+from src.config.constants import UserAgent
+from src.config.cookie import BiliCookies
+from src.config.path import DEFAULT_COOKIE_PATH
+from src.util.bvid import av2bv
+
+_BV_RE = re.compile(r"bv[0-9a-zA-Z]{10}", re.IGNORECASE)
+_SPACE_MID_RE = re.compile(r"space\.bilibili\.com/(\d+)")
+_FAV_FID_RE = re.compile(r"[?&]fid=(\d+)")
+_SEASON_SID_RE = re.compile(r"sid=(\d+)")
+
+
+def ensure_cookie_file() -> None:
+    """确保 cookie 文件存在（全新安装时为空文件，has_valid_session=False 走未登录分支）。
+
+    BiliCookies.from_file 在文件缺失时抛 FileNotFoundError（有测试依赖），
+    因此不在 src 层改语义，而是在 UI 层保证文件存在。
+    """
+    if not DEFAULT_COOKIE_PATH.exists():
+        DEFAULT_COOKIE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        DEFAULT_COOKIE_PATH.write_text("", encoding="utf-8")
+
+
+def has_valid_session() -> bool:
+    """本地快速判断是否具备登录凭证（SESSDATA 存在）。不发起网络请求。"""
+    try:
+        return BiliCookies.from_file().has_valid_session
+    except FileNotFoundError:
+        return False
+
+
+# ---- 归一化 ----
+
+def normalize_bvid(raw: str) -> str:
+    """输入 BV/bv 号、av 号或视频链接 → 返回 BV 号。失败抛 ValueError。"""
+    s = raw.strip()
+    if not s:
+        raise ValueError("输入为空")
+    m = _BV_RE.search(s)
+    if m:
+        b = m.group(0)
+        return b[:2].upper() + b[2:]  # 保留原有大小写，仅修正 bv 前缀
+    m = re.fullmatch(r"av(\d+)", s, re.IGNORECASE)
+    if m:
+        return av2bv(m.group(1))
+    if "http" in s.lower():
+        try:
+            r = requests.get(
+                s, allow_redirects=True, timeout=15,
+                headers={"User-Agent": UserAgent().pcChrome},
+            )
+            r.raise_for_status()
+            m = _BV_RE.search(r.url)
+            if m:
+                b = m.group(0)
+                return b[:2].upper() + b[2:]
+        except requests.RequestException as e:
+            raise ValueError(f"访问链接失败：{e}") from e
+    raise ValueError(f"无法从输入解析 BV 号：{raw}")
+
+
+def normalize_fav(raw: str) -> int:
+    """输入 media_id 或收藏夹链接 → 返回 media_id。失败抛 ValueError。"""
+    s = raw.strip()
+    if not s:
+        raise ValueError("输入为空")
+    if s.isdigit():
+        return int(s)
+    m = _FAV_FID_RE.search(s)
+    if m:
+        return int(m.group(1))
+    raise ValueError(f"无法从输入解析收藏夹 media_id：{raw}")
+
+
+def normalize_season(raw: str):
+    """输入合集参数/链接 → 返回 (kind, value, mid)。
+
+    - BV号/视频链接 → ("bvid", bvid, None)
+    - sid 数字 → ("sid", sid, 0)
+    - 合集链接（含 sid）→ ("sid", sid, mid|0)
+    """
+    s = raw.strip()
+    if not s:
+        raise ValueError("输入为空")
+    if s.isdigit():
+        return ("sid", int(s), 0)
+    m = _SEASON_SID_RE.search(s)
+    if m:
+        sid = int(m.group(1))
+        mm = _SPACE_MID_RE.search(s)
+        mid = int(mm.group(1)) if mm else 0
+        return ("sid", sid, mid)
+    bvid = normalize_bvid(s)
+    return ("bvid", bvid, None)
+
+
+def normalize_mid(raw: str) -> int:
+    """输入 mid 或空间链接 → 返回 mid。失败抛 ValueError。"""
+    s = raw.strip()
+    if not s:
+        raise ValueError("输入为空")
+    if s.isdigit():
+        return int(s)
+    m = _SPACE_MID_RE.search(s)
+    if m:
+        return int(m.group(1))
+    raise ValueError(f"无法从输入解析 UP主 mid：{raw}")

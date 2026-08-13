@@ -98,6 +98,18 @@ class LoginService:
         code, _ = self._poll_once(qrcode_key)
         return code
 
+    def poll_full(self, qrcode_key: str) -> Tuple[int, Optional[str]]:
+        """轮询一次扫码登录状态，返回 (状态码, set-cookie)。
+
+        与 `poll()` 的区别：登录成功时把响应头里的 set-cookie 一并返回，
+        供 UI 直接调用 `save_cookie()` 保存（poll 只返回状态码、丢弃了 cookie）。
+
+        :param qrcode_key: generate_qr 返回的 key
+        :return: (状态码, set-cookie 原始字符串)。登录成功时 set-cookie 非空
+        """
+        code, resp = self._poll_once(qrcode_key)
+        return code, resp.headers.get("set-cookie", "") or None
+
     def _poll_once(self, qrcode_key: str):
         """轮询一次并返回 (状态码, 响应)。登录成功时响应头含 set-cookie。"""
         resp = self.session.session.get(

@@ -365,7 +365,8 @@ class VideoService:
         :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
         :return: DownloadResult
         """
-        existing = self._find_downloaded_file(bvid, {"m4a", "mp3", "flac", "aac", "mp4"}, page=page,
+        # 音频缓存检查不含 mp4：已存在的「视频」mp4 不能当作音频已下载而跳过（仅音频下载）
+        existing = self._find_downloaded_file(bvid, {"m4a", "mp3", "flac", "aac"}, page=page,
                                               root=dir or self.default_dir)
         # print(f"existing:{existing}")
         if existing is not None:
@@ -783,6 +784,8 @@ class VideoService:
             *,
             mode: str = "video",
             quality: VideoQuality = VideoQuality.HD4K,
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
     ) -> list:
         """下载整个收藏夹的全部视频（有声音）或仅音频。
 
@@ -801,6 +804,8 @@ class VideoService:
         :param dir: 保存根目录。None 时使用默认下载目录
         :param mode: video（下载视频+音频合成，默认）或 audio（仅下载音频流）
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
+        :param progress_cb: 进度回调 (downloaded, total)
+        :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由 UI 传入以获取逐文件事件）
         :return: DownloadResult 列表
         """
         from src.services.fav import FavService
@@ -822,7 +827,8 @@ class VideoService:
             logger.info("[VideoService] 收藏夹「%s」下载：%s", info.title, bvid)
             new_results = self._execute_batch_download(
                 bvid,
-                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type),
+                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type,
+                                                progress=progress, progress_cb=progress_cb),
                 label=label,
             )
             if new_results is None:
@@ -888,6 +894,8 @@ class VideoService:
             *,
             mode: str = "video",
             quality: VideoQuality = VideoQuality.HD4K,
+            progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None,
     ) -> list:
         """下载某个 UP 主空间的全部视频（有声音）或仅音频。
 
@@ -906,6 +914,8 @@ class VideoService:
         :param dir: 保存根目录。None 时使用默认下载目录
         :param mode: video（下载视频+音频合成，默认）或 audio（仅下载音频流）
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
+        :param progress_cb: 进度回调 (downloaded, total)
+        :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由 UI 传入以获取逐文件事件）
         :return: DownloadResult 列表
         """
         from src.services.user import UserService
@@ -927,7 +937,8 @@ class VideoService:
             logger.info("[VideoService] UP主「%s」下载：%s", up_name, bvid)
             new_results = self._execute_batch_download(
                 bvid,
-                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type),
+                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type,
+                                                progress=progress, progress_cb=progress_cb),
                 label=label,
             )
             if new_results is None:

@@ -1,3 +1,1 @@
-from frontend.config import Config
-
-UI_Config = Config()
+"""frontend 包：多个前端的容器。当前子目录 `pyside6/` 为桌面前端；`old/` 为历史代码（保留）。"""

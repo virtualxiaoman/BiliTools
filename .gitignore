@@ -33,5 +33,12 @@ __pycache__/
 /assets/cookie/*
 !/assets/cookie/.gitkeep
 
+# ---- 运行期数据（个人设置/缓存，不入库） ----
+/assets/ui_settings.json
+/assets/cache/
+
+# ---- Claude 会话记录 ----
+/claudesession.txt
+
 # 旧前端遗留的 cookie 目录（前端重写后不再使用，绝不提交凭据）
 /frontend/cookie/

@@ -2,12 +2,22 @@
 路径锚点：全库统一的路径管理。
 
 以 `PROJECT_ROOT` 为基准派生所有路径常量，杜绝依赖当前工作目录(cwd)的裸相对路径。
+PyInstaller 打包后（sys.frozen）锚定到可执行文件所在目录，保证 output/assets 可写。
 """
 
+import sys
 from pathlib import Path
 
-# 项目根目录：src/config/path.py 向上三级
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+def _project_root() -> Path:
+    """项目根目录：开发模式取 src/config/path.py 向上三级；打包后取 exe 所在目录（可写）。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent.parent
+
+
+# 项目根目录
+PROJECT_ROOT = _project_root()
 
 # 资源目录（cookie、图标等静态资源）
 ASSETS_DIR = PROJECT_ROOT / "assets"
