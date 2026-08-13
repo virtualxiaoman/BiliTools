@@ -8,7 +8,7 @@ start/set_quality/add/update/status/finish/make_stream_callback/iter_count）。
 - 阶段文本（如 ffmpeg 合成中）→ worker.phase；
 - 里程碑（第 i/n 个、单文件完成）→ worker.milestone（追加进日志）。
 """
-from ..signals import LogCategory
+from frontend.pyside6.signals import LogCategory
 
 
 class ProgressAdapter:

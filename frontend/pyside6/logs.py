@@ -17,7 +17,7 @@ from PySide6.QtCore import qInstallMessageHandler
 
 from src.config.path import OUTPUT_DIR
 
-from .signals import AppSignals, LogCategory
+from frontend.pyside6.signals import AppSignals, LogCategory
 
 LOG_DIR = OUTPUT_DIR / "logs"
 LOG_FILE = LOG_DIR / "bilitools.log"

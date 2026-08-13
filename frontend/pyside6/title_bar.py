@@ -25,8 +25,9 @@ class TitleBar(QWidget):
         lay.addWidget(self.title)
         lay.addStretch(1)
 
-        # 运行中任务数：浮层居中显示，不参与布局、不拦截鼠标
-        self.count_label = QLabel("")
+        # 运行中任务数：浮层居中显示在标题栏内（必须传 parent，否则会成为独立顶层窗口），
+        # 不参与布局、不拦截鼠标
+        self.count_label = QLabel(self)
         self.count_label.setObjectName("Dim")
         self.count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.count_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)

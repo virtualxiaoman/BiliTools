@@ -5,8 +5,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
-from .. import theme
-from ..signals import app_signals
+from frontend.pyside6 import theme
+from frontend.pyside6.signals import app_signals
 
 
 class LogWidget(QWidget):

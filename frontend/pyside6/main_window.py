@@ -2,13 +2,13 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox, QStackedWidget, QVBoxLayout, QWidget
 
-from .nav_bar import NavBar
-from .pages.download_page import DownloadPage
-from .pages.login_page import LoginPage
-from .pages.settings_page import SettingsPage
-from .signals import app_signals
-from .title_bar import TitleBar
-from .workers.download_manager import DownloadManager
+from frontend.pyside6.nav_bar import NavBar
+from frontend.pyside6.pages.download_page import DownloadPage
+from frontend.pyside6.pages.login_page import LoginPage
+from frontend.pyside6.pages.settings_page import SettingsPage
+from frontend.pyside6.signals import app_signals
+from frontend.pyside6.title_bar import TitleBar
+from frontend.pyside6.workers.download_manager import DownloadManager
 
 
 class MainWindow(QWidget):
@@ -83,6 +83,6 @@ class MainWindow(QWidget):
                 return
         # 停止后台线程，避免进程退出时 QThread 仍运行导致崩溃
         self.manager.shutdown()
-        from .workers.login_worker import shutdown_all
+        from frontend.pyside6.workers.login_worker import shutdown_all
         shutdown_all()
         super().closeEvent(event)

@@ -8,7 +8,7 @@
 """
 from PySide6.QtWidgets import QApplication
 
-from .signals import LogCategory
+from frontend.pyside6.signals import LogCategory
 
 CURRENT_THEME = "light"
 
@@ -139,6 +139,15 @@ QPushButton#Primary:hover {{ background-color: {p['accent_hover']}; }}
 QPushButton#Primary:pressed {{ background-color: {p['accent_focus']}; }}
 QPushButton#Primary:disabled {{ background-color: {p['progress_bg']}; color: {p['text_dim']}; }}
 
+QPushButton#NavItem {{
+    text-align: left; padding: 10px 14px; border-radius: 6px;
+    background: transparent; border: none; color: {p['nav_text']}; font-size: 13px;
+}}
+QPushButton#NavItem:hover {{ background-color: {p['btn_hover']}; }}
+QPushButton#NavItem:checked {{
+    background-color: {p['accent']}; color: {p['btn_primary_text']}; font-weight: 600;
+}}
+
 QPushButton#TitleBtn {{
     background: transparent; border: none; border-radius: 4px;
     color: {p['text']}; font-size: 14px; padding: 0;
@@ -234,5 +243,5 @@ class ThemeManager:
         if app is not None:
             app.setStyleSheet(build_qss(get_palette()))
         # 通知依赖语义色的控件（如日志）重建着色
-        from .signals import app_signals
+        from frontend.pyside6.signals import app_signals
         app_signals.theme_changed.emit(CURRENT_THEME)

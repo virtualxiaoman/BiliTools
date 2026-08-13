@@ -1,24 +1,27 @@
 """左侧下载输入面板：四个来源页签 + 共用选项 + 下载按钮 + 任务进度区。"""
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator
+from PySide6.QtCore import QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
-    QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
+    QButtonGroup, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QRadioButton, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from src.models.download_model import VideoQuality
 
-from ..signals import LogCategory, app_signals
-from ..utils import normalize_bvid, normalize_fav, normalize_mid, normalize_season
-from .task_progress_panel import TaskProgressPanel
+from frontend.pyside6.signals import LogCategory, app_signals
+from frontend.pyside6.utils import (
+    extract_page_from_url, normalize_bvid, normalize_fav, normalize_mid,
+    normalize_season,
+)
+from frontend.pyside6.widgets.task_progress_panel import TaskProgressPanel
 
 _HINTS = [
     "支持 BV号 / av号 / 视频链接",
-    "支持 media_id 或收藏夹链接",
-    "支持 BV号 / sid / 合集链接",
-    "支持 mid 或空间链接",
+    "支持 fid / 收藏夹链接",
+    "支持 BV号(自动获取对应的合集) / sid / 合集链接",
+    "支持 mid / 空间链接",
 ]
 
 
@@ -103,6 +106,10 @@ class DownloadPanel(QWidget):
         self.rb_all = QRadioButton("全部P")
         self.rb_single = QRadioButton("单P")
         self.rb_all.setChecked(True)
+        # 显式分组，保证「有且仅有一个」被选中
+        self.range_grp = QButtonGroup(self)
+        self.range_grp.addButton(self.rb_all)
+        self.range_grp.addButton(self.rb_single)
         self.spin_page = PNumberEdit()
         rr.addWidget(QLabel("范围："))
         rr.addWidget(self.rb_all)
@@ -115,6 +122,10 @@ class DownloadPanel(QWidget):
         type_row = QHBoxLayout()
         self.rb_video = QRadioButton("视频")  # 视频即含声音，无需括号说明
         self.rb_audio = QRadioButton("仅音频")
+        # 显式分组，保证「有且仅有一个」被选中
+        self.type_grp = QButtonGroup(self)
+        self.type_grp.addButton(self.rb_video)
+        self.type_grp.addButton(self.rb_audio)
         self.rb_video.setChecked(self.settings.get("media_type") != "audio")
         self.rb_audio.setChecked(self.settings.get("media_type") == "audio")
         type_row.addWidget(QLabel("类型："))
@@ -131,7 +142,7 @@ class DownloadPanel(QWidget):
             self.quality_combo.addItem(q.display_name, q)
         idx = self.quality_combo.findData(default_quality)
         self.quality_combo.setCurrentIndex(idx if idx >= 0 else 0)
-        q_row.addWidget(QLabel("清晰度："))
+        q_row.addWidget(QLabel("优先清晰度："))
         q_row.addWidget(self.quality_combo, 1)
         outer.addLayout(q_row)
 
@@ -146,9 +157,15 @@ class DownloadPanel(QWidget):
         self.task_panel = TaskProgressPanel()
         outer.addWidget(self.task_panel, 1)
 
+        # ---- 打开输出文件夹（左列最下方） ----
+        self.btn_open_dir = QPushButton("打开输出文件夹")
+        outer.addWidget(self.btn_open_dir)
+
         btn_browse.clicked.connect(self._on_browse)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.btn_download.clicked.connect(self._on_download)
+        self.btn_open_dir.clicked.connect(self._on_open_output_dir)
+        self.input_bv.textChanged.connect(self._on_bv_input_changed)
 
     # ---- 供 DownloadPage 连接 manager 信号 ----
 
@@ -175,6 +192,23 @@ class DownloadPanel(QWidget):
         if folder:
             self.dir_edit.setText(folder)
 
+    def _on_open_output_dir(self):
+        folder = Path(self.dir_edit.text().strip() or self.settings.get("save_dir"))
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+
+    def _on_bv_input_changed(self, text):
+        """输入的视频链接带 p=n → 界面自动切到「单P」并填入该序号。"""
+        if not text.strip() or "http" not in text.lower():
+            return
+        page = extract_page_from_url(text)
+        if page is not None:
+            self.rb_single.setChecked(True)
+            self.spin_page.setValue(page)
+
     def _current_input(self):
         return self._inputs[self.tabs.currentIndex()]
 
@@ -190,6 +224,8 @@ class DownloadPanel(QWidget):
         try:
             if tab == 0:
                 bvid = normalize_bvid(raw)
+                # 尊重用户当前的「范围」选择：输入链接时的 p=n 自动切换只发生在
+                # textChanged（_on_bv_input_changed），用户若手动改回「全部P」则以下全部P下载
                 scope = "single" if self.rb_single.isChecked() else "all"
                 page = self.spin_page.value()
                 desc = f"视频 {bvid}" + (f"（P{page}）" if scope == "single" else "（全部分P）")

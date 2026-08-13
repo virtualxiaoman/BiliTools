@@ -2,9 +2,9 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QSplitter, QVBoxLayout, QWidget
 
-from ..widgets.download_panel import DownloadPanel
-from ..widgets.login_card import LoginCard
-from ..widgets.log_widget import LogWidget
+from frontend.pyside6.widgets.download_panel import DownloadPanel
+from frontend.pyside6.widgets.login_card import LoginCard
+from frontend.pyside6.widgets.log_widget import LogWidget
 
 
 class DownloadPage(QWidget):

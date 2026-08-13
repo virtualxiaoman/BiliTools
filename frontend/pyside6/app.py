@@ -6,13 +6,13 @@ from PySide6.QtWidgets import QApplication
 
 from src.config.path import ASSETS_DIR
 
-from .logs import install_exception_hooks, install_logging
-from .main_window import MainWindow
-from .settings import Settings
-from .signals import app_signals
-from .theme import ThemeManager
-from .utils import ensure_cookie_file
-from .workers.login_worker import start_login_check
+from frontend.pyside6.logs import install_exception_hooks, install_logging
+from frontend.pyside6.main_window import MainWindow
+from frontend.pyside6.settings import Settings
+from frontend.pyside6.signals import app_signals
+from frontend.pyside6.theme import ThemeManager
+from frontend.pyside6.utils import ensure_cookie_file
+from frontend.pyside6.workers.login_worker import start_login_check
 
 
 def main() -> int:

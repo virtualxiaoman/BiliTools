@@ -6,9 +6,9 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWi
 from src.config.cookie import BiliCookies
 from src.config.path import DEFAULT_COOKIE_PATH, DEFAULT_QR_IMAGE_PATH
 
-from ..signals import LogCategory, app_signals
-from ..utils import ensure_cookie_file
-from ..workers.login_worker import QrLoginWorker, _drop, _keepalive
+from frontend.pyside6.signals import LogCategory, app_signals
+from frontend.pyside6.utils import ensure_cookie_file
+from frontend.pyside6.workers.login_worker import QrLoginWorker, _drop, _keepalive
 
 
 class LoginPage(QWidget):

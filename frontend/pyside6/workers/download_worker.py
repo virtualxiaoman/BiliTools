@@ -8,8 +8,8 @@ from src.services.fav import FavService
 from src.services.video import VideoService
 from src.api.errors import BiliAuthError, BiliRiskError
 
-from ..signals import LogCategory, app_signals
-from .progress_adapter import ProgressAdapter
+from frontend.pyside6.signals import LogCategory, app_signals
+from frontend.pyside6.workers.progress_adapter import ProgressAdapter
 
 logger = logging.getLogger(__name__)
 

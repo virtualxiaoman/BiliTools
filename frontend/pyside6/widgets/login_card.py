@@ -8,8 +8,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWi
 
 from src.config.path import ASSETS_DIR
 
-from ..signals import app_signals
-from ..workers.login_worker import query_login_async
+from frontend.pyside6.signals import app_signals
+from frontend.pyside6.workers.login_worker import query_login_async
 
 logger = logging.getLogger(__name__)
 

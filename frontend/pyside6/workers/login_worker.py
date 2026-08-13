@@ -8,8 +8,8 @@ from src.api.errors import BiliAuthError
 from src.config.cookie import BiliCookies
 from src.services.login import LoginService
 
-from ..signals import app_signals
-from ..utils import ensure_cookie_file
+from frontend.pyside6.signals import app_signals
+from frontend.pyside6.utils import ensure_cookie_file
 
 logger = logging.getLogger(__name__)
 

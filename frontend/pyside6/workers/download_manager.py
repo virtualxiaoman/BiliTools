@@ -9,9 +9,9 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from ..signals import LogCategory, app_signals
-from ..utils import has_valid_session
-from .download_worker import ERROR_AUTH, DownloadWorker
+from frontend.pyside6.signals import LogCategory, app_signals
+from frontend.pyside6.utils import has_valid_session
+from frontend.pyside6.workers.download_worker import ERROR_AUTH, DownloadWorker
 
 
 class DownloadManager(QObject):

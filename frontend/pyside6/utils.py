@@ -4,6 +4,7 @@
 既保证任务去重 key 稳定，也让非法输入在开线程之前就报错。
 """
 import re
+from typing import Optional
 
 import requests
 
@@ -15,7 +16,21 @@ from src.util.bvid import av2bv
 _BV_RE = re.compile(r"bv[0-9a-zA-Z]{10}", re.IGNORECASE)
 _SPACE_MID_RE = re.compile(r"space\.bilibili\.com/(\d+)")
 _FAV_FID_RE = re.compile(r"[?&]fid=(\d+)")
-_SEASON_SID_RE = re.compile(r"sid=(\d+)")
+_SEASON_SID_RE = re.compile(r"[?&]sid=(\d+)")
+_SEASON_LIST_RE = re.compile(r"space\.bilibili\.com/(\d+)/lists/(\d+)")
+_PAGE_RE = re.compile(r"[?&]p=(\d+)")
+
+
+def extract_page_from_url(raw: str) -> Optional[int]:
+    """从视频链接中提取分P参数 `p=n`；仅当输入为链接时尝试，无 p 参数返回 None。
+
+    [例子] https://www.bilibili.com/video/BV1ws411v7zE?spm_id_from=...&p=2  → 2
+    """
+    s = raw.strip()
+    if "http" not in s.lower():
+        return None
+    m = _PAGE_RE.search(s)
+    return int(m.group(1)) if m else None
 
 
 def ensure_cookie_file() -> None:
@@ -85,13 +100,20 @@ def normalize_season(raw: str):
 
     - BV号/视频链接 → ("bvid", bvid, None)
     - sid 数字 → ("sid", sid, 0)
-    - 合集链接（含 sid）→ ("sid", sid, mid|0)
+    - 合集空间链接 `space.bilibili.com/<mid>/lists/<sid>` → ("sid", sid, mid)
+      （按路径结构匹配，不依赖 ?type=season）
+    - 带 sid 参数的合集链接 → ("sid", sid, mid|0)
     """
     s = raw.strip()
     if not s:
         raise ValueError("输入为空")
     if s.isdigit():
         return ("sid", int(s), 0)
+    # 合集空间链接：/mid/lists/sid
+    m = _SEASON_LIST_RE.search(s)
+    if m:
+        return ("sid", int(m.group(2)), int(m.group(1)))
+    # 带 sid 参数的合集链接
     m = _SEASON_SID_RE.search(s)
     if m:
         sid = int(m.group(1))
