@@ -148,10 +148,10 @@ def test_download_multi_page_audio(tmp_path, video_service: VideoService):
 
 
 def test_fav_get_bv():
-    """收藏夹 bvid 列表（支持 URL 与 media_id）。"""
+    """收藏夹 bvid 列表（传 media_id）。"""
     from src.services import FavService
     fav = FavService()
-    bvs = fav.get_fav_bv("https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create")
+    bvs = fav.get_fav_bv(3953119978)
     assert len(bvs) >= 1
     assert all(b.startswith("BV") for b in bvs)
 

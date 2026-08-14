@@ -40,17 +40,20 @@ service.download_season("BV1Q43w6QETb")                  # 从合集内任意一
 service.download_season(season_id=8683221)                # 按 sid 直接下载（洛天依·纯蓝幻乐）
 service.download_season(season_id=1717000, mid=506925078) # 下载他人合集（明日方舟）
 
-# 7. 收藏夹下载：全部视频（有声音）或仅音频（缓存听歌），URL 或 media_id 均可
-service.download_fav("https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create")
+# 7. 收藏夹下载：全部视频（有声音）或仅音频（缓存听歌），传 media_id
+service.download_fav(3953119978)
 service.download_fav(3953119978, mode="audio")            # 仅下载音频到 output/video/<收藏夹名>/
 
-# 8. UP主空间下载：全部视频或仅音频，URL 或 mid 均可
-service.download_up("https://space.bilibili.com/249056021")
+# 8. UP主空间下载：全部视频或仅音频，传 mid
+service.download_up(249056021)
 service.download_up(249056021, mode="audio")              # 仅下载音频到 output/video/<UP主昵称>/
 ```
 
-收藏夹视频列表获取：`FavService().get_fav_bv(media_id 或 URL)`、`get_fav_info(media_id 或 URL)`。
-UP主视频列表获取：`service.list_up_videos(mid 或 URL)`。
+收藏夹视频列表获取：`FavService().get_fav_bv(media_id)`、`get_fav_info(media_id)`。
+UP主视频列表获取：`service.list_up_videos(mid)`。
+
+> 注：后端只接收规范 id（BV号 / media_id / mid / sid）；BV号、av号、完整链接、b23.tv
+> 短链的解析统一由 GUI 前端完成（`frontend/pyside6/utils.py`）。
 
 更多示例见 `examples/quick_start.py`，命令行入口见 `main.py`。
 

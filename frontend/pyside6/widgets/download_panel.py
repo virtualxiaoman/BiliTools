@@ -12,8 +12,8 @@ from src.models.download_model import VideoQuality
 
 from frontend.pyside6.signals import LogCategory, app_signals
 from frontend.pyside6.utils import (
-    extract_page_from_url, normalize_bvid, normalize_fav, normalize_mid,
-    normalize_season,
+    NeedsUrlResolution, extract_page_from_url, normalize_bvid, normalize_fav,
+    normalize_mid, normalize_season,
 )
 from frontend.pyside6.widgets.task_progress_panel import TaskProgressPanel
 
@@ -247,10 +247,32 @@ class DownloadPanel(QWidget):
                 return {"source": "up", "input": mid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
                         "save_dir": save_dir, "desc": f"UP主 {mid}"}
+        except NeedsUrlResolution:
+            # 短链等本地解析不了的链接：先建 pending 任务，交给下载线程跟随跳转，
+            # 避免在界面线程发 HTTP 请求卡住 UI
+            return self._build_pending_spec(tab, raw, media_type, quality, save_dir)
         except ValueError as e:
             app_signals.log_message.emit(LogCategory.ERROR, f"输入无效：{e}")
             return None
         return None
+
+    def _build_pending_spec(self, tab, raw, media_type, quality, save_dir):
+        """本地解析不出的链接（如 b23.tv 短链）→ 原样入 spec，由 worker 线程解析。"""
+        sources = ["bv", "fav", "season", "up"]
+        labels = ["视频", "收藏夹", "合集", "UP主"]
+        scope = "single" if self.rb_single.isChecked() else "all"
+        page = self.spin_page.value()
+        return {
+            "source": sources[tab],
+            "input": raw,
+            "pending_resolve": True,
+            "scope": scope if tab == 0 else "all",
+            "page": page if tab == 0 else 1,
+            "media_type": media_type,
+            "quality": quality,
+            "save_dir": save_dir,
+            "desc": f"{labels[tab]}（解析链接中…）",
+        }
 
     def _on_download(self):
         spec = self._build_spec()

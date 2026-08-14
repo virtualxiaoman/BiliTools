@@ -9,6 +9,7 @@ from src.services.video import VideoService
 from src.api.errors import BiliAuthError, BiliRiskError
 
 from frontend.pyside6.signals import LogCategory, app_signals
+from frontend.pyside6.utils import resolve_input
 from frontend.pyside6.workers.progress_adapter import ProgressAdapter
 
 logger = logging.getLogger(__name__)
@@ -33,10 +34,34 @@ class DownloadWorker(QThread):
     def milestone(self, category: int, text: str) -> None:
         app_signals.log_message.emit(category, text)
 
+    def _resolve_pending(self):
+        """短链等输入在工作线程内跟随跳转解析，避免阻塞界面线程。"""
+        if not self.spec.get("pending_resolve"):
+            return
+        raw = self.spec["input"]
+        source = self.spec["source"]
+        canonical = resolve_input(source, raw)
+        self.spec["input"] = canonical
+        self.spec["pending_resolve"] = False
+        display = self._canonical_display(source, canonical)
+        self.spec["desc"] = f"{self._source_label(source)}（已解析：{display}）"
+        self.milestone(LogCategory.NORMAL, f"解析链接：{raw} → {display}")
+        self.phase.emit(f"已解析：{display}")
+
+    @staticmethod
+    def _source_label(source: str) -> str:
+        return {"bv": "视频", "fav": "收藏夹", "season": "合集", "up": "UP主"}.get(source, source)
+
+    @staticmethod
+    def _canonical_display(source: str, canonical) -> str:
+        # season 规范值为 (kind, val, mid)，显示 val（合集 id）；其余直接显示
+        return str(canonical[1]) if source == "season" else str(canonical)
+
     def run(self):
         try:
             service = VideoService()
             self._service = service
+            self._resolve_pending()
             self.milestone(LogCategory.NORMAL, f"开始任务：{self.spec['desc']}")
             results = self._execute(service)
             summary = self._summary(results)

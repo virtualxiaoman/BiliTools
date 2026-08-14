@@ -16,7 +16,7 @@ import time
 import random
 import logging
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional
 
 from src.api.auth import get_wbi
 from src.api.errors import (
@@ -783,7 +783,7 @@ class VideoService:
 
     def download_fav(
             self,
-            fid: Optional[Union[int, str]] = None,
+            fid: Optional[int] = None,
             dir: Optional[Path] = None,
             *,
             mode: str = "video",
@@ -799,13 +799,11 @@ class VideoService:
 
         [使用方法]
             service = VideoService()
-            # 下载收藏夹全部视频（含音频合成），URL 或 media_id 均可
-            service.download_fav("https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create")
             service.download_fav(3953119978)
             # 仅下载音频（本地缓存听歌）
             service.download_fav(3953119978, mode="audio")
 
-        :param fid: 收藏夹 media_id 或收藏夹页面 URL
+        :param fid: 收藏夹 media_id（int）
         :param dir: 保存根目录。None 时使用默认下载目录
         :param mode: video（下载视频+音频合成，默认）或 audio（仅下载音频流）
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
@@ -850,29 +848,26 @@ class VideoService:
 
     # ---- UP主空间 ----
 
-    def _resolve_mid(self, mid: Optional[Union[int, str]]) -> int:
-        """接受 mid 或 UP主空间 URL，统一返回 mid。"""
+    def _resolve_mid(self, mid: Optional[int]) -> int:
+        """后端只接收规范 mid（int 或数字字符串），不接受 URL。
+
+        链接解析统一由前端（frontend.pyside6.utils）归一化后再传入。
+        """
         if mid is None:
-            raise ValueError("需要提供 mid 或 UP主空间 URL")
+            raise ValueError("需要提供 mid")
         s = str(mid).strip()
-        # https://space.bilibili.com/249056021 或带路径
-        if s.startswith("http://") or s.startswith("https://"):
-            import re
-            match = re.search(r"space\.bilibili\.com/(\d+)", s)
-            if not match:
-                raise ValueError(f"无法从空间 URL 解析 mid：{s}")
-            return int(match.group(1))
+        if not s.isdigit():
+            raise ValueError(f"mid 必须是纯数字，收到：{mid}")
         return int(s)
 
-    def list_up_videos(self, mid: Optional[Union[int, str]] = None, ps: int = 30) -> list:
+    def list_up_videos(self, mid: Optional[int] = None, ps: int = 30) -> list:
         """获取某个 UP 主空间的全部视频 BV 号列表（分页翻到底）。
 
         [使用方法]:
             service = VideoService()
             bvs = service.list_up_videos(249056021)
-            bvs = service.list_up_videos("https://space.bilibili.com/249056021")
 
-        :param mid: UP主 mid 或空间 URL
+        :param mid: UP主 mid（int）
         :param ps: 每页数量（最大 50）
         :return: 视频bv号列表
         """
@@ -897,7 +892,7 @@ class VideoService:
 
     def download_up(
             self,
-            mid: Optional[Union[int, str]] = None,
+            mid: Optional[int] = None,
             dir: Optional[Path] = None,
             *,
             mode: str = "video",
@@ -913,13 +908,11 @@ class VideoService:
 
         [使用方法]
             service = VideoService()
-            # 下载 UP 主全部视频（含音频合成），URL 或 mid 均可
-            service.download_up("https://space.bilibili.com/249056021")
             service.download_up(249056021)
             # 仅下载音频
             service.download_up(249056021, mode="audio")
 
-        :param mid: UP主 mid 或空间 URL
+        :param mid: UP主 mid（int）
         :param dir: 保存根目录。None 时使用默认下载目录
         :param mode: video（下载视频+音频合成，默认）或 audio（仅下载音频流）
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）

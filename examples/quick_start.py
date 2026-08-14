@@ -99,14 +99,13 @@ def get_archive():
 def download_fav():
     """下载收藏夹全部视频（有声音）或仅音频（缓存听歌）。
 
-    URL 或 media_id 均可；保存到 output/video/<收藏夹名>/。
+    传 media_id；保存到 output/video/<收藏夹名>/。
     """
     service = VideoService()
-    fav_url = "https://space.bilibili.com/506925078/favlist?fid=3953119978&ftype=create"
     # 下载全部视频（含音频合成）
-    # results = service.download_fav(fav_url)
+    # results = service.download_fav(3953119978)
     # 仅下载音频（本地缓存听歌）
-    results = service.download_fav(fav_url, mode="audio")
+    results = service.download_fav(3953119978, mode="audio")
     print(f"收藏夹下载完成，共 {len(results)} 个文件")
     for r in results:
         print("  ", r.path.name)
@@ -115,17 +114,17 @@ def download_fav():
 def download_up():
     """下载某 UP 主空间全部视频（有声音）或仅音频。
 
-    URL 或 mid 均可；保存到 output/video/<UP主昵称>/。
+    传 mid；保存到 output/video/<UP主昵称>/。
     """
     service = VideoService()
-    up_url = "https://space.bilibili.com/249056021"
+    mid = 249056021
     # 先查看 UP 主的视频列表
-    bvs = service.list_up_videos(up_url)
+    bvs = service.list_up_videos(mid)
     print(f"UP主共 {len(bvs)} 个视频：{bvs}")
     # 下载全部视频（含音频合成）
-    # results = service.download_up(up_url)
+    # results = service.download_up(mid)
     # 仅下载音频
-    results = service.download_up(up_url, mode="audio")
+    results = service.download_up(mid, mode="audio")
     print(f"UP主下载完成，共 {len(results)} 个文件")
     for r in results:
         print("  ", r.path.name)
