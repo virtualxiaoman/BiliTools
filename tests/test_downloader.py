@@ -125,8 +125,9 @@ def test_download_stream_resume_after_interrupt(tmp_path):
     FULL = b"hello world"
 
     class FakeResp:
-        def __init__(self, body):
+        def __init__(self, body, status_code=200):
             self._body = body
+            self.status_code = status_code
             self.headers = {"Content-Length": str(len(body))}
         def __enter__(self): return self
         def __exit__(self, *a): return False
@@ -137,11 +138,11 @@ def test_download_stream_resume_after_interrupt(tmp_path):
     def fake_get(url, headers=None, stream=False, timeout=None):
         rng = (headers or {}).get("Range", "")
         if rng:
-            # 断点续传：返回剩余部分
+            # 断点续传：服务器返回 206 + 剩余部分
             start = int(rng.split("=")[1].split("-")[0])
-            return FakeResp(FULL[start:])
+            return FakeResp(FULL[start:], status_code=206)
         # 首次：读到一半抛 IncompleteRead，模拟断流
-        resp = FakeResp(FULL)
+        resp = FakeResp(FULL, status_code=200)
         def _iter(chunk_size):
             yield FULL[:5]
             raise requests.exceptions.ConnectionError(
@@ -157,6 +158,46 @@ def test_download_stream_resume_after_interrupt(tmp_path):
         assert target.read_bytes() == FULL
         assert mock_get.call_count == 2  # 首次 + 1 次续传
         # 第二次请求带 Range 头
+        assert mock_get.call_args_list[1].kwargs["headers"]["Range"] == "bytes=5-"
+
+
+def test_download_stream_resume_ignored_range_restarts(tmp_path):
+    """服务器忽略 Range（续传时返回 200 全量）应丢弃半截文件从头下载，不追加损坏。"""
+    import requests
+
+    FULL = b"hello world"
+
+    class FakeResp:
+        def __init__(self, body, status_code=200):
+            self._body = body
+            self.status_code = status_code
+            self.headers = {"Content-Length": str(len(body))}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size):
+            yield self._body
+
+    def fake_get(url, headers=None, stream=False, timeout=None):
+        rng = (headers or {}).get("Range", "")
+        if rng:
+            # 服务器忽略 Range：仍返回 200 全量内容
+            return FakeResp(FULL, status_code=200)
+        # 首次：读到一半抛 IncompleteRead，留下 5 字节半截文件
+        resp = FakeResp(FULL, status_code=200)
+        def _iter(chunk_size):
+            yield FULL[:5]
+            raise requests.exceptions.ConnectionError("IncompleteRead")
+        resp.iter_content = _iter
+        return resp
+
+    with patch("requests.get", side_effect=fake_get) as mock_get:
+        target = tmp_path / "f.bin"
+        size = dl.download_stream("http://x", target, max_retries=2)
+        assert size == 11
+        # 最终文件完整（若按追加写入会变成 5+11=16 字节的损坏文件）
+        assert target.read_bytes() == FULL
+        assert mock_get.call_count == 2
         assert mock_get.call_args_list[1].kwargs["headers"]["Range"] == "bytes=5-"
 
 

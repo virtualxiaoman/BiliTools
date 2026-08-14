@@ -85,10 +85,12 @@ class DownloadWorker(QThread):
 
         if src == "fav":
             fid = spec["input"]
+            # 先取一次收藏夹视频列表：既用于进度总数，也传回 service 复用，避免内部再拉取一次
             bvids = FavService(service.session).get_fav_bv(fid)
             adapter = ProgressAdapter(len(bvids), f"收藏夹 {fid}", self)
             mode = "audio" if mt == "audio" else "video"
-            return service.download_fav(fid, save_dir, mode=mode, quality=quality, progress=adapter)
+            return service.download_fav(fid, save_dir, mode=mode, quality=quality,
+                                        progress=adapter, bvids=bvids)
 
         if src == "season":
             kind, val, mid = spec["input"]
@@ -104,15 +106,17 @@ class DownloadWorker(QThread):
             adapter = ProgressAdapter(file_count, f"合集「{season.title}」", self)
             return service.download_season(
                 bvid=bvid, dir=save_dir, season_id=season_id, mid=mid or 0,
-                quality=quality, media_type=media_type, progress=adapter,
+                quality=quality, media_type=media_type, progress=adapter, season=season,
             )
 
         if src == "up":
             mid = spec["input"]
+            # 先取一次 UP 主视频列表：既用于进度总数，也传回 service 复用，避免内部再翻页一次
             bvids = service.list_up_videos(mid)
             adapter = ProgressAdapter(len(bvids), f"UP主 {mid}", self)
             mode = "audio" if mt == "audio" else "video"
-            return service.download_up(mid, save_dir, mode=mode, quality=quality, progress=adapter)
+            return service.download_up(mid, save_dir, mode=mode, quality=quality,
+                                       progress=adapter, bvids=bvids)
 
         raise ValueError(f"未知下载来源：{src}")
 

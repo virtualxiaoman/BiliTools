@@ -696,6 +696,7 @@ class VideoService:
             media_type: str = "video_with_audio",
             progress_cb: Optional[ProgressCallback] = None,
             progress: Optional[BatchProgress] = None,
+            season: Optional[VideoSeason] = None,
     ) -> list:
         """下载整个合集。`bvid` 与 `season_id` 任选其一。
 
@@ -712,10 +713,13 @@ class VideoService:
         :param media_type: 下载类型：video / audio / video_with_audio / cover
         :param progress_cb: 进度回调 (downloaded, total)
         :param progress: BatchProgress 进度显示；None 时自动创建
+        :param season: 可选：外部已获取的合集结构（VideoSeason）。传入时跳过内部重复反查
+            （GUI 场景会先取合集用于进度总数，传回此处避免请求两次）；None 时内部自动获取
         :return: DownloadResult 列表
         :raises ValueError: 无法定位合集
         """
-        season = self.fetch_season(bvid, season_id, mid)
+        if season is None:
+            season = self.fetch_season(bvid, season_id, mid)
         if season is None or not season.episodes:
             loc = f"bvid={bvid}" if bvid else f"season_id={season_id}"
             raise ValueError(f"{loc} 无法定位到合集，请确认参数正确。")
@@ -786,6 +790,7 @@ class VideoService:
             quality: VideoQuality = VideoQuality.HD4K,
             progress_cb: Optional[ProgressCallback] = None,
             progress: Optional[BatchProgress] = None,
+            bvids: Optional[list] = None,
     ) -> list:
         """下载整个收藏夹的全部视频（有声音）或仅音频。
 
@@ -806,13 +811,16 @@ class VideoService:
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
         :param progress_cb: 进度回调 (downloaded, total)
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由 UI 传入以获取逐文件事件）
+        :param bvids: 可选：外部已获取的收藏夹视频 BV 号列表。传入时跳过内部重复拉取
+            （GUI 场景会先取列表用于进度总数，传回此处避免请求两次）；None 时内部自动获取
         :return: DownloadResult 列表
         """
         from src.services.fav import FavService
 
         fav = FavService(self.session)
         info = fav.get_fav_info(fid)
-        bvids = fav.get_fav_bv(fid)
+        if bvids is None:
+            bvids = fav.get_fav_bv(fid)
         if not bvids:
             raise ValueError(f"收藏夹「{info.title}」没有视频。")
 
@@ -896,6 +904,7 @@ class VideoService:
             quality: VideoQuality = VideoQuality.HD4K,
             progress_cb: Optional[ProgressCallback] = None,
             progress: Optional[BatchProgress] = None,
+            bvids: Optional[list] = None,
     ) -> list:
         """下载某个 UP 主空间的全部视频（有声音）或仅音频。
 
@@ -916,12 +925,15 @@ class VideoService:
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
         :param progress_cb: 进度回调 (downloaded, total)
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由 UI 传入以获取逐文件事件）
+        :param bvids: 可选：外部已获取的 UP 主视频 BV 号列表。传入时跳过内部重复翻页拉取
+            （GUI 场景会先取列表用于进度总数，传回此处避免请求两次）；None 时内部自动获取
         :return: DownloadResult 列表
         """
         from src.services.user import UserService
 
         mid = self._resolve_mid(mid)
-        bvids = self.list_up_videos(mid)
+        if bvids is None:
+            bvids = self.list_up_videos(mid)
         if not bvids:
             raise ValueError(f"UP主 {mid} 没有视频。")
 

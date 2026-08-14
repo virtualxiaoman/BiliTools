@@ -51,7 +51,9 @@ def download_stream(
     下载响应必须带正确的 Referer（B 站要求 referer 为 https://www.bilibili.com）。
 
     网络中断（连接断开/读取不完整）时会自动**断点续传**：用 Range 头从已下载位置
-    继续，最多重试 `max_retries` 次。
+    继续，最多重试 `max_retries` 次。续传时会校验服务器是否返回 206（Partial
+    Content）——若服务器忽略 Range 返回 200 全量内容，会丢弃半截文件从头下载，
+    避免把全量内容追加到半截文件后造成文件损坏。
 
     :param url: 媒体直链
     :param save_path: 保存路径（父目录需已存在）
@@ -73,18 +75,29 @@ def download_stream(
     for attempt in range(max_retries + 1):
         downloaded = save_path.stat().st_size if save_path.exists() else 0
         req_headers = dict(headers) if headers else {}
-        if downloaded > 0:
+        resuming = downloaded > 0
+        if resuming:
             # 断点续传：从已下载位置继续
             req_headers["Range"] = f"bytes={downloaded}-"
         try:
             resp = requests.get(url, headers=req_headers, stream=True, timeout=30)
             resp.raise_for_status()
+            if resuming and resp.status_code != 206:
+                # 服务器忽略/不支持 Range（返回 200 全量内容等）：
+                # 丢弃半截文件从头下载，避免把全量内容追加到半截文件后损坏。
+                logger.warning(
+                    "[download_stream] 断点续传未获 206（status=%s），丢弃半截文件从头下载：%s",
+                    resp.status_code, url,
+                )
+                save_path.unlink(missing_ok=True)
+                downloaded = 0
+                resuming = False
             if total is None:
                 total = int(resp.headers.get("Content-Length", 0)) or None
-                if downloaded > 0 and total is not None:
+                if resuming and total is not None:
                     # 响应的是剩余部分，补上已下载的偏移
                     total += downloaded
-            with open(save_path, "ab" if downloaded > 0 else "wb") as f:
+            with open(save_path, "ab" if resuming else "wb") as f:
                 for chunk in resp.iter_content(chunk_size=chunk_size):
                     if chunk:
                         f.write(chunk)
