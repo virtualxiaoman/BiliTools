@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
-    QButtonGroup, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
+    QButtonGroup, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QRadioButton, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -152,7 +152,7 @@ class DownloadPanel(QWidget):
         q_row.addWidget(self.quality_combo, 1)
         outer.addLayout(q_row)
 
-        # ---- 并发线程数（多视频同时下载，1~5） ----
+        # ---- 并发线程数（多视频同时下载，1~5）+ 多账号分流 ----
         th_row = QHBoxLayout()
         self.threads_edit = NumberEdit(1, 5, "1~5")
         self.threads_edit.setValue(int(self.settings.get("download_threads", 2)))
@@ -160,8 +160,16 @@ class DownloadPanel(QWidget):
             "同时下载多个视频的线程数（1~5）；触发风控时所有线程会在下次获取信息前暂停")
         self.threads_edit.editingFinished.connect(
             lambda: self.settings.set("download_threads", self.threads_edit.value()))
+        self.distribute_check = QCheckBox("多账号分流")
+        self.distribute_check.setChecked(bool(self.settings.get("distribute_accounts", False)))
+        self.distribute_check.setToolTip(
+            "有多个账号时，把并发线程均匀分摊到各账号上（各自用自己账号的 cookie），"
+            "降低单个账号的风控风险")
+        self.distribute_check.toggled.connect(lambda on: self.settings.set("distribute_accounts", on))
         th_row.addWidget(QLabel("并发线程："))
         th_row.addWidget(self.threads_edit)
+        th_row.addSpacing(8)
+        th_row.addWidget(self.distribute_check)
         th_row.addStretch(1)
         outer.addLayout(th_row)
 
@@ -252,22 +260,26 @@ class DownloadPanel(QWidget):
                 desc = f"视频 {bvid}" + (f"（P{page}）" if scope == "single" else "（全部分P）")
                 return {"source": "bv", "input": bvid, "scope": scope, "page": page,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": desc}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(),
+                        "distribute_accounts": self.distribute_check.isChecked(), "desc": desc}
             if tab == 1:
                 fid = normalize_fav(raw)
                 return {"source": "fav", "input": fid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": f"收藏夹 {fid}"}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(),
+                        "distribute_accounts": self.distribute_check.isChecked(), "desc": f"收藏夹 {fid}"}
             if tab == 2:
                 kind, val, mid = normalize_season(raw)
                 return {"source": "season", "input": (kind, val, mid), "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": f"合集 {val}"}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(),
+                        "distribute_accounts": self.distribute_check.isChecked(), "desc": f"合集 {val}"}
             if tab == 3:
                 mid = normalize_mid(raw)
                 return {"source": "up", "input": mid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": f"UP主 {mid}"}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(),
+                        "distribute_accounts": self.distribute_check.isChecked(), "desc": f"UP主 {mid}"}
         except NeedsUrlResolution:
             # 短链等本地解析不了的链接：先建 pending 任务，交给下载线程跟随跳转，
             # 避免在界面线程发 HTTP 请求卡住 UI
@@ -292,7 +304,7 @@ class DownloadPanel(QWidget):
             "media_type": media_type,
             "quality": quality,
             "save_dir": save_dir,
-            "threads": self.threads_edit.value(),
+            "threads": self.threads_edit.value(), "distribute_accounts": self.distribute_check.isChecked(),
             "desc": f"{labels[tab]}（解析链接中…）",
         }
 

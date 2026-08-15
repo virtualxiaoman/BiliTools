@@ -230,3 +230,69 @@ def test_download_fav_parallel_threads(tmp_path):
         monkeypatch.undo()
     assert results == ["OK", "OK", "OK"]
     assert len(threads_seen) >= 2
+
+
+def test_download_fav_distributes_across_accounts(tmp_path, monkeypatch):
+    """account_sessions 非空时，并发任务均匀轮询分摊到各账号（BV1/BV3→s1，BV2/BV4→s2）。"""
+    from src.services import VideoService
+
+    svc = _svc(tmp_path)
+    svc._report_bvid_download = lambda bvid, new_results, dc, i, total: dc
+
+    class FakeFav:
+        def __init__(self, session):
+            pass
+
+        def get_fav_info(self, fid):
+            return _FavInfo()
+
+        def get_fav_bv(self, fid):
+            return ["BV1", "BV2", "BV3", "BV4"]
+
+    monkeypatch.setattr("src.services.fav.FavService", FakeFav)
+
+    got = {}
+
+    def fake_download_all_pages(self, *a, **k):
+        got.setdefault(id(self.session), []).append(a[0])
+        return []
+
+    monkeypatch.setattr(VideoService, "download_all_pages", fake_download_all_pages)
+
+    s1, s2 = object(), object()
+    svc.download_fav(1, tmp_path, mode="video", threads=2, account_sessions=[s1, s2])
+
+    # 任务按下标轮询：i%2 → 0,2 走 s1；1,3 走 s2
+    assert sorted(got[id(s1)]) == ["BV1", "BV3"]
+    assert sorted(got[id(s2)]) == ["BV2", "BV4"]
+
+
+def test_download_fav_no_accounts_uses_current(tmp_path, monkeypatch):
+    """account_sessions 为空时，并发任务全部使用当前 service（回退行为）。"""
+    from src.services import VideoService
+
+    svc = _svc(tmp_path)
+    svc._report_bvid_download = lambda bvid, new_results, dc, i, total: dc
+
+    class FakeFav:
+        def __init__(self, session):
+            pass
+
+        def get_fav_info(self, fid):
+            return _FavInfo()
+
+        def get_fav_bv(self, fid):
+            return ["BV1", "BV2"]
+
+    monkeypatch.setattr("src.services.fav.FavService", FakeFav)
+
+    used = []
+
+    def fake_download_all_pages(self, *a, **k):
+        used.append(self is svc)  # 应使用原 service 自身
+        return []
+
+    monkeypatch.setattr(VideoService, "download_all_pages", fake_download_all_pages)
+
+    svc.download_fav(1, tmp_path, mode="video", threads=2)
+    assert used == [True, True]  # 两个任务都在原 service 上执行

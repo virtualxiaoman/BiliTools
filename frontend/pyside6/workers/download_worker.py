@@ -116,7 +116,8 @@ class DownloadWorker(QThread):
             adapter = self._make_adapter(threads, len(bvids), f"收藏夹 {fid}")
             mode = "audio" if mt == "audio" else "video"
             return service.download_fav(fid, save_dir, mode=mode, quality=quality,
-                                        progress=adapter, bvids=bvids, threads=threads)
+                                        progress=adapter, bvids=bvids, threads=threads,
+                                        account_sessions=self._account_sessions(threads, spec))
 
         if src == "season":
             kind, val, mid = spec["input"]
@@ -133,7 +134,7 @@ class DownloadWorker(QThread):
             return service.download_season(
                 bvid=bvid, dir=save_dir, season_id=season_id, mid=mid or 0,
                 quality=quality, media_type=media_type, progress=adapter, season=season,
-                threads=threads,
+                threads=threads, account_sessions=self._account_sessions(threads, spec),
             )
 
         if src == "up":
@@ -143,9 +144,33 @@ class DownloadWorker(QThread):
             adapter = self._make_adapter(threads, len(bvids), f"UP主 {mid}")
             mode = "audio" if mt == "audio" else "video"
             return service.download_up(mid, save_dir, mode=mode, quality=quality,
-                                       progress=adapter, bvids=bvids, threads=threads)
+                                       progress=adapter, bvids=bvids, threads=threads,
+                                       account_sessions=self._account_sessions(threads, spec))
 
         raise ValueError(f"未知下载来源：{src}")
+
+    def _account_sessions(self, threads, spec):
+        """多账号分流：并发且开启分流时，为每个登录有效的账号建一个独立 BiliSession。
+
+        :return: BiliSession 列表；未开启或没有可用账号时返回 None（沿用当前账号）
+        """
+        if threads <= 1 or not spec.get("distribute_accounts"):
+            return None
+        try:
+            from src.api.session import BiliSession
+            from src.config.cookie import BiliCookies
+            from src.services.account import AccountManager
+        except Exception:
+            return None
+        sessions = []
+        for acc in AccountManager().list_accounts():
+            try:
+                cookies = BiliCookies.from_file(acc.cookie_path)
+            except FileNotFoundError:
+                continue
+            if cookies.has_valid_session:
+                sessions.append(BiliSession(cookie_path=str(acc.cookie_path)))
+        return sessions or None
 
     def _make_adapter(self, threads, n, label):
         """并发（threads>1）时用线程安全的 ParallelProgressAdapter，否则用普通 ProgressAdapter。"""

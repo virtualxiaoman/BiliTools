@@ -739,6 +739,16 @@ class VideoService:
             progress.finish()
         return new_results, file_idx
 
+    def _account_services(self, account_sessions: Optional[list]) -> list:
+        """并发分账用的服务列表：每个账号一个独立会话的 VideoService。
+
+        传空/None 时返回 `[self]`（全部任务用当前账号）；否则为每个 session 建一个
+        VideoService（同 default_dir），供并发任务按下标轮询分摊账号。
+        """
+        if not account_sessions:
+            return [self]
+        return [VideoService(session=s, default_dir=self.default_dir) for s in account_sessions]
+
     def download_season(
             self,
             bvid: Optional[str] = None,
@@ -752,6 +762,7 @@ class VideoService:
             progress: Optional[BatchProgress] = None,
             season: Optional[VideoSeason] = None,
             threads: int = 1,
+            account_sessions: Optional[list] = None,
     ) -> list:
         """下载整个合集。`bvid` 与 `season_id` 任选其一。
 
@@ -761,6 +772,8 @@ class VideoService:
         每个稿件若有多个分P，则逐P下载。文件保存到 `<dir>/<合集标题>/`。
         `threads > 1` 时多个稿件并发下载（需配合线程安全的 progress）；任一稿件触发
         风控时，所有线程在下一次获取信息前各自随机暂停。
+        `account_sessions` 非空时，并发线程**均匀分摊到各账号**（任务按下标轮询账号），
+        降低单个账号的风控风险。
 
         :param bvid: 合集内任意一个视频的BV号
         :param dir: 保存根目录。None 时使用默认下载目录
@@ -773,6 +786,8 @@ class VideoService:
         :param season: 可选：外部已获取的合集结构（VideoSeason）。传入时跳过内部重复反查
             （GUI 场景会先取合集用于进度总数，传回此处避免请求两次）；None 时内部自动获取
         :param threads: 并发下载线程数（>1 启用并发，需线程安全的 progress）
+        :param account_sessions: 可选：多个账号的 BiliSession 列表，用于把并发任务均匀
+            分摊到各账号（多账号降风控）；None 时全部任务使用当前账号
         :return: DownloadResult 列表
         :raises ValueError: 无法定位合集
         """
@@ -797,6 +812,7 @@ class VideoService:
             return self._download_season_parallel(
                 season, save_dir, quality=quality, media_type=media_type,
                 progress=progress, progress_cb=progress_cb, label=label, threads=threads,
+                services=self._account_services(account_sessions),
             )
 
         results = []
@@ -823,17 +839,18 @@ class VideoService:
         return results
 
     def _download_season_parallel(self, season, save_dir, *, quality, media_type,
-                                  progress, progress_cb, label, threads) -> list:
-        """合集并发下载：每个稿件一个线程，共享风控协调器。"""
+                                  progress, progress_cb, label, threads, services) -> list:
+        """合集并发下载：每个稿件一个线程，共享风控协调器；任务按下标轮询 services 分摊账号。"""
         gate = RiskGate()
         counter = _FileCounter()
 
-        def _work(episode, _i):
+        def _work(episode, i):
+            svc = services[i % len(services)]
             num_pages = len(episode.pages) if episode.is_multi_page else 1
             start_idx = counter.reserve(num_pages)
-            return self._execute_batch_download(
+            return svc._execute_batch_download(
                 episode.bvid,
-                lambda ep=episode, sidx=start_idx: self._download_episode(
+                lambda ep=episode, sidx=start_idx: svc._download_episode(
                     ep, save_dir, media_type=media_type, quality=quality,
                     file_idx=sidx, progress=progress, progress_cb=progress_cb,
                 ),
@@ -891,12 +908,14 @@ class VideoService:
             progress: Optional[BatchProgress] = None,
             bvids: Optional[list] = None,
             threads: int = 1,
+            account_sessions: Optional[list] = None,
     ) -> list:
         """下载整个收藏夹的全部视频（有声音）或仅音频。
 
         逐个下载收藏夹内的视频，保存到 `<dir>/<收藏夹名称>/`（默认 `output/video/<收藏夹名称>/`）。
         每个视频若有分P则逐P下载。下载带进度显示（含清晰度标签）。
         `threads > 1` 时多个视频并发下载；任一视频触发风控时所有线程在下一次获取信息前各自随机暂停。
+        `account_sessions` 非空时，并发任务**均匀分摊到各账号**（按下标轮询），降低单个账号风控风险。
 
         [使用方法]
             service = VideoService()
@@ -913,6 +932,8 @@ class VideoService:
         :param bvids: 可选：外部已获取的收藏夹视频 BV 号列表。传入时跳过内部重复拉取
             （GUI 场景会先取列表用于进度总数，传回此处避免请求两次）；None 时内部自动获取
         :param threads: 并发下载线程数（>1 启用并发，需线程安全的 progress）
+        :param account_sessions: 可选：多个账号的 BiliSession 列表，用于把并发任务均匀
+            分摊到各账号（多账号降风控）；None 时全部任务使用当前账号
         :return: DownloadResult 列表
         """
         from src.services.fav import FavService
@@ -936,11 +957,13 @@ class VideoService:
 
         if threads > 1:
             gate = RiskGate()
+            services = self._account_services(account_sessions)
 
-            def _work(bvid, _i):
-                return self._execute_batch_download(
+            def _work(bvid, i):
+                svc = services[i % len(services)]
+                return svc._execute_batch_download(
                     bvid,
-                    lambda b=bvid: self.download_all_pages(
+                    lambda b=bvid: svc.download_all_pages(
                         b, save_dir, quality=quality, media_type=media_type,
                         progress=progress, progress_cb=progress_cb,
                     ),
@@ -1032,12 +1055,14 @@ class VideoService:
             progress: Optional[BatchProgress] = None,
             bvids: Optional[list] = None,
             threads: int = 1,
+            account_sessions: Optional[list] = None,
     ) -> list:
         """下载某个 UP 主空间的全部视频（有声音）或仅音频。
 
         逐个下载该 UP 主的所有投稿，保存到 `<dir>/<UP主昵称>/`（默认 `output/video/<昵称>/`）。
         每个视频若有分P则逐P下载，带进度显示。
         `threads > 1` 时多个视频并发下载；任一视频触发风控时所有线程在下一次获取信息前各自随机暂停。
+        `account_sessions` 非空时，并发任务**均匀分摊到各账号**（按下标轮询），降低单个账号风控风险。
 
         [使用方法]
             service = VideoService()
@@ -1054,6 +1079,8 @@ class VideoService:
         :param bvids: 可选：外部已获取的 UP 主视频 BV 号列表。传入时跳过内部重复翻页拉取
             （GUI 场景会先取列表用于进度总数，传回此处避免请求两次）；None 时内部自动获取
         :param threads: 并发下载线程数（>1 启用并发，需线程安全的 progress）
+        :param account_sessions: 可选：多个账号的 BiliSession 列表，用于把并发任务均匀
+            分摊到各账号（多账号降风控）；None 时全部任务使用当前账号
         :return: DownloadResult 列表
         """
         from src.services.user import UserService
@@ -1077,11 +1104,13 @@ class VideoService:
 
         if threads > 1:
             gate = RiskGate()
+            services = self._account_services(account_sessions)
 
-            def _work(bvid, _i):
-                return self._execute_batch_download(
+            def _work(bvid, i):
+                svc = services[i % len(services)]
+                return svc._execute_batch_download(
                     bvid,
-                    lambda b=bvid: self.download_all_pages(
+                    lambda b=bvid: svc.download_all_pages(
                         b, save_dir, quality=quality, media_type=media_type,
                         progress=progress, progress_cb=progress_cb,
                     ),

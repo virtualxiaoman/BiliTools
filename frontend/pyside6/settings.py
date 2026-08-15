@@ -16,6 +16,7 @@ DEFAULTS = {
     "log_timestamp": True,
     "cookie_dir": str(COOKIE_ROOT),    # 全局 cookie 目录（默认 %APPDATA%/xiaoman/BiliTools/cookie）
     "download_threads": 2,             # 并发下载线程数（1~5）
+    "distribute_accounts": True,      # 多账号分流：把并发线程均匀分摊到各账号（降风控）
 }
 
 
