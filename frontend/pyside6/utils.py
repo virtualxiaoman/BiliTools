@@ -47,8 +47,9 @@ def extract_page_from_url(raw: str) -> Optional[int]:
 def ensure_cookie_file() -> None:
     """确保 cookie 文件存在（全新安装时为空文件，has_valid_session=False 走未登录分支）。
 
-    BiliCookies.from_file 在文件缺失时抛 FileNotFoundError（有测试依赖），
-    因此不在 src 层改语义，而是在 UI 层保证文件存在。
+    BiliSession 对缺失文件已降级为匿名会话（不抛异常）；
+    此函数仍保证文件存在，供仍直接调用 BiliCookies.from_file 的取 CSRF 等场景使用
+    （该函数在文件缺失时仍抛 FileNotFoundError，有测试依赖）。
     """
     if not DEFAULT_COOKIE_PATH.exists():
         DEFAULT_COOKIE_PATH.parent.mkdir(parents=True, exist_ok=True)

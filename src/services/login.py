@@ -40,36 +40,17 @@ class LoginService:
     """B 站登录服务。"""
 
     def __init__(self, session: Optional[BiliSession] = None):
-        if session is not None:
-            self.session = session
-        else:
-            try:
-                self.session = BiliSession()
-            except FileNotFoundError:
-                # 全新安装/未登录：本地尚无 cookie 文件。
-                # 状态查询视为未登录；登录流程前上层会先创建空 cookie 文件。
-                logger.warning("[LoginService] 未找到本地 cookie 文件，视为未登录")
-                self.session = None
-
-    def _ensure_session(self) -> BiliSession:
-        """惰性构造 BiliSession（供登录流程使用）。
-
-        首次调用时若 self.session 为 None 则重新构造；
-        本地仍无 cookie 文件时会抛出 FileNotFoundError（保持原语义）。
-        """
-        if self.session is None:
-            self.session = BiliSession()
-        return self.session
+        self.session = session if session is not None else BiliSession()
 
     # ---- 登录状态 ----
 
     def get_login_state(self) -> LoginUser:
         """获取登录状态与当前用户信息。
 
-        :return: LoginUser。本地无 cookie 文件时视为未登录，
-                 返回 is_login=False 的 LoginUser（不抛异常）。
+        :return: LoginUser。本地无有效登录凭证（无 cookie 文件或无 SESSDATA）时，
+                 视为未登录，直接返回 is_login=False 的 LoginUser（不发网络请求）。
         """
-        if self.session is None:
+        if not self.session.cookie.has_valid_session:
             return LoginUser()
         data = self.session.get(LoginUrls.LOGIN_STATE)
         return LoginUser.from_nav_json(data)
@@ -90,7 +71,7 @@ class LoginService:
         :param save_qr_path: 二维码图片保存路径。None 时保存到 QR_IMAGE_PATH（assets/cookie/qr_login.png）
         :return: (二维码登录 url, qrcode_key)，将 url 交给用户扫描
         """
-        data = self._ensure_session().get(LoginUrls.QR_GENERATE)
+        data = self.session.get(LoginUrls.QR_GENERATE)
         qrcode_key = data["qrcode_key"]
         url = data["url"]
 
@@ -134,7 +115,7 @@ class LoginService:
 
     def _poll_once(self, qrcode_key: str):
         """轮询一次并返回 (状态码, 响应)。登录成功时响应头含 set-cookie。"""
-        resp = self._ensure_session().session.get(
+        resp = self.session.session.get(
             LoginUrls.QR_LOGIN, params={"qrcode_key": qrcode_key}, timeout=self.session.timeout
         )
         resp.raise_for_status()

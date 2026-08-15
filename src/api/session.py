@@ -13,12 +13,14 @@
 
 import logging
 import time
+from pathlib import Path
 from typing import Optional
 
 import requests
 
 from src.config.constants import MAX_RETRY, REQUEST_TIMEOUT, RETRY_DELAY
 from src.config.cookie import BiliCookies
+from src.config.path import DEFAULT_COOKIE_PATH
 from src.api.errors import raise_for_code
 
 logger = logging.getLogger(__name__)
@@ -41,12 +43,26 @@ class BiliSession:
         :param max_retry: 请求失败时的最大重试次数（不含首次）。
         :param timeout: 单次请求超时（秒）。
         """
-        self.cookie = BiliCookies.from_file(cookie_path)
+        self.cookie = self._load_cookie(cookie_path)
         self.referer = referer
         self.max_retry = max_retry
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update(self.cookie.to_headers(referer=referer))
+
+    @staticmethod
+    def _load_cookie(cookie_path: Optional[str]) -> "BiliCookies":
+        """读取 cookie；本地无 cookie 文件时以匿名会话（空 cookie）代替，不抛异常。
+
+        免鉴权接口（QR 登录、nav 状态查询、热门榜单等）可直接使用；
+        需要登录的接口由服务端返回未登录错误（BiliAuthError）。
+        """
+        try:
+            return BiliCookies.from_file(cookie_path)
+        except FileNotFoundError:
+            logger.warning("[BiliSession] cookie 文件缺失，以未登录状态请求（路径：%s）",
+                           Path(cookie_path).resolve() if cookie_path else DEFAULT_COOKIE_PATH)
+            return BiliCookies()
 
     # ---- 请求入口 ----
 
