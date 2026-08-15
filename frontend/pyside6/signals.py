@@ -21,6 +21,7 @@ class AppSignals(QObject):
     login_changed = Signal(object)       # LoginUser | None（未登录/获取失败）
     goto_page = Signal(str)              # 'download' | 'login' | 'settings'
     theme_changed = Signal(str)          # 'light' | 'dark'
+    zoom_changed = Signal(float)         # 全局界面缩放系数
 
 
 # 全局唯一实例

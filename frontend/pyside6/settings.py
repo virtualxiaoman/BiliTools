@@ -11,6 +11,7 @@ DEFAULTS = {
     "quality": "HD4K",
     "media_type": "video_with_audio",  # 视频（含音频）/ 仅音频
     "theme": "light",                  # light / dark
+    "zoom": 1.0,                       # 界面缩放系数（0.8~1.5，100 = 100%）
     "log_max_lines": 1000,
     "log_timestamp": True,
 }

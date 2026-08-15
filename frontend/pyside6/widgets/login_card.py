@@ -35,7 +35,7 @@ class LoginCard(QWidget):
         self.avatar.setFixedSize(60, 60)
         self.avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.name_label = QLabel("未登录")
-        self.name_label.setStyleSheet("font-size: 15px; font-weight: 600;")
+        self.name_label.setObjectName("NameBig")  # 字体由 theme QSS 控制（粗体、随缩放）
         self.mid_label = QLabel("请前往「登录」页扫码")
         self.mid_label.setObjectName("Dim")
         self.btn_refresh = QPushButton("刷新")

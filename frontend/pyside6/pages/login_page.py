@@ -31,7 +31,7 @@ class LoginPage(QWidget):
 
         title = QLabel("扫码登录 B 站账号")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 18px; font-weight: 600;")
+        title.setObjectName("PageTitle")  # 字体由 theme QSS 控制（粗体、随缩放）
 
         self.qr_label = QLabel("正在生成二维码…")
         self.qr_label.setFixedSize(240, 240)

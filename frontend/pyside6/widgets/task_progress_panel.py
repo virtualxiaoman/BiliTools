@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea, QVBoxLayout, QWidget,
 )
 
+from frontend.pyside6 import fonts
+
 
 class TaskRow(QWidget):
     def __init__(self, desc):
@@ -57,7 +59,7 @@ class TaskRow(QWidget):
         self.status.setText(summary[:60])
         self.status.setToolTip(summary)
         color = "#2e7d32" if success else "#c62828"
-        self.status.setStyleSheet(f"color:{color}; font-weight:600;")
+        self.status.setStyleSheet(f"{fonts.bold_family_css()}color:{color}; font-weight:600;")
 
 
 class TaskProgressPanel(QWidget):

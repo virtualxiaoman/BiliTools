@@ -2,16 +2,19 @@
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QRadioButton, QScrollArea, QSpinBox,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFormLayout,
+    QHBoxLayout, QLabel, QLineEdit, QPushButton, QRadioButton, QScrollArea,
+    QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from src.config.path import COOKIE_DIR, VIDEO_OUTPUT_DIR
 from src.models.download_model import VideoQuality
 from src.util.downloader import ffmpeg_available
 
+from frontend.pyside6 import fonts
 from frontend.pyside6.logs import LOG_DIR
+from frontend.pyside6.signals import app_signals
+from frontend.pyside6.theme import build_qss, get_palette
 
 # 左侧分类（按钮文字 -> 右侧页面索引）
 _CATEGORIES = ["下载", "界面", "日志", "目录"]
@@ -133,6 +136,22 @@ class SettingsPage(QWidget):
         self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         form.addRow("界面主题", self.theme_combo)
 
+        # 界面缩放（80%~150%，拖动即时生效）
+        zoom_row = QHBoxLayout()
+        zoom_row.setContentsMargins(0, 0, 0, 0)
+        self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
+        self.zoom_slider.setRange(80, 150)
+        self.zoom_slider.setValue(int(round(self.settings.get("zoom", 1.0) * 100)))
+        self.zoom_slider.setSingleStep(5)
+        self.zoom_slider.setTickInterval(10)
+        self.zoom_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.zoom_slider.valueChanged.connect(self._on_zoom_changed)
+        self.zoom_label = QLabel(f"{self.zoom_slider.value()}%")
+        self.zoom_label.setFixedWidth(46)
+        zoom_row.addWidget(self.zoom_slider, 1)
+        zoom_row.addWidget(self.zoom_label)
+        form.addRow("界面缩放", zoom_row)
+
         container = QWidget()
         container.setLayout(form)
         return container
@@ -192,6 +211,18 @@ class SettingsPage(QWidget):
         name = self.theme_combo.currentData()
         if name:
             self.theme_mgr.set_theme(name)
+
+    def _on_zoom_changed(self, value):
+        """界面缩放：重算默认字体与整份 QSS（所有 px 按比例放大），不重建窗口。"""
+        zoom = value / 100.0
+        self.settings.set("zoom", zoom)
+        self.zoom_label.setText(f"{value}%")
+        fonts.set_zoom(zoom)
+        app = QApplication.instance()
+        if app is not None:
+            app.setFont(fonts.app_font())
+            app.setStyleSheet(build_qss(get_palette()))
+        app_signals.zoom_changed.emit(zoom)
 
     def _on_check_ffmpeg(self):
         ok = ffmpeg_available()

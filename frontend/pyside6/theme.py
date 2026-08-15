@@ -6,8 +6,11 @@
 - 输入框：圆角 + hover 变红；
 - 深浅两套由同一 QSS 模板 + token 生成，全应用统一，不依赖系统观感。
 """
+import re
+
 from PySide6.QtWidgets import QApplication
 
+from frontend.pyside6 import fonts
 from frontend.pyside6.signals import LogCategory
 
 CURRENT_THEME = "light"
@@ -112,9 +115,11 @@ def log_colors(category: int):
 
 
 def build_qss(p: dict) -> str:
-    """由调色板 token 生成整应用 QSS。"""
-    return f"""
-QWidget {{ background-color: {p['bg']}; color: {p['text']}; font-size: 13px; }}
+    """由调色板 token 生成整应用 QSS，并按全局缩放系数放大所有 px 尺寸。"""
+    # 强调/标题文字用粗体兰亭圆；未加载时为空串 → 退化为系统加粗
+    bold_ff = fonts.bold_family_css()
+    qss = f"""
+QWidget {{ background-color: {p['bg']}; color: {p['text']}; font-size: 16px; }}
 QWidget#TitleBar {{ background-color: {p['titlebar_bg']}; border-bottom: 1px solid {p['border']}; }}
 QWidget#NavBar {{ background-color: {p['nav_bg']}; border-bottom: 1px solid {p['border']}; }}
 QWidget#Panel {{ background-color: {p['panel_bg']}; border: 1px solid {p['border']}; border-radius: 8px; }}
@@ -122,7 +127,11 @@ QWidget#Card {{ background-color: {p['card_bg']}; border: 1px solid {p['border']
 
 QLabel {{ color: {p['text']}; background: transparent; }}
 QLabel#Dim {{ color: {p['text_dim']}; }}
-QLabel#Hint {{ color: {p['text_dim']}; font-size: 12px; }}
+QLabel#Hint {{ color: {p['text_dim']}; font-size: 15px; }}
+QLabel#AppTitle {{ {bold_ff}font-size: 17px; }}
+QLabel#PageTitle {{ {bold_ff}font-size: 22px; }}
+QLabel#NameBig {{ {bold_ff}font-size: 18px; }}
+QLabel#SectionTitle {{ {bold_ff}font-size: 16px; }}
 
 QPushButton {{
     background-color: {p['btn_bg']}; border: 1px solid {p['btn_border']};
@@ -133,7 +142,7 @@ QPushButton:pressed {{ background-color: {p['btn_pressed']}; }}
 QPushButton:disabled {{ color: {p['text_dim']}; background-color: {p['bg']}; border-color: {p['border']}; }}
 QPushButton#Primary {{
     background-color: {p['accent']}; color: {p['btn_primary_text']};
-    border: none; border-radius: 6px; padding: 8px 0; font-weight: 600; font-size: 14px;
+    border: none; border-radius: 6px; padding: 8px 0; {bold_ff}font-weight: 600; font-size: 17px;
 }}
 QPushButton#Primary:hover {{ background-color: {p['accent_hover']}; }}
 QPushButton#Primary:pressed {{ background-color: {p['accent_focus']}; }}
@@ -141,11 +150,11 @@ QPushButton#Primary:disabled {{ background-color: {p['progress_bg']}; color: {p[
 
 QPushButton#NavItem {{
     text-align: left; padding: 10px 14px; border-radius: 6px;
-    background: transparent; border: none; color: {p['nav_text']}; font-size: 13px;
+    background: transparent; border: none; color: {p['nav_text']}; font-size: 16px;
 }}
 QPushButton#NavItem:hover {{ background-color: {p['btn_hover']}; }}
 QPushButton#NavItem:checked {{
-    background-color: {p['accent']}; color: {p['btn_primary_text']}; font-weight: 600;
+    background-color: {p['accent']}; color: {p['btn_primary_text']}; {bold_ff}font-weight: 600;
 }}
 
 QPushButton#TitleBtn {{
@@ -182,9 +191,9 @@ QSpinBox {{
 
 QTabBar::tab {{
     background: transparent; color: {p['nav_text']};
-    padding: 8px 16px; border-bottom: 2px solid transparent; font-size: 13px;
+    padding: 8px 16px; border-bottom: 2px solid transparent; font-size: 16px;
 }}
-QTabBar::tab:selected {{ color: {p['nav_active']}; border-bottom: 2px solid {p['nav_active']}; font-weight: 600; }}
+QTabBar::tab:selected {{ color: {p['nav_active']}; border-bottom: 2px solid {p['nav_active']}; {bold_ff}font-weight: 600; }}
 QTabBar::tab:hover {{ color: {p['accent_hover']}; }}
 QTabWidget::pane {{ border: none; }}
 
@@ -221,6 +230,21 @@ QMenu::item:selected {{ background-color: {p['accent']}; color: {p['btn_primary_
 QGroupBox {{ border: 1px solid {p['border']}; border-radius: 6px; margin-top: 10px; }}
 QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; color: {p['text_dim']}; }}
 """
+    return _scale_px(qss, fonts.zoom())
+
+
+def _scale_px(qss: str, factor: float) -> str:
+    """把 QSS 中所有 `NNpx` 尺寸按 factor 放大（界面全局缩放）。"""
+    if factor == 1.0:
+        return qss
+
+    def _rep(m):
+        return f"{int(round(float(m.group(1)) * factor))}px"
+
+    return _PX_RE.sub(_rep, qss)
+
+
+_PX_RE = re.compile(r"(\d+(?:\.\d+)?)px")
 
 
 class ThemeManager:

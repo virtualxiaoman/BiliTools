@@ -153,7 +153,9 @@ class DownloadPanel(QWidget):
         outer.addWidget(self.btn_download)
 
         # ---- 任务进度区 ----
-        outer.addWidget(QLabel("任务进度"))
+        self.label_tasks = QLabel("任务进度")
+        self.label_tasks.setObjectName("SectionTitle")  # 字体由 theme QSS 控制（粗体、随缩放）
+        outer.addWidget(self.label_tasks)
         self.task_panel = TaskProgressPanel()
         outer.addWidget(self.task_panel, 1)
 
