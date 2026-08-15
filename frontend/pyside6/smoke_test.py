@@ -19,6 +19,8 @@ def log(*a):
 
 try:
     from PySide6.QtWidgets import QApplication
+    from src.config.path import set_cookie_dir
+    from src.services.account import AccountManager
     from frontend.pyside6.logs import install_exception_hooks, install_logging
     from frontend.pyside6.signals import app_signals, LogCategory
     from frontend.pyside6.settings import Settings
@@ -33,6 +35,8 @@ try:
     install_exception_hooks(app_signals)
     install_logging(app_signals)
     settings = Settings()
+    set_cookie_dir(settings.get("cookie_dir"))  # 与真实装配一致
+    AccountManager().apply_startup()
     tm = ThemeManager(settings)
     tm.apply(app)
     ensure_cookie_file()

@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from src.config.path import ASSETS_DIR, VIDEO_OUTPUT_DIR
+from src.config.path import ASSETS_DIR, COOKIE_ROOT, VIDEO_OUTPUT_DIR
 
 UI_SETTINGS_PATH = ASSETS_DIR / "ui_settings.json"
 
@@ -14,6 +14,8 @@ DEFAULTS = {
     "zoom": 1.0,                       # 界面缩放系数（0.8~1.5，100 = 100%）
     "log_max_lines": 1000,
     "log_timestamp": True,
+    "cookie_dir": str(COOKIE_ROOT),    # 全局 cookie 目录（默认 %APPDATA%/xiaoman/BiliTools/cookie）
+    "download_threads": 2,             # 并发下载线程数（1~5）
 }
 
 

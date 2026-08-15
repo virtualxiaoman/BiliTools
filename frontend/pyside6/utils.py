@@ -14,7 +14,7 @@ import requests
 
 from src.config.constants import UserAgent
 from src.config.cookie import BiliCookies
-from src.config.path import DEFAULT_COOKIE_PATH
+from src.config.path import get_cookie_path
 from src.util.bvid import av2bv
 
 _BV_RE = re.compile(r"bv[0-9a-zA-Z]{10}", re.IGNORECASE)
@@ -51,9 +51,10 @@ def ensure_cookie_file() -> None:
     此函数仍保证文件存在，供仍直接调用 BiliCookies.from_file 的取 CSRF 等场景使用
     （该函数在文件缺失时仍抛 FileNotFoundError，有测试依赖）。
     """
-    if not DEFAULT_COOKIE_PATH.exists():
-        DEFAULT_COOKIE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        DEFAULT_COOKIE_PATH.write_text("", encoding="utf-8")
+    path = get_cookie_path()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
 
 
 def has_valid_session() -> bool:

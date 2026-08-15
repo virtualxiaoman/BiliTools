@@ -1,9 +1,12 @@
 """
-下载工具：DASH 流的下载与 ffmpeg 音视频合成。
+下载工具：DASH 流的下载与音视频合成。
 
 - `download_stream`     下载单个媒体流到本地文件（流式写入，支持进度回调）；
-- `merge_video_audio`   用 ffmpeg 合成音视频（subprocess 列表参数，避免 shell 注入）；
-- `ffmpeg_available`    ffmpeg 可用性探测（带缓存）。
+- `merge_video_audio`   合成音视频到单文件（subprocess 列表参数，避免 shell 注入）；
+- `ffmpeg_available`    合成后端可用性探测（带缓存）。
+
+合成后端按优先级探测：系统 PATH 中的 ffmpeg → imageio-ffmpeg 库内置的静态 ffmpeg
+（pip 依赖，wheel 自带二进制，无需手动安装 ffmpeg）。
 
 由旧 `src/utils.py` 的 `merge_video_audio`（os.system 拼接）迁移并加固而来。
 """
@@ -21,18 +24,46 @@ logger = logging.getLogger(__name__)
 # 进度回调签名：已下载字节数, 总字节数（总字节数可能为 None/0）
 ProgressCallback = Callable[[int, Optional[int]], None]
 
-# ffmpeg 可用性探测结果缓存（避免每次调用都执行 which）
+# 合成后端探测结果缓存（避免每次调用都执行 which / 导入 imageio）
 _ffmpeg_checked: bool = False
-_ffmpeg_ok: bool = False
+_ffmpeg_path: Optional[str] = None
+
+
+def _imageio_ffmpeg_path() -> Optional[str]:
+    """imageio-ffmpeg 库内置的静态 ffmpeg 可执行文件路径（未安装时返回 None）。
+
+    imageio-ffmpeg 的 wheel 自带 ffmpeg 二进制，无需系统安装 ffmpeg，也无需
+    运行时下载。仅在系统没有 ffmpeg 时才会被用到（懒加载，不拖累已有 ffmpeg 的机器）。
+    """
+    try:
+        import imageio_ffmpeg
+    except ImportError:
+        return None
+    try:
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        logger.warning("[downloader] 无法定位 imageio-ffmpeg 内置的 ffmpeg 可执行文件", exc_info=True)
+        return None
+
+
+def _resolve_ffmpeg() -> Optional[str]:
+    """按优先级探测可用的 ffmpeg 可执行文件路径（结果缓存，仅探测一次）。
+
+    1. 系统 PATH 中的 ffmpeg；
+    2. imageio-ffmpeg 库内置的静态 ffmpeg（pip 依赖，wheel 自带二进制）。
+
+    找不到时返回 None。
+    """
+    global _ffmpeg_checked, _ffmpeg_path
+    if not _ffmpeg_checked:
+        _ffmpeg_checked = True
+        _ffmpeg_path = shutil.which("ffmpeg") or _imageio_ffmpeg_path()
+    return _ffmpeg_path
 
 
 def ffmpeg_available() -> bool:
-    """检查系统是否安装了 ffmpeg（结果缓存，避免每次探测）。"""
-    global _ffmpeg_checked, _ffmpeg_ok
-    if not _ffmpeg_checked:
-        _ffmpeg_ok = shutil.which("ffmpeg") is not None
-        _ffmpeg_checked = True
-    return _ffmpeg_ok
+    """检查音视频合成后端是否可用（系统 ffmpeg 或 imageio-ffmpeg，结果缓存）。"""
+    return _resolve_ffmpeg() is not None
 
 
 def download_stream(
@@ -127,17 +158,24 @@ def merge_video_audio(
     """
     使用 ffmpeg 将视频流与音频流合成为单文件。
 
+    合成后端按优先级自动选择：系统 PATH 中的 ffmpeg → imageio-ffmpeg 库内置的
+    静态 ffmpeg。无系统 ffmpeg 时无需手动安装，`pip install imageio-ffmpeg` 即可。
+
     [使用方法]:
         merge_video_audio(Path("video.m4s"), Path("audio.m4a"), Path("output.mp4"))
     :param video_path: 视频流文件完整路径
     :param audio_path: 音频流文件完整路径
     :param save_path: 合成后的文件保存路径
-    :param progress_cb: 进度回调（ffmpeg 阶段仅作状态提示，无精确字节数）
-    :raises FFmpegNotFoundError: 系统未安装 ffmpeg
-    :raises DownloadError: 合成失败（ffmpeg 返回非零）
+    :param progress_cb: 进度回调（合成阶段仅作状态提示，无精确字节数）
+    :raises FFmpegNotFoundError: 未检测到 ffmpeg 且未安装 imageio-ffmpeg
+    :raises DownloadError: 合成失败（后端返回非零）
     """
-    if not ffmpeg_available():
-        raise FFmpegNotFoundError("未检测到 ffmpeg，无法进行音视频合成。请先安装 ffmpeg 并加入系统 PATH。")
+    ffmpeg = _resolve_ffmpeg()
+    if ffmpeg is None:
+        raise FFmpegNotFoundError(
+            "未检测到 ffmpeg，且未安装 imageio-ffmpeg 库，无法进行音视频合成。"
+            "请安装 ffmpeg 并加入系统 PATH，或执行 `pip install imageio-ffmpeg` 使用内置 ffmpeg。"
+        )
 
     video_path = Path(video_path)
     audio_path = Path(audio_path)
@@ -150,16 +188,16 @@ def merge_video_audio(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     # 列表参数传入，避免 shell 拼接（路径含空格/引号也不会出错）。
     # -y 覆盖已存在的目标文件，避免 ffmpeg 交互式询问导致挂起。
-    cmd = ["ffmpeg", "-y", "-i", str(video_path), "-i", str(audio_path), "-c", "copy", str(save_path)]
-    logger.info("[merge_video_audio] ffmpeg 命令：%s", " ".join(cmd))
+    cmd = [ffmpeg, "-y", "-i", str(video_path), "-i", str(audio_path), "-c", "copy", str(save_path)]
+    logger.debug("[merge_video_audio] 合成命令：%s", " ".join(cmd))
     if progress_cb:
         progress_cb(0, None)
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=600)
     except subprocess.TimeoutExpired:
-        raise DownloadError("ffmpeg 合成超时（>600s），请检查视频是否过大。")
+        raise DownloadError("音视频合成超时（>600s），请检查视频是否过大。")
     if result.returncode != 0:
         err_tail = result.stderr.decode("utf-8", errors="replace")[-500:] if result.stderr else ""
-        raise DownloadError(f"ffmpeg 合成失败，返回码 {result.returncode}：{err_tail}")
+        raise DownloadError(f"音视频合成失败，返回码 {result.returncode}：{err_tail}")
     if progress_cb:
         progress_cb(1, 1)

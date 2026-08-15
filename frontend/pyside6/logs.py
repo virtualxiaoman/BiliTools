@@ -81,20 +81,26 @@ class StdoutRedirect:
 
 
 def install_logging(signals: AppSignals) -> None:
-    """挂载 handler、重定向 stdout/stderr、建日志文件。幂等。"""
+    """挂载 handler、重定向 stdout/stderr、建日志文件。幂等。
+
+    界面日志保持简洁：仅 INFO 及以上进入 UI；DEBUG（含 ffmpeg 合成命令、逐P信息等
+    细节）只写入文件日志供排查。
+    """
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     for h in logger.handlers:
         if getattr(h, "_bilitools_ui", False):
             return  # 已安装
 
     sh = SignalLogHandler(signals)
+    sh.setLevel(logging.INFO)  # 界面只显示 INFO+
     sh._bilitools_ui = True
     logger.addHandler(sh)
 
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         fh = RotatingFileHandler(LOG_FILE, maxBytes=1024 * 1024, backupCount=3, encoding="utf-8")
+        fh.setLevel(logging.DEBUG)  # 文件保留 DEBUG，供排查
         fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
         fh._bilitools_ui = True
         logger.addHandler(fh)

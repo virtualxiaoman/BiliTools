@@ -8,6 +8,8 @@ start/set_quality/add/update/status/finish/make_stream_callback/iter_count）。
 - 阶段文本（如 ffmpeg 合成中）→ worker.phase；
 - 里程碑（第 i/n 个、单文件完成）→ worker.milestone（追加进日志）。
 """
+import threading
+
 from frontend.pyside6.signals import LogCategory
 
 
@@ -57,8 +59,8 @@ class ProgressAdapter:
         self._maybe_emit()
 
     def status(self, message):
+        # 阶段提示只更新进度条文案，不写入日志（避免并发下阶段行交错、日志杂乱）
         self.worker.phase.emit(message)  # phase 是 Qt 信号，必须用 .emit
-        self.worker.milestone(LogCategory.NORMAL, message)
 
     def finish(self):
         # 兜底输出"正在下载"行（如缓存命中：无字节也无清晰度）
@@ -68,7 +70,7 @@ class ProgressAdapter:
         if self.current_done == 0:
             self.worker.milestone(LogCategory.SUCCESS, f"已存在，跳过：{self.current_name}")
         else:
-            self.worker.milestone(LogCategory.SUCCESS, f"下载完成：{q}{self.current_name}")
+            self.worker.milestone(LogCategory.SUCCESS, f"下载完成 {q}{self.current_name}")
 
     def make_stream_callback(self):
         return self.update
@@ -77,16 +79,12 @@ class ProgressAdapter:
         return range(1, self.n + 1)
 
     def _flush_pending_line(self):
-        """输出"正在下载 第 i/n 个：[清晰度] 文件名"（每个文件只输出一次）。"""
+        """输出"正在下载 [清晰度] 文件名"（每个文件只输出一次）。"""
         if not self._pending_line:
             return
         self._pending_line = False
         q = f"[{self.current_quality.display_name}] " if self.current_quality else ""
-        idx = self._mono
-        if self.n:
-            self.worker.milestone(LogCategory.PROGRESS, f"正在下载 第 {idx}/{self.n} 个：{q}{self.current_name}")
-        else:
-            self.worker.milestone(LogCategory.PROGRESS, f"正在下载 第 {idx} 个：{q}{self.current_name}")
+        self.worker.milestone(LogCategory.PROGRESS, f"正在下载 {q}{self.current_name}")
 
     def _grand_total(self):
         totals = [t for t in self._stream_totals if t]
@@ -97,3 +95,133 @@ class ProgressAdapter:
             return
         self._last_emitted = self.current_done
         self.worker.progress.emit(self.current_done, self._grand_total() or 0)
+
+
+class _FileState:
+    """单个线程的「当前文件」进度状态（ParallelProgressAdapter 内部使用）。"""
+
+    __slots__ = ("name", "seq", "done", "totals", "quality", "pending_line")
+
+    def __init__(self, name, seq):
+        self.name = name
+        self.seq = seq
+        self.done = 0
+        self.totals = []
+        self.quality = None
+        self.pending_line = True
+
+    def grand_total(self):
+        totals = [t for t in self.totals if t]
+        return sum(totals) if totals else 0
+
+
+class ParallelProgressAdapter:
+    """线程安全 + 并发的进度适配器（鸭子类型，供 service 并行批处理方法使用）。
+
+    与 ProgressAdapter 契约一致，但内部按线程隔离「当前文件」状态（start/add/update/
+    finish 在同一线程内成对调用），字节进度跨线程聚合后转发 Qt 信号：
+    - 聚合已下载字节 → worker.progress（节流）；
+    - 每文件开始/完成 → worker.milestone（追加日志）。
+    """
+
+    def __init__(self, n, label, worker):
+        self.n = n
+        self.label = label
+        self.worker = worker
+        self.display = False
+        self._lock = threading.Lock()
+        self._states = {}      # thread ident -> _FileState
+        self._mono = 0         # 文件序号（跨线程自增）
+        self._done_done = 0    # 已完成文件的已下载字节
+        self._done_total = 0   # 已完成文件的已知总大小
+        self._last_emitted = 0
+        self._throttle = 512 * 1024
+
+    def start(self, index, name):
+        with self._lock:
+            self._mono += 1
+            self._states[threading.get_ident()] = _FileState(name, self._mono)
+
+    def set_quality(self, quality):
+        with self._lock:
+            st = self._states[threading.get_ident()]
+            st.quality = quality
+            if st.pending_line:
+                self._flush_pending_line(st)
+
+    def add(self, delta, total, stream_id=0):
+        with self._lock:
+            st = self._states[threading.get_ident()]
+            st.done += delta
+            if total:
+                while len(st.totals) <= stream_id:
+                    st.totals.append(0)
+                st.totals[stream_id] = total
+            pending = st.pending_line
+            done, grand = self._aggregate_locked()
+        if pending:
+            self._flush_pending_line(st)
+        self._maybe_emit(done, grand)
+
+    def update(self, downloaded, total):
+        with self._lock:
+            st = self._states[threading.get_ident()]
+            st.done = downloaded
+            if total:
+                st.totals = [total]
+            pending = st.pending_line
+            done, grand = self._aggregate_locked()
+        if pending:
+            self._flush_pending_line(st)
+        self._maybe_emit(done, grand)
+
+    def status(self, message):
+        # 阶段提示只更新进度条文案，不写入日志（避免并发下阶段行交错）
+        self.worker.phase.emit(message)
+
+    def finish(self):
+        with self._lock:
+            st = self._states.pop(threading.get_ident(), None)
+            if st is None:
+                return
+            self._done_done += st.done
+            self._done_total += st.grand_total()
+            pending = st.pending_line
+            name, quality = st.name, st.quality
+        if pending:
+            self._flush_pending_line(st)
+        q = f"[{quality.display_name}] " if quality else ""
+        if st.done == 0:
+            self.worker.milestone(LogCategory.SUCCESS, f"已存在，跳过：{name}")
+        else:
+            self.worker.milestone(LogCategory.SUCCESS, f"下载完成 {q}{name}")
+
+    def make_stream_callback(self):
+        return self.update
+
+    def iter_count(self):
+        return range(1, self.n + 1)
+
+    # ---- 内部 ----
+
+    def _aggregate_locked(self):
+        done = self._done_done
+        grand = self._done_total
+        for st in self._states.values():
+            done += st.done
+            grand += st.grand_total()
+        return done, grand
+
+    def _maybe_emit(self, done, grand):
+        with self._lock:
+            if done - self._last_emitted < self._throttle:
+                return
+            self._last_emitted = done
+        self.worker.progress.emit(done, grand)
+
+    def _flush_pending_line(self, state):
+        if not state.pending_line:
+            return
+        state.pending_line = False
+        q = f"[{state.quality.display_name}] " if state.quality else ""
+        self.worker.milestone(LogCategory.PROGRESS, f"正在下载 {q}{state.name}")

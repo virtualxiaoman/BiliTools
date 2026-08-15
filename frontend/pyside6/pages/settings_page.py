@@ -1,4 +1,6 @@
 """设置页：左侧窄按钮栏分类 + 右侧设置区域（QStackedWidget）。"""
+from pathlib import Path
+
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
@@ -7,17 +9,19 @@ from PySide6.QtWidgets import (
     QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from src.config.path import COOKIE_DIR, VIDEO_OUTPUT_DIR
+from src.config.path import COOKIE_ROOT, VIDEO_OUTPUT_DIR, get_cookie_dir, set_cookie_dir
 from src.models.download_model import VideoQuality
+from src.services.account import AccountManager
 from src.util.downloader import ffmpeg_available
 
 from frontend.pyside6 import fonts
 from frontend.pyside6.logs import LOG_DIR
 from frontend.pyside6.signals import app_signals
 from frontend.pyside6.theme import build_qss, get_palette
+from frontend.pyside6.workers.login_worker import recheck_login
 
 # 左侧分类（按钮文字 -> 右侧页面索引）
-_CATEGORIES = ["下载", "界面", "日志", "目录"]
+_CATEGORIES = ["下载", "界面", "日志", "目录", "账号"]
 
 
 class SettingsPage(QWidget):
@@ -56,6 +60,7 @@ class SettingsPage(QWidget):
         self.stack.addWidget(self._build_ui_page())         # 1 界面
         self.stack.addWidget(self._build_log_page())        # 2 日志
         self.stack.addWidget(self._build_dir_page())        # 3 目录
+        self.stack.addWidget(self._build_account_page())    # 4 账号
         outer.addWidget(self.stack, 1)
 
         self._cat_grp.buttonClicked.connect(lambda b: self.stack.setCurrentIndex(self._cat_grp.id(b)))
@@ -183,16 +188,83 @@ class SettingsPage(QWidget):
         for text, path in [
             ("打开输出目录", VIDEO_OUTPUT_DIR),
             ("打开日志目录", LOG_DIR),
-            ("打开 cookie 目录", COOKIE_DIR),
         ]:
             b = QPushButton(text)
             b.clicked.connect(
                 lambda checked, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(str(p)))
             )
             form.addRow("", b)
+        b = QPushButton("打开 cookie 目录")
+        b.clicked.connect(self._on_open_cookie_dir)
+        form.addRow("", b)
         container = QWidget()
         container.setLayout(form)
         return container
+
+    def _build_account_page(self):
+        form = QFormLayout()
+        form.setVerticalSpacing(16)
+        form.setContentsMargins(20, 16, 20, 16)
+
+        # Cookie 保存位置（全局目录，默认 C 盘用户目录）
+        self.cookie_dir_edit = QLineEdit(str(get_cookie_dir()))
+        btn_cookie_dir = QPushButton("浏览…")
+        btn_cookie_dir.clicked.connect(self._on_choose_cookie_dir)
+        btn_cookie_reset = QPushButton("恢复默认")
+        btn_cookie_reset.clicked.connect(self._on_reset_cookie_dir)
+        dir_row = QHBoxLayout()
+        dir_row.addWidget(self.cookie_dir_edit, 1)
+        dir_row.addWidget(btn_cookie_dir)
+        dir_row.addWidget(btn_cookie_reset)
+        form.addRow("Cookie 保存位置", dir_row)
+        self.cookie_dir_edit.editingFinished.connect(self._on_cookie_dir_edited)
+
+        hint = QLabel(
+            "默认保存在 C 盘用户目录（%APPDATA%\\xiaoman\\BiliTools\\cookie），"
+            "程序文件夹分享/拷贝时不会带出登录凭证。"
+        )
+        hint.setObjectName("Dim")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
+
+        btn_open = QPushButton("打开 cookie 目录")
+        btn_open.clicked.connect(self._on_open_cookie_dir)
+        form.addRow("", btn_open)
+
+        container = QWidget()
+        container.setLayout(form)
+        return container
+
+    # ---- 账号页事件 ----
+
+    def _on_choose_cookie_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择 Cookie 保存目录", self.cookie_dir_edit.text())
+        if folder:
+            self._apply_cookie_dir(folder)
+
+    def _on_cookie_dir_edited(self):
+        self._apply_cookie_dir(self.cookie_dir_edit.text().strip() or COOKIE_ROOT)
+
+    def _on_reset_cookie_dir(self):
+        self._apply_cookie_dir(COOKIE_ROOT)
+
+    def _apply_cookie_dir(self, new_dir):
+        new_dir = Path(new_dir).expanduser().resolve()
+        old_dir = get_cookie_dir()
+        if new_dir == old_dir:
+            self.cookie_dir_edit.setText(str(new_dir))
+            return
+        manager = AccountManager()
+        # 先把旧目录下的账号 cookie 迁到新目录并更新映射，再切换全局目录
+        manager.relocate(old_dir, new_dir)
+        set_cookie_dir(new_dir)
+        self.settings.set("cookie_dir", str(new_dir))
+        self.cookie_dir_edit.setText(str(new_dir))
+        manager.apply_startup()  # 按最新映射重设当前账号 cookie 路径
+        recheck_login()
+
+    def _on_open_cookie_dir(self):
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(get_cookie_dir())))
 
     # ---- 事件 ----
 
@@ -226,5 +298,8 @@ class SettingsPage(QWidget):
 
     def _on_check_ffmpeg(self):
         ok = ffmpeg_available()
-        self.ffmpeg_status.setText("已安装 ✓" if ok else "未检测到 ffmpeg，请安装并加入系统 PATH")
+        self.ffmpeg_status.setText(
+            "可用 ✓" if ok
+            else "不可用：请安装 ffmpeg 并加入系统 PATH，或执行 pip install imageio-ffmpeg"
+        )
         self.ffmpeg_status.setStyleSheet(f"color:{'#2e7d32' if ok else '#c62828'};")

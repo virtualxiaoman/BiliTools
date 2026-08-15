@@ -3,12 +3,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from src.config.cookie import BiliCookies
-from src.config.path import DEFAULT_COOKIE_PATH, DEFAULT_QR_IMAGE_PATH
+from src.config.path import get_qr_image_path
+from src.services.account import AccountManager
 
 from frontend.pyside6.signals import LogCategory, app_signals
-from frontend.pyside6.utils import ensure_cookie_file
-from frontend.pyside6.workers.login_worker import QrLoginWorker, _drop, _keepalive
+from frontend.pyside6.workers.login_worker import QrLoginWorker, _drop, _keepalive, recheck_login
 
 
 class LoginPage(QWidget):
@@ -45,7 +44,7 @@ class LoginPage(QWidget):
         self.status_label.setWordWrap(True)
         self.status_label.setObjectName("Dim")
 
-        self.btn_generate = QPushButton("重新生成")
+        self.btn_generate = QPushButton("登录新账号")
 
         self.info_label = QLabel("未登录")
         self.btn_logout = QPushButton("退出登录")
@@ -92,8 +91,9 @@ class LoginPage(QWidget):
         w.start()
 
     def _show_qr(self):
-        if DEFAULT_QR_IMAGE_PATH.exists():
-            pm = QPixmap(str(DEFAULT_QR_IMAGE_PATH))
+        qr_path = get_qr_image_path()
+        if qr_path.exists():
+            pm = QPixmap(str(qr_path))
             if not pm.isNull():
                 self.qr_label.setPixmap(pm.scaled(
                     240, 240, Qt.AspectRatioMode.KeepAspectRatio,
@@ -133,12 +133,6 @@ class LoginPage(QWidget):
             self.status_label.setText("")
 
     def _on_logout(self):
-        try:
-            if DEFAULT_COOKIE_PATH.exists():
-                DEFAULT_COOKIE_PATH.unlink()
-        except OSError:
-            pass
-        BiliCookies._cache.clear()  # 清掉进程内 cookie 缓存
-        ensure_cookie_file()
-        app_signals.login_changed.emit(None)
+        AccountManager().remove_current()  # 删 cookie 文件 + 删映射条目 + 清缓存 + 切下一个账号
         app_signals.log_message.emit(LogCategory.NORMAL, "已退出登录")
+        recheck_login()  # 若有其他账号，刷新到新当前账号；否则未登录

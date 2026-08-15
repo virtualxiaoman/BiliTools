@@ -21,7 +21,7 @@ from typing import Optional, Tuple
 
 from src.api.session import BiliSession
 from src.config.cookie import BiliCookies
-from src.config.path import DEFAULT_COOKIE_PATH, DEFAULT_QR_IMAGE_PATH
+from src.config.path import get_cookie_path, get_qr_image_path
 from src.models.login_model import LoginUser
 from src.urls.login_urls import LoginUrls
 
@@ -68,7 +68,7 @@ class LoginService:
     def generate_qr(self, save_qr_path: Optional[Path] = None) -> Tuple[str, str]:
         """生成扫码登录二维码。
 
-        :param save_qr_path: 二维码图片保存路径。None 时保存到 QR_IMAGE_PATH（assets/cookie/qr_login.png）
+        :param save_qr_path: 二维码图片保存路径。None 时保存到 get_qr_image_path()（跟随全局 cookie 目录）
         :return: (二维码登录 url, qrcode_key)，将 url 交给用户扫描
         """
         data = self.session.get(LoginUrls.QR_GENERATE)
@@ -82,7 +82,7 @@ class LoginService:
             logger.warning("[LoginService] 未安装 qrcode 库，跳过二维码图片生成，仅返回登录 url。")
             return url, qrcode_key
 
-        save_path = Path(save_qr_path) if save_qr_path is not None else DEFAULT_QR_IMAGE_PATH
+        save_path = Path(save_qr_path) if save_qr_path is not None else get_qr_image_path()
         save_path.parent.mkdir(parents=True, exist_ok=True)
         qr = qrcode.QRCode()
         qr.add_data(url)
@@ -138,7 +138,7 @@ class LoginService:
 
         :param timeout: 超时时间（秒），超时返回 False
         :param interval: 轮询间隔（秒）
-        :param save_cookie_path: cookie 保存路径。None 时保存到 DEFAULT_COOKIE_PATH
+        :param save_cookie_path: cookie 保存路径。None 时保存到 get_cookie_path()（当前生效路径）
         :param img_show: 是否用本地图片查看器打开二维码
         :return: 登录成功返回 True
         """
@@ -146,8 +146,8 @@ class LoginService:
         if img_show:
             try:
                 from PIL import Image
-                # 二维码图片由 generate_qr 保存到 QR_IMAGE_PATH（或自定义路径），这里打开同一份
-                qr_img_path = DEFAULT_QR_IMAGE_PATH
+                # 二维码图片由 generate_qr 保存到 get_qr_image_path()（或自定义路径），这里打开同一份
+                qr_img_path = get_qr_image_path()
                 if not qr_img_path.exists():
                     logger.warning("[LoginService] 二维码图片不存在：%s", qr_img_path)
                 else:
@@ -155,7 +155,7 @@ class LoginService:
             except Exception as e:
                 logger.warning("[LoginService] 打开二维码图片失败：%s", e)
 
-        save_path = Path(save_cookie_path) if save_cookie_path is not None else DEFAULT_COOKIE_PATH
+        save_path = Path(save_cookie_path) if save_cookie_path is not None else get_cookie_path()
         start = time.time()
         while time.time() - start < timeout:
             code, resp = self._poll_once(qrcode_key)
@@ -177,12 +177,12 @@ class LoginService:
         从原始 set-cookie 中提取 SESSDATA/bili_jct/DedeUserID 等关键字段（含登录成功 url 中的 cookie）。
 
         :param cookie: 原始 cookie 字符串（通常是响应头 set-cookie）
-        :param full_path: 保存路径。None 时保存到 DEFAULT_COOKIE_PATH
+        :param full_path: 保存路径。None 时保存到 get_cookie_path()（当前生效路径）
         :return: 保存的文件路径
         """
         import re
 
-        save_path = Path(full_path) if full_path is not None else DEFAULT_COOKIE_PATH
+        save_path = Path(full_path) if full_path is not None else get_cookie_path()
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         # 提取关键字段（原始实现来自旧 login.py 的正则解析）

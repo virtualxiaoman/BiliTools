@@ -7,7 +7,7 @@
 - 支持失败自动重试（替代旧代码里散落各处的 while 重试循环）。
 
 [使用方法]
-    session = BiliSession()                       # 使用默认 cookie（assets/cookie/qr_login.txt）
+    session = BiliSession()                       # 使用当前账号 cookie（默认 %APPDATA%/xiaoman/BiliTools）
     data = session.get(VideoUrls.VIEW, params={"bvid": "BV1ov42117yC"})  # 返回 data 字典
 """
 
@@ -20,7 +20,7 @@ import requests
 
 from src.config.constants import MAX_RETRY, REQUEST_TIMEOUT, RETRY_DELAY
 from src.config.cookie import BiliCookies
-from src.config.path import DEFAULT_COOKIE_PATH
+from src.config.path import get_cookie_path
 from src.api.errors import raise_for_code
 
 logger = logging.getLogger(__name__)
@@ -37,8 +37,9 @@ class BiliSession:
         timeout: float = REQUEST_TIMEOUT,
     ):
         """
-        :param cookie_path: cookie 文件路径。None 时使用全局默认 DEFAULT_COOKIE_PATH。
-                            cookie 读取结果在 BiliCookies 内做进程级缓存。
+        :param cookie_path: cookie 文件路径。None 时使用全局生效路径 get_cookie_path()
+                            （多账号体系下即当前账号的 cookie）。cookie 读取结果在
+                            BiliCookies 内做进程级缓存。
         :param referer: 默认 Referer，可用 session.get/post 的 headers 参数覆盖。
         :param max_retry: 请求失败时的最大重试次数（不含首次）。
         :param timeout: 单次请求超时（秒）。
@@ -61,7 +62,7 @@ class BiliSession:
             return BiliCookies.from_file(cookie_path)
         except FileNotFoundError:
             logger.warning("[BiliSession] cookie 文件缺失，以未登录状态请求（路径：%s）",
-                           Path(cookie_path).resolve() if cookie_path else DEFAULT_COOKIE_PATH)
+                           Path(cookie_path).resolve() if cookie_path else get_cookie_path())
             return BiliCookies()
 
     # ---- 请求入口 ----

@@ -1,7 +1,8 @@
-"""批量下载进度显示（BatchProgress）的单元测试。"""
+"""批量下载进度显示（BatchProgress / ParallelBatchProgress）的单元测试。"""
+import threading
 
 from src.models import VideoQuality
-from src.util.progress import BatchProgress
+from src.util.progress import BatchProgress, ParallelBatchProgress
 
 
 class TestBatchProgress:
@@ -96,6 +97,53 @@ class TestBatchProgress:
         p.add(1, 100, stream_id=0)
         p.add(2, 100, stream_id=0)  # 同流，total 相同
         assert p._grand_total() == 100  # 不是 200
+
+
+class TestParallelBatchProgress:
+    def test_aggregates_bytes_across_threads(self):
+        """并发线程各自 add/finish，聚合字节应等于各线程之和。"""
+        p = ParallelBatchProgress(n=4, display=False)
+
+        def worker():
+            p.start(1, "a.mp4")
+            p.add(5_000_000, 10_000_000, stream_id=0)
+            p.finish()
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert p.current_done == 10_000_000  # 2 × 5MB
+        assert p._grand_total() == 20_000_000  # 2 × 10MB
+
+    def test_threads_have_independent_file_state(self):
+        """start 在不同线程互不覆盖；同一线程内 add 累加到自己的文件。"""
+        p = ParallelBatchProgress(n=2, display=False)
+        results = {}
+
+        def worker(tag):
+            p.start(1, f"{tag}.mp4")
+            p.add(1_000_000, None, stream_id=0)
+            with p._lock:
+                st = p._states[threading.get_ident()]
+                results[tag] = (st.name, st.done)
+            p.finish()
+
+        threads = [threading.Thread(target=worker, args=(t,)) for t in ("a", "b")]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert results == {"a": ("a.mp4", 1_000_000), "b": ("b.mp4", 1_000_000)}
+
+    def test_sequential_still_works(self):
+        """单线程用法与 BatchProgress 一致（聚合视图退化为该线程）。"""
+        p = ParallelBatchProgress(n=1, display=False)
+        p.start(1, "v.mp4")
+        p.update(10, 100)
+        p.finish()
+        assert p.current_done == 10
 
 
 class TestAutoProgress:

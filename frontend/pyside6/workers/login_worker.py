@@ -6,6 +6,7 @@ from PySide6.QtCore import QThread, Signal
 
 from src.api.errors import BiliAuthError
 from src.config.cookie import BiliCookies
+from src.services.account import AccountManager
 from src.services.login import LoginService
 
 from frontend.pyside6.signals import app_signals
@@ -84,7 +85,7 @@ def _drop(w):
 class QrLoginWorker(QThread):
     """扫码登录：生成二维码 → 轮询状态 → 保存 cookie。"""
 
-    qr_ready = Signal()          # 二维码图片已生成（读取 DEFAULT_QR_IMAGE_PATH）
+    qr_ready = Signal()          # 二维码图片已生成（读取 get_qr_image_path()）
     status = Signal(int, str)    # (状态码, 文案)
     done = Signal(bool, str)     # (是否成功, 信息)
 
@@ -110,8 +111,10 @@ class QrLoginWorker(QThread):
                 self.status.emit(code, _qr_text(code))
                 if code == 0:
                     if set_cookie:
-                        service.save_cookie(set_cookie)
-                    BiliCookies.refresh()
+                        # 接入账号体系：写 cookie 到当前账号路径 + 建/更新映射 + 切换
+                        AccountManager().handle_login(set_cookie)
+                    else:
+                        BiliCookies.refresh()
                     # 新建 service：本 worker 的 service 构造于登录前，用的是旧(空)cookie，
                     # 直接 get_login_state 仍会 未登录。
                     user = LoginService().get_login_state()

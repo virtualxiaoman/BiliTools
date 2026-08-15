@@ -15,6 +15,8 @@
 import time
 import random
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -40,9 +42,43 @@ from src.services.archive import ArchiveService
 from src.urls.video_urls import VideoUrls
 from src.util.downloader import ProgressCallback, download_stream, ffmpeg_available, merge_video_audio
 from src.util.filename import build_download_filename, build_multi_page_filename
-from src.util.progress import BatchProgress
+from src.util.progress import BatchProgress, ParallelBatchProgress
+from src.util.risk_gate import RiskGate
 
 logger = logging.getLogger(__name__)
+
+
+class _FileCounter:
+    """线程安全的文件序号分配：并发下载时每个视频（稿件）预先占号，保证进度序号不重叠。"""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._val = 0
+
+    def reserve(self, n: int) -> int:
+        """预留 n 个文件序号，返回这批的起始值（0 起，配合 _download_episode 的 ++ 后为 1 起显示）。"""
+        with self._lock:
+            start = self._val
+            self._val += max(n, 0)
+            return start
+
+
+def _parallel_run(items, fn, threads: int) -> list:
+    """并发执行 fn(item, idx)，返回按输入顺序排列的结果列表。
+
+    :param items: 输入列表
+    :param fn: fn(item, index) -> result；异常会上抛（线程池退出时会等其余任务跑完）
+    :param threads: 并发线程数
+    """
+    results: list = [None] * len(items)
+    if len(items) <= 1 or threads <= 1:
+        return [fn(item, i) for i, item in enumerate(items)]
+    with ThreadPoolExecutor(max_workers=threads) as ex:
+        future_to_idx = {ex.submit(fn, item, i): i for i, item in enumerate(items)}
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            results[idx] = future.result()
+    return results
 
 
 class VideoService:
@@ -198,36 +234,49 @@ class VideoService:
             *,
             label: str = "",
             retries: int = 3,
+            risk_gate: Optional[RiskGate] = None,
     ) -> Any:
         """执行批量下载中单个视频（稿件）的下载动作，统一处理异常。
 
         - 视频不可见（-404 不存在 / 62002 稿件不可见）：记录日志并返回 None（跳过）；
-        - 触发风控（-412 / -403）：随机退避等待后重试，最多 retries 次，仍失败则抛出；
+        - 触发风控（-412 / -403）：有 risk_gate 时标记风控事件（由 gate 让**所有线程**
+          在下一次获取信息前各自随机暂停），无 gate 时保持原有本地退避重试；
         - 其余异常：原样抛出。
 
         :param bvid: 视频BV号（仅用于日志）
         :param action: 无参可调用对象，完成该视频（稿件）的下载
         :param label: 批量任务描述（收藏夹/合集/UP主名称），仅用于日志
         :param retries: 触发风控后的最大重试次数
+        :param risk_gate: 并发下载时的风控协调器；None 表示顺序下载（本地退避）
         :return: action 的返回值；视频不可见被跳过时返回 None
         """
         last_error: Optional[Exception] = None
         for attempt in range(retries + 1):
+            if risk_gate is not None:
+                # 风控后所有线程在下一次获取信息前暂停（每个线程暂停时长单独计算）
+                risk_gate.pause_before_fetch()
             try:
                 return action()
             except Exception as e:
                 if self._is_video_unavailable_error(e):
-                    logger.warning("[VideoService] 视频 %s 不可见，跳过（%s）。", bvid, label)
+                    logger.warning("视频 %s 不可见，跳过（%s）。", bvid, label)
                     return None
                 if self._is_risk_control_error(e):
                     last_error = e
-                    wait = random.uniform(3, 8) * (attempt + 1)
-                    logger.warning("[VideoService] 视频 %s 触发风控（第 %d/%d 次尝试），等待 %.1fs 后重试（%s）。",
-                                   bvid, attempt + 1, retries + 1, wait, label)
-                    time.sleep(wait)
+                    if risk_gate is not None:
+                        logger.warning(
+                            "视频 %s 触发风控（第 %d/%d 次尝试），通知所有线程暂停（%s）。",
+                            bvid, attempt + 1, retries + 1, label)
+                        risk_gate.mark_risk()
+                    else:
+                        wait = random.uniform(3, 8) * (attempt + 1)
+                        logger.warning(
+                            "视频 %s 触发风控（第 %d/%d 次尝试），等待 %.1fs 后重试（%s）。",
+                            bvid, attempt + 1, retries + 1, wait, label)
+                        time.sleep(wait)
                     continue
                 raise
-        logger.error("[VideoService] 视频 %s 连续 %d 次触发风控，已放弃（%s）。", bvid, retries + 1, label)
+        logger.error("视频 %s 连续 %d 次触发风控，已放弃（%s）。", bvid, retries + 1, label)
         if last_error is not None:
             raise last_error
         raise BiliRiskError(f"视频 {bvid} 触发风控，已放弃（{label}）。")
@@ -247,14 +296,14 @@ class VideoService:
         """
         all_cached = bool(new_results) and all(result.cached for result in new_results)
         if all_cached:
-            print(f"{bvid} 命中缓存，跳过网络请求。")
+            print(f"{bvid}：命中缓存")
         else:
-            print(f"{bvid} 未命中缓存，已下载 {len(new_results)} 个文件。")
+            print(f"{bvid}：下载 {len(new_results)} 个文件")
             download_count += 1
             time.sleep(0.3)  # 避免风控
             if download_count % 10 == 0:
                 time.sleep(random.uniform(1, 3))  # 每10个未命中缓存的视频随机休息1~3秒，降低风控风险
-        print(f"[VideoService] 已下载 {index}/{total} 个视频。")
+        print(f"已下载 {index}/{total} 个视频")
         return download_count
 
     def _find_downloaded_file(self, bvid: str, extensions: set[str],
@@ -413,7 +462,8 @@ class VideoService:
         """下载视频流 + 音频流，并用 ffmpeg 合成为一个文件。
 
         视频流与音频流先下载到临时目录（`<dir>/.tmp/`），合成成功后默认删除。
-        [注意] 合成依赖系统安装 ffmpeg，未安装时会在下载前直接报错。
+        [注意] 合成依赖 ffmpeg（系统安装或 imageio-ffmpeg 库内置），两者都不可用时会
+        在下载前直接报错。
 
         :param bvid: BV号
         :param dir: 保存目录。None 时使用默认下载目录
@@ -424,7 +474,7 @@ class VideoService:
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由批量接口传入）
         :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
         :return: DownloadResult
-        :raises FFmpegNotFoundError: 系统未安装 ffmpeg
+        :raises FFmpegNotFoundError: 未检测到 ffmpeg 且未安装 imageio-ffmpeg
         """
         # 修改：下载前先检查是否已经存在最终视频
         existing = self._find_downloaded_file(bvid, {"mp4", "flv", "m4s"}, page=page,
@@ -434,9 +484,12 @@ class VideoService:
 
         import tempfile
 
-        # 预检 ffmpeg：避免下载完几十 MB 后才报错
+        # 预检合成后端：避免下载完几十 MB 后才报错
         if not ffmpeg_available():
-            raise FFmpegNotFoundError("未检测到 ffmpeg，无法进行音视频合成。请先安装 ffmpeg 并加入系统 PATH。")
+            raise FFmpegNotFoundError(
+                "未检测到 ffmpeg，且未安装 imageio-ffmpeg 库，无法进行音视频合成。"
+                "请安装 ffmpeg 并加入系统 PATH，或执行 `pip install imageio-ffmpeg` 使用内置 ffmpeg。"
+            )
 
         info, dash = self._fetch_streams(bvid, page)
         video_stream = dash.pick_video(quality)
@@ -584,8 +637,9 @@ class VideoService:
             display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
             display_name = self._default_filename(info, bvid, page_obj.page, display_ext)
             progress.start(i, display_name)
-            logger.info("[VideoService] 正在下载 %s 第 %d/%d 分P：%s",
-                        bvid, page_obj.page, n, page_obj.part)
+            # 逐P信息仅保留在 debug 日志（UI 已由 progress 的"正在下载 文件名"行表达）
+            logger.debug("正在下载 %s 第 %d/%d 分P：%s",
+                         bvid, page_obj.page, n, page_obj.part)
             if media_type == "video":
                 results.append(self.download_video(bvid, dir, page=page_obj.page, quality=quality,
                                                    progress_cb=progress_cb, progress=progress))
@@ -697,6 +751,7 @@ class VideoService:
             progress_cb: Optional[ProgressCallback] = None,
             progress: Optional[BatchProgress] = None,
             season: Optional[VideoSeason] = None,
+            threads: int = 1,
     ) -> list:
         """下载整个合集。`bvid` 与 `season_id` 任选其一。
 
@@ -704,6 +759,8 @@ class VideoService:
         - 传 `season_id`：按合集 sid 直接下载（如 sid=8683221 或 sid=1717000）。
 
         每个稿件若有多个分P，则逐P下载。文件保存到 `<dir>/<合集标题>/`。
+        `threads > 1` 时多个稿件并发下载（需配合线程安全的 progress）；任一稿件触发
+        风控时，所有线程在下一次获取信息前各自随机暂停。
 
         :param bvid: 合集内任意一个视频的BV号
         :param dir: 保存根目录。None 时使用默认下载目录
@@ -712,9 +769,10 @@ class VideoService:
         :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
         :param media_type: 下载类型：video / audio / video_with_audio / cover
         :param progress_cb: 进度回调 (downloaded, total)
-        :param progress: BatchProgress 进度显示；None 时自动创建
+        :param progress: BatchProgress 进度显示；None 时自动创建（并发时创建线程安全版本）
         :param season: 可选：外部已获取的合集结构（VideoSeason）。传入时跳过内部重复反查
             （GUI 场景会先取合集用于进度总数，传回此处避免请求两次）；None 时内部自动获取
+        :param threads: 并发下载线程数（>1 启用并发，需线程安全的 progress）
         :return: DownloadResult 列表
         :raises ValueError: 无法定位合集
         """
@@ -729,15 +787,23 @@ class VideoService:
 
         # 计算总共要下载的文件数（多P稿件按分P数计），驱动进度
         file_count = sum(len(ep.pages) if ep.is_multi_page else 1 for ep in season.episodes)
-        progress = progress or BatchProgress(n=file_count, label=f"合集「{season.title}」")
+        if progress is None:
+            progress = (ParallelBatchProgress(n=file_count, label=f"合集「{season.title}」")
+                        if threads > 1 else BatchProgress(n=file_count, label=f"合集「{season.title}」"))
 
         label = f"合集「{season.title}」"
+        total = len(season.episodes)
+        if threads > 1:
+            return self._download_season_parallel(
+                season, save_dir, quality=quality, media_type=media_type,
+                progress=progress, progress_cb=progress_cb, label=label, threads=threads,
+            )
+
         results = []
         download_count = 0
         file_idx = 0
-        total = len(season.episodes)
         for i, episode in enumerate(season.episodes, 1):
-            logger.info("[VideoService] 合集「%s」下载：%s", season.title, episode.title)
+            logger.info("合集「%s」下载：%s", season.title, episode.title)
             # 起始文件序号在闭包里固定：风控重试会重新执行整个动作，不能捕获到已更新的 file_idx
             outcome = self._execute_batch_download(
                 episode.bvid,
@@ -750,6 +816,39 @@ class VideoService:
             if outcome is None:
                 continue  # 视频不可见：_execute_batch_download 已记录日志
             new_results, file_idx = outcome
+            results.extend(new_results)
+            download_count = self._report_bvid_download(
+                episode.bvid, new_results, download_count, i, total,
+            )
+        return results
+
+    def _download_season_parallel(self, season, save_dir, *, quality, media_type,
+                                  progress, progress_cb, label, threads) -> list:
+        """合集并发下载：每个稿件一个线程，共享风控协调器。"""
+        gate = RiskGate()
+        counter = _FileCounter()
+
+        def _work(episode, _i):
+            num_pages = len(episode.pages) if episode.is_multi_page else 1
+            start_idx = counter.reserve(num_pages)
+            return self._execute_batch_download(
+                episode.bvid,
+                lambda ep=episode, sidx=start_idx: self._download_episode(
+                    ep, save_dir, media_type=media_type, quality=quality,
+                    file_idx=sidx, progress=progress, progress_cb=progress_cb,
+                ),
+                label=label, risk_gate=gate,
+            )
+
+        outcomes = _parallel_run(season.episodes, _work, threads)
+        # 顺序汇总（结果按输入顺序，日志不交错）
+        results = []
+        download_count = 0
+        total = len(season.episodes)
+        for i, (episode, outcome) in enumerate(zip(season.episodes, outcomes), 1):
+            if outcome is None:
+                continue
+            new_results, _ = outcome
             results.extend(new_results)
             download_count = self._report_bvid_download(
                 episode.bvid, new_results, download_count, i, total,
@@ -791,11 +890,13 @@ class VideoService:
             progress_cb: Optional[ProgressCallback] = None,
             progress: Optional[BatchProgress] = None,
             bvids: Optional[list] = None,
+            threads: int = 1,
     ) -> list:
         """下载整个收藏夹的全部视频（有声音）或仅音频。
 
         逐个下载收藏夹内的视频，保存到 `<dir>/<收藏夹名称>/`（默认 `output/video/<收藏夹名称>/`）。
         每个视频若有分P则逐P下载。下载带进度显示（含清晰度标签）。
+        `threads > 1` 时多个视频并发下载；任一视频触发风控时所有线程在下一次获取信息前各自随机暂停。
 
         [使用方法]
             service = VideoService()
@@ -811,6 +912,7 @@ class VideoService:
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由 UI 传入以获取逐文件事件）
         :param bvids: 可选：外部已获取的收藏夹视频 BV 号列表。传入时跳过内部重复拉取
             （GUI 场景会先取列表用于进度总数，传回此处避免请求两次）；None 时内部自动获取
+        :param threads: 并发下载线程数（>1 启用并发，需线程安全的 progress）
         :return: DownloadResult 列表
         """
         from src.services.fav import FavService
@@ -825,12 +927,41 @@ class VideoService:
         save_dir = (Path(dir) if dir is not None else self.default_dir) / info.title
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        results = []
-        download_count = 0
         media_type = "audio" if mode == "audio" else "video_with_audio"
         label = f"收藏夹「{info.title}」"
+        total = len(bvids)
+        if progress is None:
+            progress = (ParallelBatchProgress(n=total, label=label)
+                        if threads > 1 else BatchProgress(n=total, label=label))
+
+        if threads > 1:
+            gate = RiskGate()
+
+            def _work(bvid, _i):
+                return self._execute_batch_download(
+                    bvid,
+                    lambda b=bvid: self.download_all_pages(
+                        b, save_dir, quality=quality, media_type=media_type,
+                        progress=progress, progress_cb=progress_cb,
+                    ),
+                    label=label, risk_gate=gate,
+                )
+
+            outcomes = _parallel_run(bvids, _work, threads)
+            results = []
+            download_count = 0
+            for i, (bvid, outcome) in enumerate(zip(bvids, outcomes), 1):
+                if outcome is None:
+                    print(f"跳过不可见视频 {bvid}，进度 {i}/{total}")
+                    continue
+                results.extend(outcome)
+                download_count = self._report_bvid_download(bvid, outcome, download_count, i, total)
+            return results
+
+        results = []
+        download_count = 0
         for i, bvid in enumerate(bvids):
-            logger.info("[VideoService] 收藏夹「%s」下载：%s", info.title, bvid)
+            logger.info("收藏夹「%s」下载：%s", info.title, bvid)
             new_results = self._execute_batch_download(
                 bvid,
                 lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type,
@@ -838,7 +969,7 @@ class VideoService:
                 label=label,
             )
             if new_results is None:
-                print(f"[VideoService] 跳过不可见视频 {bvid}，进度 {i + 1}/{len(bvids)}")
+                print(f"跳过不可见视频 {bvid}，进度 {i + 1}/{len(bvids)}")
                 continue
             results.extend(new_results)
             download_count = self._report_bvid_download(
@@ -900,11 +1031,13 @@ class VideoService:
             progress_cb: Optional[ProgressCallback] = None,
             progress: Optional[BatchProgress] = None,
             bvids: Optional[list] = None,
+            threads: int = 1,
     ) -> list:
         """下载某个 UP 主空间的全部视频（有声音）或仅音频。
 
         逐个下载该 UP 主的所有投稿，保存到 `<dir>/<UP主昵称>/`（默认 `output/video/<昵称>/`）。
         每个视频若有分P则逐P下载，带进度显示。
+        `threads > 1` 时多个视频并发下载；任一视频触发风控时所有线程在下一次获取信息前各自随机暂停。
 
         [使用方法]
             service = VideoService()
@@ -920,6 +1053,7 @@ class VideoService:
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由 UI 传入以获取逐文件事件）
         :param bvids: 可选：外部已获取的 UP 主视频 BV 号列表。传入时跳过内部重复翻页拉取
             （GUI 场景会先取列表用于进度总数，传回此处避免请求两次）；None 时内部自动获取
+        :param threads: 并发下载线程数（>1 启用并发，需线程安全的 progress）
         :return: DownloadResult 列表
         """
         from src.services.user import UserService
@@ -934,12 +1068,41 @@ class VideoService:
         save_dir = (Path(dir) if dir is not None else self.default_dir) / up_name
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        results = []
-        download_count = 0
         media_type = "audio" if mode == "audio" else "video_with_audio"
         label = f"UP主「{up_name}」"
+        total = len(bvids)
+        if progress is None:
+            progress = (ParallelBatchProgress(n=total, label=label)
+                        if threads > 1 else BatchProgress(n=total, label=label))
+
+        if threads > 1:
+            gate = RiskGate()
+
+            def _work(bvid, _i):
+                return self._execute_batch_download(
+                    bvid,
+                    lambda b=bvid: self.download_all_pages(
+                        b, save_dir, quality=quality, media_type=media_type,
+                        progress=progress, progress_cb=progress_cb,
+                    ),
+                    label=label, risk_gate=gate,
+                )
+
+            outcomes = _parallel_run(bvids, _work, threads)
+            results = []
+            download_count = 0
+            for i, (bvid, outcome) in enumerate(zip(bvids, outcomes), 1):
+                if outcome is None:
+                    logger.warning("视频 %s 不可见，跳过。", bvid)
+                    continue
+                results.extend(outcome)
+                download_count = self._report_bvid_download(bvid, outcome, download_count, i, total)
+            return results
+
+        results = []
+        download_count = 0
         for i, bvid in enumerate(bvids):
-            logger.info("[VideoService] UP主「%s」下载：%s", up_name, bvid)
+            logger.info("UP主「%s」下载：%s", up_name, bvid)
             new_results = self._execute_batch_download(
                 bvid,
                 lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type,
@@ -947,7 +1110,7 @@ class VideoService:
                 label=label,
             )
             if new_results is None:
-                logger.warning("[VideoService] 视频 %s 不可见，跳过。", bvid)
+                logger.warning("视频 %s 不可见，跳过。", bvid)
                 continue
             results.extend(new_results)
             download_count = self._report_bvid_download(

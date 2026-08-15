@@ -86,6 +86,7 @@ class DownloadWorker(QThread):
         mt = spec["media_type"]
         src = spec["source"]
         media_type = "audio" if mt == "audio" else "video_with_audio"
+        threads = int(spec.get("threads", 1))
 
         if src == "bv":
             bvid = spec["input"]
@@ -112,10 +113,10 @@ class DownloadWorker(QThread):
             fid = spec["input"]
             # 先取一次收藏夹视频列表：既用于进度总数，也传回 service 复用，避免内部再拉取一次
             bvids = FavService(service.session).get_fav_bv(fid)
-            adapter = ProgressAdapter(len(bvids), f"收藏夹 {fid}", self)
+            adapter = self._make_adapter(threads, len(bvids), f"收藏夹 {fid}")
             mode = "audio" if mt == "audio" else "video"
             return service.download_fav(fid, save_dir, mode=mode, quality=quality,
-                                        progress=adapter, bvids=bvids)
+                                        progress=adapter, bvids=bvids, threads=threads)
 
         if src == "season":
             kind, val, mid = spec["input"]
@@ -128,22 +129,30 @@ class DownloadWorker(QThread):
             if season is None or not season.episodes:
                 raise ValueError("无法定位到合集，请确认参数正确")
             file_count = sum(len(ep.pages) if ep.is_multi_page else 1 for ep in season.episodes)
-            adapter = ProgressAdapter(file_count, f"合集「{season.title}」", self)
+            adapter = self._make_adapter(threads, file_count, f"合集「{season.title}」")
             return service.download_season(
                 bvid=bvid, dir=save_dir, season_id=season_id, mid=mid or 0,
                 quality=quality, media_type=media_type, progress=adapter, season=season,
+                threads=threads,
             )
 
         if src == "up":
             mid = spec["input"]
             # 先取一次 UP 主视频列表：既用于进度总数，也传回 service 复用，避免内部再翻页一次
             bvids = service.list_up_videos(mid)
-            adapter = ProgressAdapter(len(bvids), f"UP主 {mid}", self)
+            adapter = self._make_adapter(threads, len(bvids), f"UP主 {mid}")
             mode = "audio" if mt == "audio" else "video"
             return service.download_up(mid, save_dir, mode=mode, quality=quality,
-                                       progress=adapter, bvids=bvids)
+                                       progress=adapter, bvids=bvids, threads=threads)
 
         raise ValueError(f"未知下载来源：{src}")
+
+    def _make_adapter(self, threads, n, label):
+        """并发（threads>1）时用线程安全的 ParallelProgressAdapter，否则用普通 ProgressAdapter。"""
+        if threads > 1:
+            from frontend.pyside6.workers.progress_adapter import ParallelProgressAdapter
+            return ParallelProgressAdapter(n, label, self)
+        return ProgressAdapter(n, label, self)
 
     def _summary(self, results) -> str:
         if results is None:

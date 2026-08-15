@@ -16,6 +16,7 @@
 """
 
 from typing import Callable, List, Optional
+import threading
 
 from src.models.download_model import VideoQuality
 
@@ -152,3 +153,137 @@ class BatchProgress:
     def iter_count(self) -> range:
         """返回 (1..n) 的序号，供外层遍历。"""
         return range(1, self.n + 1)
+
+
+class ParallelBatchProgress:
+    """线程安全的并发下载进度：多线程各自持有「当前文件」状态，字节进度跨线程聚合。
+
+    与 `BatchProgress` 契约一致（start/set_quality/add/update/status/finish/
+    make_stream_callback/iter_count），并发下多个线程调用互不干扰；
+    `current_done`/`current_index` 等仅代表聚合视图。display=True 时 stdout 会交错，
+    GUI 场景通常 display=False 并经前端适配器转发 Qt 信号。
+    """
+
+    def __init__(self, n: int = 1, label: str = "下载", display: bool = False):
+        self.n = max(n, 1)
+        self.label = label
+        self.display = display
+        self.current_index = 0
+        self.current_name = ""
+        self.current_quality: Optional[VideoQuality] = None
+        self.current_done = 0
+        self._lock = threading.Lock()
+        self._states: dict = {}     # thread ident -> _ThreadFile
+        self._mono = 0              # 文件序号（跨线程自增）
+        self._done_done = 0         # 已完成文件的已下载字节
+        self._done_total = 0        # 已完成文件的已知总大小
+        self._stream_totals: List[int] = []  # 聚合视图：各活跃线程已知总大小
+
+    def start(self, index: int, name: str) -> None:
+        with self._lock:
+            self._mono += 1
+            self._states[threading.get_ident()] = _ThreadFile(name, self._mono)
+            self.current_index = index
+            self.current_name = name
+        if self.display:
+            print(f"\n[{index}/{self.n}] [{name}]: 准备下载")
+
+    def set_quality(self, quality: VideoQuality) -> None:
+        with self._lock:
+            st = self._states[threading.get_ident()]
+            st.quality = quality
+            self.current_quality = quality
+
+    def add(self, delta: int, total: Optional[int], stream_id: int = 0) -> None:
+        with self._lock:
+            st = self._states[threading.get_ident()]
+            st.done += delta
+            if total:
+                while len(st.totals) <= stream_id:
+                    st.totals.append(0)
+                st.totals[stream_id] = total
+            self._aggregate_locked()
+            self._render_locked()
+
+    def update(self, downloaded: int, total: Optional[int]) -> None:
+        with self._lock:
+            st = self._states[threading.get_ident()]
+            st.done = downloaded
+            if total:
+                st.totals = [total]
+            self._aggregate_locked()
+            self._render_locked()
+
+    def status(self, message: str) -> None:
+        if self.display:
+            print(f"\r{self._header()}: {message}", flush=True)
+
+    def finish(self) -> None:
+        with self._lock:
+            st = self._states.pop(threading.get_ident(), None)
+            if st is None:
+                return
+            self._done_done += st.done
+            self._done_total += st.grand_total()
+            self._aggregate_locked()
+            self._render_locked(final=True)
+
+    def make_stream_callback(self) -> StreamProgressCallback:
+        return self.update
+
+    def iter_count(self) -> range:
+        return range(1, self.n + 1)
+
+    # ---- 聚合与渲染 ----
+
+    def _aggregate_locked(self) -> None:
+        done = self._done_done
+        totals: List[int] = []
+        for st in self._states.values():
+            done += st.done
+            totals.extend(t for t in st.totals if t)
+        self._stream_totals = totals
+        self.current_done = done
+
+    def _grand_total(self) -> Optional[int]:
+        active = sum(self._stream_totals) if self._stream_totals else 0
+        return self._done_total + active if (active or self._done_total) else None
+
+    def _header(self) -> str:
+        parts = f"[{self.current_index}/{self.n}] [{self.current_name}]"
+        if self.current_quality is not None:
+            parts += f" [{self.current_quality.display_name}]"
+        return parts
+
+    def _render_locked(self, final: bool = False) -> None:
+        if not self.display:
+            return
+        done_mb = self.current_done / (1024 * 1024)
+        grand = self._grand_total()
+        if grand:
+            total_mb = grand / (1024 * 1024)
+            pct = min(self.current_done / grand * 100, 100.0)
+            line = f"{self._header()}: {done_mb:.1f}/{total_mb:.1f}MB ({pct:.1f}%)"
+        else:
+            line = f"{self._header()}: {done_mb:.1f}/{done_mb:.1f}MB (--%)"
+        if final:
+            print(f"\r{line}")
+        else:
+            print(f"\r{line}", end="", flush=True)
+
+
+class _ThreadFile:
+    """单个线程的「当前文件」进度状态（ParallelBatchProgress 内部使用）。"""
+
+    __slots__ = ("name", "seq", "done", "totals", "quality")
+
+    def __init__(self, name: str, seq: int):
+        self.name = name
+        self.seq = seq
+        self.done = 0
+        self.totals: List[int] = []
+        self.quality: Optional[VideoQuality] = None
+
+    def grand_total(self) -> int:
+        totals = [t for t in self.totals if t]
+        return sum(totals) if totals else 0

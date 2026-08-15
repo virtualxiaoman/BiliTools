@@ -40,6 +40,8 @@ class LoginCard(QWidget):
         self.mid_label.setObjectName("Dim")
         self.btn_refresh = QPushButton("刷新")
         self.btn_refresh.setFixedWidth(56)
+        self.btn_switch = QPushButton("切换")
+        self.btn_switch.setFixedWidth(56)
 
         info = QVBoxLayout()
         info.setSpacing(2)
@@ -47,12 +49,26 @@ class LoginCard(QWidget):
         info.addWidget(self.mid_label)
         info.addStretch(1)
 
+        # 右侧竖排：刷新在上、切换在下
+        side = QVBoxLayout()
+        side.setSpacing(6)
+        side.addWidget(self.btn_refresh)
+        side.addWidget(self.btn_switch)
+        side.addStretch(1)
+
         lay.addWidget(self.avatar)
         lay.addLayout(info, 1)
-        lay.addWidget(self.btn_refresh)
+        lay.addLayout(side)
 
         self.btn_refresh.clicked.connect(self.refresh)
+        self.btn_switch.clicked.connect(self._open_switch_dialog)
         app_signals.login_changed.connect(self._render)
+
+    def _open_switch_dialog(self):
+        """打开账号切换弹窗（列出所有账号，单击切换、右键管理）。"""
+        from frontend.pyside6.widgets.account_switch_dialog import AccountSwitchDialog
+
+        AccountSwitchDialog(self).exec()
 
     def refresh(self):
         query_login_async(lambda user: app_signals.login_changed.emit(user))

@@ -6,33 +6,48 @@
 - 扫码登录流程（qr_login/generate_qr）无需预置 cookie 文件即可启动。
 """
 
+import pytest
+
 from src.api import BiliSession
-from src.config import cookie as cookie_mod
+from src.config import path as path_mod
+from src.config.cookie import BiliCookies
 from src.models.login_model import LoginUser
 from src.services.login import LoginService
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cookie():
+    """每个用例复位全局 cookie override 并清缓存，避免污染后续用例。"""
+    path_mod.set_cookie_dir(None)
+    path_mod.set_cookie_path(None)
+    BiliCookies.clear_cache()
+    yield
+    path_mod.set_cookie_dir(None)
+    path_mod.set_cookie_path(None)
+    BiliCookies.clear_cache()
 
 
 def _no_cookie_path(tmp_path):
     return tmp_path / "no-such-cookie.txt"
 
 
-def test_session_construct_without_cookie(tmp_path, monkeypatch):
+def test_session_construct_without_cookie(tmp_path):
     """根因修复：cookie 文件缺失时 BiliSession 构造为匿名会话，不抛异常。"""
-    monkeypatch.setattr(cookie_mod, "DEFAULT_COOKIE_PATH", _no_cookie_path(tmp_path))
+    path_mod.set_cookie_path(_no_cookie_path(tmp_path))
     session = BiliSession()
     assert session.cookie.has_valid_session is False
 
 
-def test_construct_without_cookie(tmp_path, monkeypatch):
-    monkeypatch.setattr(cookie_mod, "DEFAULT_COOKIE_PATH", _no_cookie_path(tmp_path))
+def test_construct_without_cookie(tmp_path):
+    path_mod.set_cookie_path(_no_cookie_path(tmp_path))
     service = LoginService()  # 不应抛异常
     assert service.session is not None
     assert service.session.cookie.has_valid_session is False
 
 
-def test_get_login_state_without_cookie(tmp_path, monkeypatch):
+def test_get_login_state_without_cookie(tmp_path):
     """无本地 cookie：返回未登录 LoginUser，不发网络请求、不抛异常。"""
-    monkeypatch.setattr(cookie_mod, "DEFAULT_COOKIE_PATH", _no_cookie_path(tmp_path))
+    path_mod.set_cookie_path(_no_cookie_path(tmp_path))
     user = LoginService().get_login_state()
     assert isinstance(user, LoginUser)
     assert user.is_login is False

@@ -4,7 +4,8 @@ import sys
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from src.config.path import ASSETS_DIR
+from src.config.path import ASSETS_DIR, set_cookie_dir
+from src.services.account import AccountManager
 
 from frontend.pyside6.fonts import app_font, load_fonts, set_zoom
 from frontend.pyside6.logs import install_exception_hooks, install_logging
@@ -35,6 +36,9 @@ def main() -> int:
     load_fonts()
 
     settings = Settings()
+    # 应用全局 cookie 目录设置与当前账号（必须先于 ensure_cookie_file，避免在默认目录建空文件）
+    set_cookie_dir(settings.get("cookie_dir"))
+    AccountManager().apply_startup()
     # 先读保存的缩放系数，再设默认字体与 QSS（theme_mgr.apply 会带上缩放）
     set_zoom(settings.get("zoom", 1.0))
     app.setFont(app_font())

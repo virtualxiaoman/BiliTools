@@ -11,12 +11,12 @@ from src.util import downloader as dl
 
 @pytest.fixture(autouse=True)
 def reset_ffmpeg_cache():
-    """每个用例前重置 ffmpeg 可用性缓存，避免污染。"""
+    """每个用例前重置合成后端探测缓存，避免污染。"""
     dl._ffmpeg_checked = False
-    dl._ffmpeg_ok = False
+    dl._ffmpeg_path = None
     yield
     dl._ffmpeg_checked = False
-    dl._ffmpeg_ok = False
+    dl._ffmpeg_path = None
 
 
 def test_ffmpeg_available_cached():
@@ -27,14 +27,40 @@ def test_ffmpeg_available_cached():
 
 
 def test_ffmpeg_not_available():
-    with patch("shutil.which", return_value=None):
+    with patch("shutil.which", return_value=None), patch.object(dl, "_imageio_ffmpeg_path", return_value=None):
         assert dl.ffmpeg_available() is False
 
 
+def test_ffmpeg_falls_back_to_imageio():
+    """系统无 ffmpeg 时，应回退到 imageio-ffmpeg 内置的二进制。"""
+    with patch("shutil.which", return_value=None), patch.object(
+        dl, "_imageio_ffmpeg_path", return_value=r"C:\imageio\ffmpeg.exe"
+    ):
+        assert dl.ffmpeg_available() is True
+
+
 def test_merge_missing_ffmpeg():
-    with patch("shutil.which", return_value=None):
+    with patch("shutil.which", return_value=None), patch.object(dl, "_imageio_ffmpeg_path", return_value=None):
         with pytest.raises(FFmpegNotFoundError):
             dl.merge_video_audio(Path("a"), Path("b"), Path("c"))
+
+
+def test_merge_uses_imageio_binary(tmp_path):
+    """系统无 ffmpeg 但装了 imageio-ffmpeg 时，用内置二进制执行相同的合成命令。"""
+    video = tmp_path / "v.mp4"
+    audio = tmp_path / "a.m4a"
+    video.write_bytes(b"v")
+    audio.write_bytes(b"a")
+    with patch("shutil.which", return_value=None), patch.object(
+        dl, "_imageio_ffmpeg_path", return_value=r"C:\imageio\ffmpeg.exe"
+    ), patch(
+        "subprocess.run",
+        return_value=__import__("subprocess").CompletedProcess(args=[], returncode=0),
+    ) as mock_run:
+        dl.merge_video_audio(video, audio, tmp_path / "out.mp4")
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == r"C:\imageio\ffmpeg.exe"
+        assert "-c" in cmd and "copy" in cmd
 
 
 def test_merge_missing_input(tmp_path):

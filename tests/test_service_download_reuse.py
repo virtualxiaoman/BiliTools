@@ -146,3 +146,87 @@ def test_download_season_reuses_external_season(tmp_path):
 
     svc.download_season(season_id=8683221, dir=tmp_path)
     assert calls["fetch_season"] == 1  # 未传时保持原有行为
+
+
+# ---- 并发下载（threads>1）----
+
+
+class _Episode3:
+    is_multi_page = False
+
+    def __init__(self, bvid):
+        self.bvid = bvid
+        self.title = f"稿件{bvid}"
+        self.pages = [_Page()]
+
+
+class _Season3:
+    id = 1
+    title = "测试合集"
+    episodes = [_Episode3("BV1"), _Episode3("BV2"), _Episode3("BV3")]
+
+
+def test_download_season_parallel_uses_multiple_threads(tmp_path):
+    """threads>1 时应并发下载稿件，结果按输入顺序汇总。"""
+    import threading
+    import time
+
+    svc = _svc(tmp_path)
+    svc.fetch_season = lambda bvid=None, season_id=None, mid=0: _Season3()
+    svc._report_bvid_download = lambda bvid, new_results, dc, i, total: dc  # 跳过节流
+
+    threads_seen = set()
+    lock = threading.Lock()
+
+    def fake_episode(ep, save_dir, **k):
+        with lock:
+            threads_seen.add(threading.get_ident())
+        time.sleep(0.05)  # 制造并发窗口
+        return ([ep.bvid], 1)
+
+    svc._download_episode = fake_episode
+
+    results = svc.download_season(season_id=1, dir=tmp_path, threads=2)
+    assert results == ["BV1", "BV2", "BV3"]  # 顺序汇总
+    assert len(threads_seen) >= 2  # 确实起了多个线程并发
+
+
+def test_download_fav_parallel_threads(tmp_path):
+    """threads>1 时收藏夹也走并发路径。"""
+    import threading
+    import time
+
+    svc = _svc(tmp_path)
+    svc.download_all_pages = lambda *a, **k: ["OK"]
+    svc._report_bvid_download = lambda bvid, new_results, dc, i, total: dc
+
+    threads_seen = set()
+    lock = threading.Lock()
+
+    def fake_episode(bvid, save_dir, **k):
+        with lock:
+            threads_seen.add(threading.get_ident())
+        time.sleep(0.05)
+        return ["OK"]
+
+    # 直接替换 download_all_pages，观察并发
+    svc.download_all_pages = fake_episode
+
+    class FakeFav:
+        def __init__(self, session):
+            pass
+
+        def get_fav_info(self, fid):
+            return _FavInfo()
+
+        def get_fav_bv(self, fid):
+            return ["BV1", "BV2", "BV3"]
+
+    monkeypatch = __import__("pytest").MonkeyPatch()
+    try:
+        monkeypatch.setattr("src.services.fav.FavService", FakeFav)
+        results = svc.download_fav(1, tmp_path, mode="video", threads=2)
+    finally:
+        monkeypatch.undo()
+    assert results == ["OK", "OK", "OK"]
+    assert len(threads_seen) >= 2

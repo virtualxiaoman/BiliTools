@@ -2,13 +2,13 @@
 Cookie 模型：读取、解析、缓存。
 
 取代旧 `src/config.py` 中的 `BiliCookies`：
-- 解析逻辑统一于此（SESSDATA / bili_jct 提取），不再散落两处；
+- 解析逻辑统一于此（SESSDATA / bili_jct / DedeUserID 提取），不再散落两处；
 - 进程内缓存：同一路径的 cookie 只读一次、解析一次，重新登录后调用 `refresh()` 更新；
 - 不再使用 `exit(1)` 杀进程，改为抛出异常由上层决定处理方式。
 
 [注意]
-cookie 的路径全局统一管理，默认读取 `DEFAULT_COOKIE_PATH`，
-除非显式传入自定义路径，否则不需要也不应到处传 cookie 路径。
+cookie 的路径全局统一管理，默认读取 `get_cookie_path()`（多账号体系下即当前账号的
+cookie 文件），除非显式传入自定义路径，否则不需要也不应到处传 cookie 路径。
 """
 
 from dataclasses import dataclass, field
@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import ClassVar, Optional
 
 from src.config.constants import UserAgent
-from src.config.path import DEFAULT_COOKIE_PATH
+from src.config.path import get_cookie_path
 
 
 @dataclass
@@ -28,11 +28,13 @@ class BiliCookies:
         cookie: 原始 cookie 字符串（分号分隔的键值对）
         SESSDATA: 登录凭证，鉴权核心字段
         bili_jct: CSRF Token，写操作（评论/私信/投币等）必带
+        mid: 用户 uid（DedeUserID）
     """
 
     cookie: str = field(default="")
     SESSDATA: Optional[str] = field(default=None, init=False)
     bili_jct: Optional[str] = field(default=None, init=False)
+    mid: Optional[int] = field(default=None, init=False)
 
     # ---- 进程内缓存：同一路径只解析一次 ----
     _cache: ClassVar[dict] = {}
@@ -41,9 +43,10 @@ class BiliCookies:
         self._parse()
 
     def _parse(self) -> None:
-        """从原始 cookie 中提取 SESSDATA 与 bili_jct（解析失败不抛异常，仅置为 None）。"""
+        """从原始 cookie 中提取 SESSDATA / bili_jct / DedeUserID（解析失败不抛异常，仅置为 None）。"""
         self.SESSDATA = self._get_field("SESSDATA")
         self.bili_jct = self._get_field("bili_jct")
+        self.mid = self._get_int_field("DedeUserID")
 
     def _get_field(self, key: str) -> Optional[str]:
         for part in self.cookie.split(";"):
@@ -51,6 +54,15 @@ class BiliCookies:
             if part.startswith(f"{key}="):
                 return part[len(key) + 1:]
         return None
+
+    def _get_int_field(self, key: str) -> Optional[int]:
+        value = self._get_field(key)
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     @property
     def has_valid_session(self) -> bool:
@@ -63,12 +75,12 @@ class BiliCookies:
     def from_file(cls, path: Optional[Path] = None):
         """从文件读取 cookie 并解析。同一路径的结果会在进程内缓存。
 
-        :param path: cookie 文件路径。默认为 None，使用全局统一的 DEFAULT_COOKIE_PATH
+        :param path: cookie 文件路径。默认为 None，使用全局生效的 get_cookie_path()
         :return: BiliCookies 实例
         :raises FileNotFoundError: cookie 文件不存在
         """
         if path is None:
-            path = DEFAULT_COOKIE_PATH
+            path = get_cookie_path()
         path = Path(path)
         if str(path) not in cls._cache:
             cls._cache[str(path)] = cls._read_file(path)
@@ -91,12 +103,17 @@ class BiliCookies:
     def refresh(cls, path: Optional[Path] = None):
         """强制重新读取指定路径的 cookie（覆盖缓存），供重新登录后调用。
 
-        :param path: cookie 文件路径。默认为 None，使用全局统一的 DEFAULT_COOKIE_PATH
+        :param path: cookie 文件路径。默认为 None，使用全局生效的 get_cookie_path()
         """
         if path is None:
-            path = DEFAULT_COOKIE_PATH
+            path = get_cookie_path()
         cls._cache.pop(str(Path(path)), None)
         return cls.from_file(path)
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """清空进程内 cookie 缓存（账号切换/删除后调用，避免旧路径缓存残留）。"""
+        cls._cache.clear()
 
     # ---- 请求头 ----
 

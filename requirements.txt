@@ -14,11 +14,13 @@ requests==2.32.5
 six==1.17.0
 tzdata==2025.3
 urllib3==2.6.3
+imageio-ffmpeg==0.6.0            # wheel 内置静态 ffmpeg 二进制：无系统 ffmpeg 时用于音视频合成回退
 PySide6==6.11.1            # 桌面前端 GUI（python -m frontend.pyside6）
 
 # Runtime note:
-#   Audio/video merging requires ffmpeg (invoked via subprocess), install it
-#   separately and add to PATH - cannot be installed via pip.
+#   Audio/video merging uses ffmpeg. Priority: system ffmpeg (invoked via
+#   subprocess) → the static ffmpeg bundled by imageio-ffmpeg (installed above).
+#   So ffmpeg no longer needs to be installed manually.
 #   Reference: BV1qw4m1d7hx
 
 # Packaging note (optional, only needed to build the desktop exe):

@@ -25,31 +25,37 @@ _HINTS = [
 ]
 
 
-class PNumberEdit(QLineEdit):
-    """P 序号输入框：无上下箭头（QLineEdit），键盘可用上下方向键改数字，占位提示"P几"。
+class NumberEdit(QLineEdit):
+    """无上下箭头的数字输入框（QLineEdit + 整型校验），键盘可用上下方向键调整数字。
 
-    QSpinBox 的上下箭头与占位提示不可兼得，故用 QLineEdit + 整型校验实现：
+    QSpinBox 的上下箭头与占位提示不可兼得，故用 QLineEdit 实现：
     - 无箭头按钮；
-    - 鼠标/键盘直接输入数字（QIntValidator 限 1~999）；
+    - 鼠标/键盘直接输入数字（QIntValidator 限 minimum~maximum）；
     - 键盘 ↑/↓ 上下调整（与 QSpinBox 行为一致）。
+
+    :param minimum: 允许的最小值
+    :param maximum: 允许的最大值
+    :param placeholder: 占位提示文本
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, minimum: int = 1, maximum: int = 999, placeholder: str = "P几", parent=None):
         super().__init__(parent)
-        self.setPlaceholderText("P几")
-        self.setValidator(QIntValidator(1, 999, self))
+        self.minimum = minimum
+        self.maximum = maximum
+        self.setPlaceholderText(placeholder)
+        self.setValidator(QIntValidator(minimum, maximum, self))
         self.setMaximumWidth(56)
-        self.setText("1")
+        self.setText(str(minimum))
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def value(self) -> int:
         try:
-            return max(1, min(999, int(self.text() or "1")))
+            return max(self.minimum, min(self.maximum, int(self.text() or str(self.minimum))))
         except ValueError:
-            return 1
+            return self.minimum
 
     def setValue(self, v: int) -> None:
-        self.setText(str(max(1, min(999, int(v)))))
+        self.setText(str(max(self.minimum, min(self.maximum, int(v)))))
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down):
@@ -110,7 +116,7 @@ class DownloadPanel(QWidget):
         self.range_grp = QButtonGroup(self)
         self.range_grp.addButton(self.rb_all)
         self.range_grp.addButton(self.rb_single)
-        self.spin_page = PNumberEdit()
+        self.spin_page = NumberEdit()
         rr.addWidget(QLabel("范围："))
         rr.addWidget(self.rb_all)
         rr.addWidget(self.rb_single)
@@ -145,6 +151,19 @@ class DownloadPanel(QWidget):
         q_row.addWidget(QLabel("优先清晰度："))
         q_row.addWidget(self.quality_combo, 1)
         outer.addLayout(q_row)
+
+        # ---- 并发线程数（多视频同时下载，1~5） ----
+        th_row = QHBoxLayout()
+        self.threads_edit = NumberEdit(1, 5, "1~5")
+        self.threads_edit.setValue(int(self.settings.get("download_threads", 2)))
+        self.threads_edit.setToolTip(
+            "同时下载多个视频的线程数（1~5）；触发风控时所有线程会在下次获取信息前暂停")
+        self.threads_edit.editingFinished.connect(
+            lambda: self.settings.set("download_threads", self.threads_edit.value()))
+        th_row.addWidget(QLabel("并发线程："))
+        th_row.addWidget(self.threads_edit)
+        th_row.addStretch(1)
+        outer.addLayout(th_row)
 
         # ---- 下载按钮 ----
         self.btn_download = QPushButton("下载")
@@ -233,22 +252,22 @@ class DownloadPanel(QWidget):
                 desc = f"视频 {bvid}" + (f"（P{page}）" if scope == "single" else "（全部分P）")
                 return {"source": "bv", "input": bvid, "scope": scope, "page": page,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "desc": desc}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": desc}
             if tab == 1:
                 fid = normalize_fav(raw)
                 return {"source": "fav", "input": fid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "desc": f"收藏夹 {fid}"}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": f"收藏夹 {fid}"}
             if tab == 2:
                 kind, val, mid = normalize_season(raw)
                 return {"source": "season", "input": (kind, val, mid), "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "desc": f"合集 {val}"}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": f"合集 {val}"}
             if tab == 3:
                 mid = normalize_mid(raw)
                 return {"source": "up", "input": mid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "desc": f"UP主 {mid}"}
+                        "save_dir": save_dir, "threads": self.threads_edit.value(), "desc": f"UP主 {mid}"}
         except NeedsUrlResolution:
             # 短链等本地解析不了的链接：先建 pending 任务，交给下载线程跟随跳转，
             # 避免在界面线程发 HTTP 请求卡住 UI
@@ -273,6 +292,7 @@ class DownloadPanel(QWidget):
             "media_type": media_type,
             "quality": quality,
             "save_dir": save_dir,
+            "threads": self.threads_edit.value(),
             "desc": f"{labels[tab]}（解析链接中…）",
         }
 
