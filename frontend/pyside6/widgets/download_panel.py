@@ -1,4 +1,4 @@
-"""左侧下载输入面板：四个来源页签 + 共用选项 + 下载按钮 + 任务进度区。"""
+"""左侧下载输入面板：多个来源页签 + 共用选项 + 下载按钮 + 任务进度区。"""
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, Qt
@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QPushButton, QRadioButton, QTabWidget, QVBoxLayout, QWidget,
 )
 
+from src.config.path import COLLECTION_OUTPUT_DIR
 from src.models.download_model import VideoQuality
 
 from frontend.pyside6.signals import LogCategory, app_signals
@@ -15,6 +16,7 @@ from frontend.pyside6.utils import (
     NeedsUrlResolution, extract_page_from_url, normalize_bvid, normalize_fav,
     normalize_mid, normalize_season,
 )
+from frontend.pyside6.widgets.dressup_panel import DressupPanel
 from frontend.pyside6.widgets.task_progress_panel import TaskProgressPanel
 
 _HINTS = [
@@ -22,6 +24,7 @@ _HINTS = [
     "支持 fid / 收藏夹链接",
     "支持 BV号(自动获取对应的合集) / sid / 合集链接",
     "支持 mid / 空间链接",
+    "关键词同时搜索表情包、收藏集与主题装扮；勾选后可批量下载",
 ]
 
 
@@ -80,11 +83,14 @@ class DownloadPanel(QWidget):
 
         # ---- 保存目录 ----
         dir_row = QHBoxLayout()
+        self.dir_label = QLabel("保存到")
         self.dir_edit = QLineEdit(settings.get("save_dir"))
-        btn_browse = QPushButton("浏览…")
-        dir_row.addWidget(QLabel("保存到"))
+        self._normal_save_dir = self.dir_edit.text()
+        self._collection_asset_active = False
+        self.btn_browse = QPushButton("浏览…")
+        dir_row.addWidget(self.dir_label)
         dir_row.addWidget(self.dir_edit, 1)
-        dir_row.addWidget(btn_browse)
+        dir_row.addWidget(self.btn_browse)
         outer.addLayout(dir_row)
 
         # ---- 来源页签 ----
@@ -97,13 +103,29 @@ class DownloadPanel(QWidget):
         self.input_season.setPlaceholderText("例如 BV1Q43w6QETb 或 sid=8683221")
         self.input_up = QLineEdit()
         self.input_up.setPlaceholderText("例如 249056021")
-        self._inputs = [self.input_bv, self.input_fav, self.input_season, self.input_up]
+        self._inputs = [
+            self.input_bv, self.input_fav, self.input_season, self.input_up,
+        ]
         for w, name in zip(self._inputs, ["视频BV", "收藏夹", "合集", "UP主"]):
             self.tabs.addTab(w, name)
+        self.dressup_panel = DressupPanel()
+        self.tabs.addTab(self.dressup_panel, "装扮")
         outer.addWidget(self.tabs)
         self.hint = QLabel(_HINTS[0])
         self.hint.setObjectName("Hint")
         outer.addWidget(self.hint)
+
+        # ---- 表情包命名（仅装扮页签显示） ----
+        self.emote_name_row = QWidget()
+        emote_name_layout = QHBoxLayout(self.emote_name_row)
+        emote_name_layout.setContentsMargins(0, 0, 0, 0)
+        self.emote_full_name_check = QCheckBox("使用表情全名")
+        self.emote_full_name_check.setToolTip(
+            "默认用 alias 中的简称；勾选后用接口 text 中的完整名称，例如“洛天依14周年·纯蓝幻乐 动态表情包_登场”")
+        emote_name_layout.addWidget(self.emote_full_name_check)
+        emote_name_layout.addStretch(1)
+        self.emote_name_row.setVisible(False)
+        outer.addWidget(self.emote_name_row)
 
         # ---- 范围（仅视频BV页签显示） ----
         self.range_row = QWidget()
@@ -125,7 +147,9 @@ class DownloadPanel(QWidget):
         outer.addWidget(self.range_row)
 
         # ---- 类型 ----
-        type_row = QHBoxLayout()
+        self.type_row = QWidget()
+        type_row = QHBoxLayout(self.type_row)
+        type_row.setContentsMargins(0, 0, 0, 0)
         self.rb_video = QRadioButton("视频")  # 视频即含声音，无需括号说明
         self.rb_audio = QRadioButton("仅音频")
         # 显式分组，保证「有且仅有一个」被选中
@@ -138,10 +162,12 @@ class DownloadPanel(QWidget):
         type_row.addWidget(self.rb_video)
         type_row.addWidget(self.rb_audio)
         type_row.addStretch(1)
-        outer.addLayout(type_row)
+        outer.addWidget(self.type_row)
 
         # ---- 清晰度 ----
-        q_row = QHBoxLayout()
+        self.quality_row = QWidget()
+        q_row = QHBoxLayout(self.quality_row)
+        q_row.setContentsMargins(0, 0, 0, 0)
         self.quality_combo = QComboBox()
         default_quality = getattr(VideoQuality, self.settings.get("quality", "HD4K"), VideoQuality.HD4K)
         for q in VideoQuality:
@@ -150,10 +176,12 @@ class DownloadPanel(QWidget):
         self.quality_combo.setCurrentIndex(idx if idx >= 0 else 0)
         q_row.addWidget(QLabel("优先清晰度："))
         q_row.addWidget(self.quality_combo, 1)
-        outer.addLayout(q_row)
+        outer.addWidget(self.quality_row)
 
         # ---- 并发线程数（多视频同时下载，1~5）+ 多账号分流 ----
-        th_row = QHBoxLayout()
+        self.threads_row = QWidget()
+        th_row = QHBoxLayout(self.threads_row)
+        th_row.setContentsMargins(0, 0, 0, 0)
         self.threads_edit = NumberEdit(1, 5, "1~5")
         self.threads_edit.setValue(int(self.settings.get("download_threads", 2)))
         self.threads_edit.setToolTip(
@@ -171,7 +199,7 @@ class DownloadPanel(QWidget):
         th_row.addSpacing(8)
         th_row.addWidget(self.distribute_check)
         th_row.addStretch(1)
-        outer.addLayout(th_row)
+        outer.addWidget(self.threads_row)
 
         # ---- 下载按钮 ----
         self.btn_download = QPushButton("下载")
@@ -190,7 +218,7 @@ class DownloadPanel(QWidget):
         self.btn_open_dir = QPushButton("打开输出文件夹")
         outer.addWidget(self.btn_open_dir)
 
-        btn_browse.clicked.connect(self._on_browse)
+        self.btn_browse.clicked.connect(self._on_browse)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.btn_download.clicked.connect(self._on_download)
         self.btn_open_dir.clicked.connect(self._on_open_output_dir)
@@ -213,13 +241,35 @@ class DownloadPanel(QWidget):
     # ---- 内部 ----
 
     def _on_tab_changed(self, idx):
+        is_dressup = idx == 4
         self.range_row.setVisible(idx == 0)  # 范围选项仅视频BV页签可用
+        self.type_row.setVisible(not is_dressup)
+        self.quality_row.setVisible(not is_dressup)
+        self.threads_row.setVisible(idx == 0 or is_dressup)
+        self.emote_name_row.setVisible(is_dressup)
+        self.btn_download.setText("下载选中" if is_dressup else "下载")
+        if is_dressup:
+            # 在固定目录页签间切换时，不要把 ``output/收藏集`` 误记为普通保存目录。
+            if not self._collection_asset_active:
+                self._normal_save_dir = self.dir_edit.text()
+            self._collection_asset_active = True
+            self.dir_label.setText("保存到（固定）")
+            self.dir_edit.setText(str(COLLECTION_OUTPUT_DIR))
+            self.dir_edit.setEnabled(False)
+            self.btn_browse.setEnabled(False)
+        else:
+            self._collection_asset_active = False
+            self.dir_label.setText("保存到")
+            self.dir_edit.setEnabled(True)
+            self.btn_browse.setEnabled(True)
+            self.dir_edit.setText(self._normal_save_dir or self.settings.get("save_dir"))
         self.hint.setText(_HINTS[idx])
 
     def _on_browse(self):
         folder = QFileDialog.getExistingDirectory(self, "选择保存目录", self.dir_edit.text())
         if folder:
             self.dir_edit.setText(folder)
+            self._normal_save_dir = folder
 
     def _on_open_output_dir(self):
         folder = Path(self.dir_edit.text().strip() or self.settings.get("save_dir"))
@@ -243,6 +293,26 @@ class DownloadPanel(QWidget):
 
     def _build_spec(self):
         tab = self.tabs.currentIndex()
+        if tab == 4:
+            items = self.dressup_panel.selected_items()
+            if not items:
+                app_signals.log_message.emit(LogCategory.WARN, "请先勾选要下载的装扮/表情包")
+                return None
+            names = "、".join(str(item.get("name") or "") for item in items[:3])
+            suffix = f" 等 {len(items)} 项" if len(items) > 3 else ""
+            return {
+                "source": "dressup",
+                "input": items,
+                "scope": "all",
+                "page": 1,
+                "media_type": "dressup",
+                "quality": self.quality_combo.currentData() or VideoQuality.HD4K,
+                "save_dir": str(COLLECTION_OUTPUT_DIR),
+                "threads": self.threads_edit.value(),
+                "distribute_accounts": self.distribute_check.isChecked(),
+                "emote_full_name": self.emote_full_name_check.isChecked(),
+                "desc": f"装扮 {names}{suffix}",
+            }
         raw = self._current_input().text().strip()
         if not raw:
             app_signals.log_message.emit(LogCategory.WARN, "请输入下载内容")
@@ -304,7 +374,8 @@ class DownloadPanel(QWidget):
             "media_type": media_type,
             "quality": quality,
             "save_dir": save_dir,
-            "threads": self.threads_edit.value(), "distribute_accounts": self.distribute_check.isChecked(),
+            "threads": self.threads_edit.value(),
+            "distribute_accounts": self.distribute_check.isChecked(),
             "desc": f"{labels[tab]}（解析链接中…）",
         }
 

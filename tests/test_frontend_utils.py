@@ -7,7 +7,7 @@ import pytest
 
 from frontend.pyside6.utils import (
     NeedsUrlResolution, extract_page_from_url, normalize_bvid, normalize_fav,
-    normalize_mid, normalize_season, resolve_input,
+    normalize_emote_ids, normalize_mid, normalize_season, resolve_input,
 )
 
 
@@ -162,3 +162,14 @@ def test_extract_page_from_url():
         "https://www.bilibili.com/video/BV1ws411v7zE?spm_id_from=333&vd_source=x&p=2") == 2
     assert extract_page_from_url("https://www.bilibili.com/video/BV1ws411v7zE") is None
     assert extract_page_from_url("BV1ws411v7zE") is None
+
+def test_normalize_emote_ids_accepts_comma_separated_ids_and_api_url():
+    assert normalize_emote_ids("10239, 10238,10239") == (10239, 10238)
+    assert normalize_emote_ids(
+        "https://api.bilibili.com/x/emote/package?business=reply&ids=10239,10238"
+    ) == (10239, 10238)
+
+
+def test_normalize_emote_ids_rejects_invalid_values():
+    with pytest.raises(ValueError):
+        normalize_emote_ids("10239,not-an-id")

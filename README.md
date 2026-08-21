@@ -5,7 +5,7 @@ py 操控 bilibili 的小工具（后端 SDK）。提供统一的数据模型与
 ## 快速上手
 
 ```python
-from src.services import VideoService
+from src.services import DressupService, EmoteService, GarbService, VideoService
 from src.models import VideoQuality
 
 # 1. 扫码登录（只需执行一次，cookie 保存到 assets/cookie/qr_login.txt）
@@ -47,13 +47,30 @@ service.download_fav(3953119978, mode="audio")            # 仅下载音频到 o
 # 8. UP主空间下载：全部视频或仅音频，传 mid
 service.download_up(249056021)
 service.download_up(249056021, mode="audio")              # 仅下载音频到 output/video/<UP主昵称>/
+
+# 9. 收藏表情包下载：支持单个或多个 package id；动态表情优先下载 GIF
+EmoteService().download_packages("10239")
+EmoteService().download_packages("10239,10238")             # 保存到 output/收藏集/<收藏集名>/<表情包类型>/
+EmoteService().download_packages("10239", use_full_name=True)  # 文件名使用完整 text（默认使用 alias 简称）
+
+# 10. 收藏集 / 装扮下载：按名称搜索，同名结果优先；资源统一保存到 output/收藏集/
+GarbService().download_by_keyword("初音未来")
+GarbService().download_by_keyword("初音未来", resource_types=["emoji_package", "space_bg"])
+
+# 11. 装扮统一搜索：一次同时搜索表情包 / 收藏集 / 主题装扮，勾选后批量并发下载
+items = DressupService().search("洛天依")
+print([item.display_name for item in items])
+DressupService().download_items([item.as_dict() for item in items], threads=2)
 ```
 
 收藏夹视频列表获取：`FavService().get_fav_bv(media_id)`、`get_fav_info(media_id)`。
 UP主视频列表获取：`service.list_up_videos(mid)`。
+表情包详情获取：`EmoteService().get_packages("10239,10238")`。
+收藏集/装扮可通过 `GarbService().search_items("关键词")` 搜索；收藏集下载封面、卡图和卡片视频，装扮按素材类别保存。
+GUI 的「装扮」页签默认按关键词同时搜索三类内容，勾选结果后可批量下载，并支持并发线程与多账号分流。
 
-> 注：后端只接收规范 id（BV号 / media_id / mid / sid）；BV号、av号、完整链接、b23.tv
-> 短链的解析统一由 GUI 前端完成（`frontend/pyside6/utils.py`）。
+> 注：视频、收藏夹、合集、UP 主、表情包后端接口接收规范 id（BV号 / media_id / mid / sid / package id）；
+> 收藏集/装扮接口接收名称关键词。BV号、av号、完整链接、b23.tv 短链的解析统一由 GUI 前端完成（`frontend/pyside6/utils.py`）。
 
 更多示例见 `examples/quick_start.py`，命令行入口见 `main.py`。
 
@@ -69,6 +86,9 @@ UP主视频列表获取：`service.list_up_videos(mid)`。
 | 私信 | `MessageService` | 发送私信 |
 | 排行 | `RankService` | 综合热门 / 排行榜 |
 | 收藏 | `FavService` | 收藏夹视频列表 / 收藏夹全部视频·音频下载 |
+| 表情包 | `EmoteService` | 按一个或多个 package id 获取并下载全部表情（动态表情优先 GIF） |
+| 收藏集/装扮 | `GarbService` | 按名称搜索并下载收藏集卡片或主题装扮素材（含表情包、空间海报等） |
+| 装扮统一 | `DressupService` | 一次搜索表情包/收藏集/装扮，勾选后并发批量下载（可多账号分流） |
 | 合集 | `ArchiveService` | 视频合集列表 |
 
 ## 项目结构
@@ -85,7 +105,7 @@ BiliTools/
 │   ├── urls/              # API URL 统一管理
 │   └── util/              # BV/AV转换、文件名清洗、下载工具
 ├── assets/cookie/         # 扫码登录后的 cookie
-├── output/                # 下载输出（video/ 视频，history/ 表格）
+├── output/                # 下载输出（video/ 视频，收藏集/ 表情包/装扮素材，history/ 表格）
 └── tests/                 # 测试
 ```
 

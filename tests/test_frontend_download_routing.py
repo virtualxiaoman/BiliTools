@@ -1,6 +1,6 @@
 """前端下载路由接线测试（无网络、无 Qt 事件循环）。
 
-验证 DownloadWorker._execute 把四种来源正确路由到 SDK 方法，
+验证 DownloadWorker._execute 把各种来源正确路由到 SDK 方法，
 并始终传入 ProgressAdapter（进度信号来源）。
 """
 import sys
@@ -39,9 +39,6 @@ class _Season:
 class _FakeService:
     session = object()
 
-    def _prog(self, value):
-        return type(value).__name__
-
     def fetch_season(self, bvid=None, season_id=None, mid=0):
         CALLS.append(("fetch_season", bvid, season_id, mid))
         return _Season()
@@ -78,6 +75,41 @@ class _FakeFavService:
     def get_fav_bv(self, fid):
         CALLS.append(("get_fav_bv", fid))
         return ["BV1", "BV2", "BV3"]
+
+
+class _FakeEmoteService:
+    def __init__(self, session):
+        self.session = session
+
+    def count_emotes(self, package_ids):
+        CALLS.append(("count_emotes", package_ids))
+        return ([{"id": package_ids[0], "emote": [{}]}], 1)
+
+    def download_packages(self, package_ids, directory, **kw):
+        CALLS.append(("download_packages", package_ids, directory, kw))
+        return []
+
+
+class _FakeGarbService:
+    def __init__(self, session):
+        self.session = session
+
+    def prepare_download(self, keyword):
+        CALLS.append(("prepare_garb", keyword))
+        return ({"name": "测试装扮", "part_id": 1}, {"suit_items": {}}, 3)
+
+    def download_item(self, item, directory, **kw):
+        CALLS.append(("download_garb", item, directory, kw))
+        return []
+
+
+class _FakeDressupService:
+    def __init__(self, session):
+        self.session = session
+
+    def download_items(self, items, directory, **kw):
+        CALLS.append(("download_dressup", items, directory, kw))
+        return []
 
 
 @pytest.fixture(autouse=True)
@@ -119,6 +151,17 @@ def test_fav(monkeypatch):
     assert kw["progress"].__class__.__name__ == "ProgressAdapter"
 
 
+def test_emote(monkeypatch):
+    import frontend.pyside6.workers.download_worker as dw
+    monkeypatch.setattr(dw, "EmoteService", _FakeEmoteService)
+    _worker("emote", (10239, 10238), emote_full_name=True)._execute(_FakeService())
+    assert ("count_emotes", (10239, 10238)) in CALLS
+    (_, package_ids, _dir, kw), = [c for c in CALLS if c[0] == "download_packages"]
+    assert package_ids == (10239, 10238)
+    assert kw["progress"].__class__.__name__ == "ProgressAdapter"
+    assert kw["use_full_name"] is True
+
+
 def test_up():
     _worker("up", 249056021)._execute(_FakeService())
     assert any(c[0] == "list_up_videos" for c in CALLS)
@@ -130,3 +173,33 @@ def test_bv_all_pages():
     _worker("bv", "BV1xxx", scope="all")._execute(_FakeService())
     (_, bvid, _dir, kw), = [c for c in CALLS if c[0] == "download_all_pages"]
     assert kw["progress"].__class__.__name__ == "ProgressAdapter"
+
+
+def test_garb(monkeypatch):
+    import frontend.pyside6.workers.download_worker as dw
+    monkeypatch.setattr(dw, "GarbService", _FakeGarbService)
+    _worker("garb", "测试装扮", media_type="garb")._execute(_FakeService())
+    assert ("prepare_garb", "测试装扮") in CALLS
+    (_, item, _dir, kw), = [c for c in CALLS if c[0] == "download_garb"]
+    assert item["name"] == "测试装扮"
+    assert kw["detail"] == {"suit_items": {}}
+    assert kw["progress"].__class__.__name__ == "ProgressAdapter"
+
+
+def test_dressup_batch(monkeypatch):
+    import frontend.pyside6.workers.download_worker as dw
+    monkeypatch.setattr(dw, "DressupService", _FakeDressupService)
+    items = [
+        {"kind": "emoji", "name": "表情包A", "payload": {"id": 1}},
+        {"kind": "suit", "name": "装扮B", "payload": {"item_id": 2}},
+    ]
+    _worker(
+        "dressup", items, media_type="dressup", threads=2,
+        distribute_accounts=False, emote_full_name=True,
+    )._execute(_FakeService())
+    (_, got_items, _dir, kw), = [c for c in CALLS if c[0] == "download_dressup"]
+    assert got_items == items
+    assert kw["threads"] == 2
+    assert kw["account_sessions"] is None
+    assert kw["progress"].__class__.__name__ == "ParallelProgressAdapter"
+    assert kw["use_full_name"] is True

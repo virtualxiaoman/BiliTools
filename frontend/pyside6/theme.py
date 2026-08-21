@@ -205,6 +205,23 @@ QRadioButton::indicator {{
 QRadioButton::indicator:hover {{ border-color: {p['accent']}; }}
 QRadioButton::indicator:checked {{ border-color: {p['accent']}; background-color: {p['accent']}; }}
 
+QCheckBox {{ color: {p['text']}; background: transparent; spacing: 8px; }}
+QCheckBox::indicator {{
+    width: 16px; height: 16px; border-radius: 4px;
+    border: 2px solid {p['border']}; background-color: {p['input_bg']};
+}}
+QCheckBox::indicator:hover {{ border-color: {p['accent']}; }}
+QCheckBox::indicator:checked {{ border-color: {p['accent']}; background-color: {p['accent']}; }}
+
+QListWidget {{
+    background-color: {p['panel_bg']}; border: 1px solid {p['border']};
+    border-radius: 4px; padding: 4px; color: {p['text']};
+    selection-background-color: {p['accent']}; selection-color: {p['btn_primary_text']};
+}}
+QListWidget::item {{ padding: 6px 8px; border-radius: 4px; }}
+QListWidget::item:hover {{ background-color: {p['btn_hover']}; }}
+QListWidget::item:selected {{ background-color: {p['accent']}; color: {p['btn_primary_text']}; }}
+
 QProgressBar {{
     background-color: {p['progress_bg']}; border: none; border-radius: 4px;
     text-align: center; color: {p['text']}; min-height: 10px;

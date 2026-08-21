@@ -25,6 +25,7 @@ _FAV_FID_RE = re.compile(r"[?&]fid=(\d+)")
 _SEASON_SID_RE = re.compile(r"[?&]sid=(\d+)")
 _SEASON_LIST_RE = re.compile(r"space\.bilibili\.com/(\d+)/lists/(\d+)")
 _PAGE_RE = re.compile(r"[?&]p=(\d+)")
+_EMOTE_IDS_RE = re.compile(r"[?&]ids=([0-9,]+)", re.IGNORECASE)
 # 从「标题+URL」文本中提取 URL：以 http(s):// 起，到空白/中文/全角标点为止
 _URL_RE = re.compile(
     r"https?://[^\s　-〿一-鿿＀-￯…—]+",
@@ -86,9 +87,9 @@ def follow_redirect(url: str, timeout: int = 15) -> str:
 def resolve_input(source: str, raw: str):
     """在下载线程内把原始输入解析为规范值（必要时跟随短链跳转后重试）。
 
-    :param source: "bv" / "fav" / "season" / "up"
+    :param source: "bv" / "fav" / "season" / "up" / "emote"
     :param raw: 用户原始输入（可能是短链）
-    :return: 与各 tab 对应的规范值：BV号 str / fid int / (kind, val, mid) / mid int
+    :return: 与各 tab 对应的规范值：BV号 str / fid int / (kind, val, mid) / mid int / tuple[int, ...]
     """
     attempts = 0
     while True:
@@ -101,6 +102,8 @@ def resolve_input(source: str, raw: str):
                 return normalize_season(raw)
             if source == "up":
                 return normalize_mid(raw)
+            if source == "emote":
+                return normalize_emote_ids(raw)
             raise ValueError(f"未知下载来源：{source}")
         except NeedsUrlResolution as e:
             attempts += 1
@@ -204,3 +207,29 @@ def normalize_mid(raw: str) -> int:
     if m:
         raise NeedsUrlResolution(m.group(0))
     raise ValueError(f"无法从输入解析 UP主 mid：{raw}")
+
+
+def normalize_emote_ids(raw: str) -> tuple[int, ...]:
+    """输入一个或多个表情包 package id，或 API 链接中的 ``ids`` 参数。
+
+    示例：``10239``、``10239,10238``、
+    ``https://api.bilibili.com/x/emote/package?business=reply&ids=10239,10238``。
+    """
+    s = raw.strip()
+    if not s:
+        raise ValueError("输入为空")
+    match = _EMOTE_IDS_RE.search(s)
+    if match:
+        s = match.group(1)
+    values = [value.strip() for value in s.split(",")]
+    if values and all(value.isdigit() and int(value) > 0 for value in values):
+        result = []
+        for value in values:
+            package_id = int(value)
+            if package_id not in result:
+                result.append(package_id)
+        return tuple(result)
+    url = _URL_RE.search(s)
+    if url:
+        raise NeedsUrlResolution(url.group(0))
+    raise ValueError("表情包 id 必须是正整数，多个 id 请用英文逗号分隔")

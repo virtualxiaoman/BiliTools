@@ -19,6 +19,8 @@ from src.urls.message_urls import MessageUrls
 from src.urls.fav_urls import FavUrls
 from src.urls.archive_urls import ArchiveUrls
 from src.urls.contract_urls import ContractUrls
+from src.urls.emote_urls import EmoteUrls
+from src.urls.garb_urls import GarbUrls
 
 __all__ = [
     "VideoUrls",
@@ -31,4 +33,6 @@ __all__ = [
     "FavUrls",
     "ArchiveUrls",
     "ContractUrls",
+    "EmoteUrls",
+    "GarbUrls",
 ]

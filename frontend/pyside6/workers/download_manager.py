@@ -52,7 +52,8 @@ class DownloadManager(QObject):
                 pass
 
     def submit(self, spec: dict) -> Optional[int]:
-        if not has_valid_session():
+        # 装扮/表情包详情与 CDN 资源可匿名访问；其余视频下载仍要求有效登录。
+        if spec.get("source") not in {"emote", "garb", "dressup"} and not has_valid_session():
             app_signals.log_message.emit(LogCategory.WARN, "未登录，无法下载，请先扫码登录")
             app_signals.goto_page.emit("login")
             return None

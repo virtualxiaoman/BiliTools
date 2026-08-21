@@ -45,6 +45,11 @@ try:
     win.show()
     win.login_page._started = True  # 禁止登录页首次显示时自动拉起二维码轮询线程（避免真实网络副作用）
     log("MainWindow built OK")
+    panel = win.download_page.panel
+    log("download tabs:", [panel.tabs.tabText(i) for i in range(panel.tabs.count())])
+    panel.tabs.setCurrentIndex(4)
+    app.processEvents()
+    log("dressup tab count:", panel.dressup_panel.result_list.count())
 
     # ---- 日志渲染 ----
     app_signals.log_message.emit(LogCategory.NORMAL, "普通信息测试")

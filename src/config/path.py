@@ -34,6 +34,8 @@ COOKIE_DIR = ASSETS_DIR / "cookie"  # 旧 cookie 目录（兼容引用，默认�
 OUTPUT_DIR = PROJECT_ROOT / "output"
 VIDEO_OUTPUT_DIR = OUTPUT_DIR / "video"  # 视频/音频下载
 HISTORY_OUTPUT_DIR = OUTPUT_DIR / "history"  # 历史记录等表格/数据文件
+COLLECTION_OUTPUT_DIR = OUTPUT_DIR / "收藏集"  # 收藏表情包、收藏集与装扮素材下载
+
 
 # 用户数据目录（%APPDATA%\xiaoman\BiliTools）：多账号映射表与默认 cookie 目录
 def _appdata_dir() -> Path:
@@ -42,7 +44,7 @@ def _appdata_dir() -> Path:
 
 
 APP_DATA_DIR = _appdata_dir() / "xiaoman" / "BiliTools"
-COOKIE_ROOT = APP_DATA_DIR / "cookie"           # 全局默认 cookie 目录（C 盘用户目录）
+COOKIE_ROOT = APP_DATA_DIR / "cookie"  # 全局默认 cookie 目录（C 盘用户目录）
 ACCOUNTS_FILE = APP_DATA_DIR / "accounts.json"  # 多账号映射表
 
 # 默认 cookie 与二维码图片路径（默认值来源；实际生效路径走下方 getter）
@@ -94,5 +96,8 @@ def set_cookie_path(path) -> None:
 
 def ensure_dirs() -> None:
     """创建所有需要存在的目录（幂等）。"""
-    for directory in (ASSETS_DIR, COOKIE_DIR, OUTPUT_DIR, VIDEO_OUTPUT_DIR, HISTORY_OUTPUT_DIR, COOKIE_ROOT):
+    for directory in (
+            ASSETS_DIR, COOKIE_DIR, OUTPUT_DIR, VIDEO_OUTPUT_DIR, HISTORY_OUTPUT_DIR,
+            COLLECTION_OUTPUT_DIR, COOKIE_ROOT,
+    ):
         directory.mkdir(parents=True, exist_ok=True)

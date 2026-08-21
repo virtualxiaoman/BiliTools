@@ -85,4 +85,6 @@ class MainWindow(QWidget):
         self.manager.shutdown()
         from frontend.pyside6.workers.login_worker import shutdown_all
         shutdown_all()
+        from frontend.pyside6.workers import search_worker
+        search_worker.shutdown_all()
         super().closeEvent(event)

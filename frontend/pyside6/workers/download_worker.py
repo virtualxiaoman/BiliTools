@@ -4,7 +4,10 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from src.services.dressup import DressupService
+from src.services.emote import EmoteService
 from src.services.fav import FavService
+from src.services.garb import GarbService
 from src.services.video import VideoService
 from src.api.errors import BiliAuthError, BiliRiskError
 
@@ -50,7 +53,10 @@ class DownloadWorker(QThread):
 
     @staticmethod
     def _source_label(source: str) -> str:
-        return {"bv": "视频", "fav": "收藏夹", "season": "合集", "up": "UP主"}.get(source, source)
+        return {
+            "bv": "视频", "fav": "收藏夹", "season": "合集", "up": "UP主",
+            "emote": "表情包", "garb": "收藏集/装扮", "dressup": "装扮",
+        }.get(source, source)
 
     @staticmethod
     def _canonical_display(source: str, canonical) -> str:
@@ -135,6 +141,39 @@ class DownloadWorker(QThread):
                 bvid=bvid, dir=save_dir, season_id=season_id, mid=mid or 0,
                 quality=quality, media_type=media_type, progress=adapter, season=season,
                 threads=threads, account_sessions=self._account_sessions(threads, spec),
+            )
+
+        if src == "emote":
+            package_ids = spec["input"]
+            emote_service = EmoteService(service.session)
+            packages, count = emote_service.count_emotes(package_ids)
+            adapter = ProgressAdapter(count, f"表情包 {','.join(map(str, package_ids))}", self)
+            return emote_service.download_packages(
+                package_ids, save_dir, progress=adapter, packages=packages,
+                use_full_name=bool(spec.get("emote_full_name", False)),
+            )
+        if src == "dressup":
+            items = spec["input"]
+            if not isinstance(items, list) or not items:
+                raise ValueError("未选择要下载的装扮/表情包")
+            threads = int(spec.get("threads", 1))
+            dressup_service = DressupService(service.session)
+            adapter = self._make_adapter(threads, len(items), f"装扮 {len(items)} 项")
+            return dressup_service.download_items(
+                items,
+                save_dir,
+                threads=threads,
+                account_sessions=self._account_sessions(threads, spec),
+                progress=adapter,
+                use_full_name=bool(spec.get("emote_full_name", False)),
+            )
+        if src == "garb":
+            keyword = spec["input"]
+            garb_service = GarbService(service.session)
+            item, detail, count = garb_service.prepare_download(keyword)
+            adapter = ProgressAdapter(count, f"收藏集/装扮 {item.get('name') or keyword}", self)
+            return garb_service.download_item(
+                item, save_dir, detail=detail, progress=adapter,
             )
 
         if src == "up":
