@@ -91,6 +91,8 @@ def resolve_input(source: str, raw: str):
     :param raw: 用户原始输入（可能是短链）
     :return: 与各 tab 对应的规范值：BV号 str / fid int / (kind, val, mid) / mid int / tuple[int, ...]
     """
+    # 输入先在 UI/工作线程本地归一化；只有 b23.tv 等无法从文本直接得到 ID 的
+    # 短链才走一次 follow_redirect，避免把网络请求放进 Qt 主线程。
     attempts = 0
     while True:
         try:

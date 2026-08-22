@@ -71,6 +71,8 @@ class LoginService:
         :param save_qr_path: 二维码图片保存路径。None 时保存到 get_qr_image_path()（跟随全局 cookie 目录）
         :return: (二维码登录 url, qrcode_key)，将 url 交给用户扫描
         """
+        # 生成接口返回登录 URL 与一次性 qrcode_key：URL 负责展示给用户，
+        # key 只用于后续 poll/poll_full 查询扫码状态。
         data = self.session.get(LoginUrls.QR_GENERATE)
         qrcode_key = data["qrcode_key"]
         url = data["url"]
@@ -160,7 +162,8 @@ class LoginService:
         while time.time() - start < timeout:
             code, resp = self._poll_once(qrcode_key)
             if code == 0:
-                # 登录成功：响应头携带 set-cookie
+                # 登录成功：响应头携带 set-cookie；保存后刷新 BiliCookies 缓存，
+                # 后续新建 BiliSession 才能立即把新凭证带到服务层。
                 set_cookie = resp.headers.get("set-cookie", "")
                 if not set_cookie:
                     logger.warning("[LoginService] 登录成功但未获取到 set-cookie，请手动检查 cookie 文件。")

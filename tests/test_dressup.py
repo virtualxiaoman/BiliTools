@@ -74,6 +74,26 @@ class _FakeGarbService:
         )]
 
 
+def test_search_reads_followup_pages_when_first_page_is_full():
+    def page_items(prefix, start, count):
+        return [{"name": f"{prefix}{i}", "part_id": i + 1} for i in range(start, start + count)]
+
+    session = _FakeSession({
+        _key(GarbUrls.SEARCH, key_word="天", pn=1, ps=50): {"list": page_items("装扮", 0, 10)},
+        _key(GarbUrls.SEARCH, key_word="天", pn=2, ps=50): {"list": page_items("装扮", 10, 2)},
+        _key(EmoteUrls.SEARCH, business="reply", key_word="天", pn=1, ps=50): {"list": page_items("表情", 0, 10)},
+        _key(EmoteUrls.SEARCH, business="reply", key_word="天", pn=2, ps=50): {"list": page_items("表情", 10, 1)},
+    })
+
+    items = DressupService(session).search("天")
+
+    assert len(items) == 23
+    assert [url for url, _ in session.calls] == [
+        GarbUrls.SEARCH, GarbUrls.SEARCH,
+        EmoteUrls.SEARCH, EmoteUrls.SEARCH,
+    ]
+
+
 def test_download_items_supports_concurrency_and_account_distribution(tmp_path, monkeypatch):
     monkeypatch.setattr("src.services.dressup.EmoteService", _FakeEmoteService)
     monkeypatch.setattr("src.services.dressup.GarbService", _FakeGarbService)

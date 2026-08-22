@@ -94,6 +94,8 @@ class BiliSession:
         重试策略：仅对「网络/传输层」错误重试（连接失败、超时、HTTP 状态码、JSON 解析失败）；
         业务错误（BiliError，如未登录/风控/视频不存在）不重试，直接抛出。
         """
+        # 服务层只负责准备 URL 和业务参数；从这里开始统一补齐请求头，
+        # 因此每个 API 都能继承当前账号的 Cookie、User-Agent 与 Referer。
         headers = kwargs.pop("headers", None)
         if headers:
             merged = dict(self.session.headers)
@@ -103,13 +105,16 @@ class BiliSession:
         last_error: Optional[Exception] = None
         for attempt in range(self.max_retry + 1):
             try:
+                # B 站接口统一返回 {code, message, data}；这里只把 data 交给服务层，
+                # 服务层再把字典转换成 dataclass 或提取成下载所需的最小字段。
                 resp = self.session.request(method, url, timeout=self.timeout, **kwargs)
                 resp.raise_for_status()
                 r_json = resp.json()
                 raise_for_code(r_json.get("code", 0), r_json.get("message", ""))
                 return r_json["data"]
             except (requests.RequestException, ValueError) as e:
-                # 传输层/解析错误：记录并重试
+                # 传输层/解析错误：记录并重试；业务 code 错误已在 raise_for_code
+                # 中转换为 BiliError，不会被误当成网络问题重复请求。
                 last_error = e
                 logger.warning("[BiliSession-%s]第%d次请求%s失败：%s", method, attempt + 1, url, e)
             if attempt < self.max_retry:

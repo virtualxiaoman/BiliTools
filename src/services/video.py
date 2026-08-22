@@ -84,11 +84,7 @@ def _parallel_run(items, fn, threads: int) -> list:
 class VideoService:
     """B 站视频的获取与下载服务。"""
 
-    def __init__(
-            self,
-            session: Optional[BiliSession] = None,
-            default_dir: Path = VIDEO_OUTPUT_DIR,
-    ):
+    def __init__(self, session: Optional[BiliSession] = None, default_dir: Path = VIDEO_OUTPUT_DIR):
         """
         :param session: BiliSession 实例，None 时创建（使用默认 cookie）
         :param default_dir: 默认下载目录，调用下载方法未指定 dir 时使用
@@ -104,6 +100,8 @@ class VideoService:
         :param bvid: BV号
         :return: VideoInfo
         """
+        # VIEW 返回原始 data；模型层在这里完成字段兼容、owner/stat/pages/season
+        # 的组装，后续下载流程只依赖 VideoInfo，不再直接读取接口字典。
         data = self.session.get(VideoUrls.VIEW, params={"bvid": bvid})
         return VideoInfo.from_view_json(data)
 
@@ -146,6 +144,8 @@ class VideoService:
             "platform": "pc",  # 平台。pc或html5
             "high_quality": 1,  # 当platform=html5时，此值为1可使画质为1080p
         }
+        # playurl 是下载链路的鉴权边界：先对 bvid/cid/清晰度参数做 wbi 签名，
+        # 再交给 BiliSession 注入 Cookie/Referer；返回的 DASH URL 只在本次任务内使用。
         get_wbi(params)  # 原地追加 wts 与 w_rid
         data = self.session.get(VideoUrls.PLAY, params=params)
 
@@ -194,6 +194,8 @@ class VideoService:
 
     def _fetch_streams(self, bvid: str, page: int = 1) -> tuple[VideoInfo, DashStreams]:
         """获取视频信息 + 指定分P的 DASH 流（download_* 系列共用，避免重复请求）。"""
+        # 每种下载（视频、音频、合成、封面）都先复用同一条信息链：
+        # BV -> VIEW -> VideoInfo -> 目标分P/cid -> PLAY -> DASH 流。
         info = self.fetch_info(bvid)
         target = self._resolve_page(info, page)
         if target.cid is None or target.cid == 0:
@@ -281,14 +283,7 @@ class VideoService:
             raise last_error
         raise BiliRiskError(f"视频 {bvid} 触发风控，已放弃（{label}）。")
 
-    def _report_bvid_download(
-            self,
-            bvid: str,
-            new_results: list,
-            download_count: int,
-            index: int,
-            total: int,
-    ) -> int:
+    def _report_bvid_download(self, bvid: str, new_results: list, download_count: int, index: int, total: int) -> int:
         """报告单个视频的缓存命中/下载情况，并做防风控节流，返回累计的未命中缓存下载次数。
 
         - 全部命中本地缓存：提示跳过网络请求，不节流；
@@ -386,6 +381,8 @@ class VideoService:
             picked = VideoQuality.from_qn(stream.quality)
             if picked is not None:
                 progress.set_quality(picked)
+        # 流 URL 来自 playurl，下载工具只负责带着会话请求头写入本地文件；
+        # 因此 API 响应、媒体字节和最终 DownloadResult 的职责边界清晰。
         size = download_stream(
             stream.url, save_path, self.session.session.headers,
             progress_cb=progress.make_stream_callback() if progress else progress_cb,
@@ -545,6 +542,8 @@ class VideoService:
             )
             if progress:
                 progress.status("正在用 ffmpeg 合成音视频...")
+            # 两条 DASH 流都落盘后才交给 ffmpeg；合成结果写入最终路径，
+            # 临时目录由 TemporaryDirectory 自动清理（keep_parts=True 时显式移出）。
             merge_video_audio(video_tmp, audio_tmp, save_path, progress_cb=progress_cb)
             if keep_parts:
                 # 保留临时文件到同级目录（重命名避免冲突）
@@ -890,6 +889,8 @@ class VideoService:
         :param dir: 保存根目录。None 时使用默认下载目录
         :return: DownloadResult 列表
         """
+        # 统一入口只做“范围决策”：先查视频是否带合集结构，再把实际下载
+        # 委托给已有的合集/全部分P流程，避免 GUI、CLI 各自复制判断逻辑。
         info = self.fetch_info(bvid)
         if info.season and info.season.episodes:
             # 属于合集：下载整个合集
@@ -938,6 +939,8 @@ class VideoService:
         """
         from src.services.fav import FavService
 
+        # 收藏夹链路：media_id -> 收藏夹详情（决定目录名）-> BV 列表 ->
+        # 对每个 BV 复用普通视频下载流程；GUI 传入 bvids 时可避免重复拉列表。
         fav = FavService(self.session)
         info = fav.get_fav_info(fid)
         if bvids is None:
@@ -1085,6 +1088,8 @@ class VideoService:
         """
         from src.services.user import UserService
 
+        # UP 主链路：规范化 mid -> 空间投稿分页得到 BV 列表 -> 查询昵称作为
+        # 输出目录 -> 每个 BV 进入 download_all_pages；列表可由 GUI 预取后传入。
         mid = self._resolve_mid(mid)
         if bvids is None:
             bvids = self.list_up_videos(mid)

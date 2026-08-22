@@ -28,9 +28,11 @@ class DownloadPage(QWidget):
 
         splitter.addWidget(self.panel)
         splitter.addWidget(right)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([430, 620])
+        # 下载输入和任务进度是主要操作区，默认给左侧更多宽度；
+        # 窗口继续变宽时也优先扩展左侧，右侧日志保持相对紧凑。
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        splitter.setSizes([560, 470])
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 8)

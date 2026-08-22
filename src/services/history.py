@@ -53,6 +53,8 @@ class HistoryService:
             "type": filter_type,
             "ps": ps,
         }
+        # cursor 接口返回“当前页 + 下一页游标”；模型层保留 max/business/view_at，
+        # get_history_all 再把这三个字段原样传回下一次请求完成翻页。
         data = self.session.get(HistoryUrls.CURSOR, params=params)
         return HistoryPage.from_json(data)
 

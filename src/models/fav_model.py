@@ -21,6 +21,7 @@ class FavInfo:
 
     @classmethod
     def from_dict(cls, data: dict) -> "FavInfo":
+        """把 FavService 从收藏夹详情接口拿到的 data 转成稳定的业务模型。"""
         return cls(
             id=data.get("id", 0),
             fid=data.get("fid", 0),

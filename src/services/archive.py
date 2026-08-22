@@ -276,6 +276,8 @@ class ArchiveService:
                 "page_num": page_num,
                 "page_size": page_size,
             }
+            # 每页接口只返回一段 archives；这里在服务层聚合全部页，
+            # 将分页细节隐藏给 VideoService，最终交给 VideoSeason 模型。
             data = self.session.get(ArchiveUrls.SEASONS_ARCHIVES_LIST, params=params)
 
             if not data:

@@ -82,6 +82,8 @@ class FavService:
         :param media_id: 收藏夹 media_id（int）
         :return: FavInfo
         """
+        # 先把前端可能传来的数字字符串收敛为 int，再请求详情；
+        # 返回的 title/media_count 被 VideoService 用于目录和进度初始化。
         mid = self._resolve_media_id(media_id)
         data = self.session.get(FavUrls.FOLDER_INFO, params={"media_id": mid})
         return FavInfo.from_dict(data)
@@ -130,6 +132,8 @@ class FavService:
         :param media_id: 收藏夹 media_id（int）
         :return: 视频bv号列表
         """
+        # resource/ids 返回收藏资源条目列表；这里只保留 bvid，交给
+        # VideoService 再逐个获取 pages/cid/playurl 并下载。
         mid = self._resolve_media_id(media_id)
         data = self.session.get(FavUrls.RESOURCE_IDS, params={"media_id": mid})
         return [fav["bvid"] for fav in data]

@@ -30,6 +30,7 @@ class DressupPanel(QWidget):
         self.input = QLineEdit()
         self.input.setPlaceholderText("输入关键词，如 洛天依 / 初音未来")
         self.input.setClearButtonEnabled(True)
+        self.input.setFixedHeight(34)
         self.btn_search = QPushButton("搜索")
         search_row.addWidget(self.input, 1)
         search_row.addWidget(self.btn_search)
@@ -105,6 +106,10 @@ class DressupPanel(QWidget):
             self.result_list.addItem(item)
         self.result_list.blockSignals(False)
         self._update_selection_state()
+        if self.result_list.count() == 0:
+            # 搜索接口正常返回但没有可展示条目：这是空结果，不是异常。
+            self.count_label.setText("未找到结果")
+            app_signals.log_message.emit(LogCategory.WARN, "未找到相关装扮或表情包")
 
     def _on_error(self, text: str):
         self.btn_search.setEnabled(True)

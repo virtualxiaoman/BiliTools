@@ -58,6 +58,8 @@ class DownloadManager(QObject):
             app_signals.goto_page.emit("login")
             return None
 
+        # 面板已经把输入转换为规范 spec；manager 在启动线程前只做门禁和去重，
+        # 真正的网络解析、API 调用和下载全部放到 DownloadWorker，避免阻塞 Qt 主线程。
         key = self._make_key(spec)
         if key in self._keys:
             app_signals.log_message.emit(
@@ -65,6 +67,8 @@ class DownloadManager(QObject):
             )
             return None
 
+        # 一个任务对应一个 QThread，信号只传递进度/阶段/完成摘要；
+        # manager 不直接触碰 BiliSession 或媒体文件，保持 UI 调度与后端执行解耦。
         worker = DownloadWorker(spec)
         tid = self._next_id
         self._next_id += 1

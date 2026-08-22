@@ -1,130 +1,138 @@
 # BiliTools
 
-py 操控 bilibili 的小工具（后端 SDK）。提供统一的数据模型与业务服务，可被命令行、Web、GUI 等多种前端稳定调用。
+BiliTools 是一个用 Python 操控 bilibili 的工具集，提供 **后端 SDK、命令行入口和 PySide6 桌面 GUI**。项目把「输入解析、API 请求、数据模型、下载与进度显示」拆成独立层，便于继续接入 Web 或其他前端。
 
-## 快速上手
+> 完整的后端 API、数据流、GUI 操作和参数说明见 [`docs/功能介绍.md`](docs/功能介绍.md)。本 README 只保留quick start。
 
-```python
-from src.services import DressupService, EmoteService, GarbService, VideoService
-from src.models import VideoQuality
-
-# 1. 扫码登录（只需执行一次，cookie 保存到 assets/cookie/qr_login.txt）
-from src.services import LoginService
-LoginService().qr_login()
-
-# 2. 获取视频信息（返回 VideoInfo 数据模型）
-service = VideoService()
-info = service.fetch_info("BV1ov42117yC")
-print(info.title, info.owner.name, info.stat.num_dm)
-
-# 3. 下载视频（默认最高清晰度 4K；文件名自动为 [标题](BV号).mp4）
-result = service.download_video_with_audio("BV1ov42117yC")
-print(result.path)
-
-#    指定清晰度：精确匹配目标档位，该档不存在时回退到最高可用
-result = service.download_video_with_audio("BV1ov42117yC", quality=VideoQuality.P1080)
-#    P1080 在有 4K 的视频上会下 1080P（不会被拉到 4K）；无 1080P 档时回退到最高可用
-
-# 4. 统一下载入口：只传 bvid，自动决定下载范围 + 最高清晰度 + 进度显示
-#    - 属于合集 → 下载整个合集（含分P）
-#    - 单视频 → 下载该视频（含分P）
-service.download("BV1ov42117yC")     # 单视频
-service.download("BV1Q43w6QETb")     # 属于合集 → 下载整个合集
-
-# 5. 多P视频：指定分P下载 / 下载全部分P（文件名含 P 序号）
-service.download_video_with_audio("BV1Q43w6QETb", page=2)          # 只下第2P
-service.download_all_pages("BV1Q43w6QETb")                          # 下载全部分P
-
-# 6. 合集下载：bvid 或 sid 任选其一
-service.download_season("BV1Q43w6QETb")                  # 从合集内任意一个视频进入
-service.download_season(season_id=8683221)                # 按 sid 直接下载（洛天依·纯蓝幻乐）
-service.download_season(season_id=1717000, mid=506925078) # 下载他人合集（明日方舟）
-
-# 7. 收藏夹下载：全部视频（有声音）或仅音频（缓存听歌），传 media_id
-service.download_fav(3953119978)
-service.download_fav(3953119978, mode="audio")            # 仅下载音频到 output/video/<收藏夹名>/
-
-# 8. UP主空间下载：全部视频或仅音频，传 mid
-service.download_up(249056021)
-service.download_up(249056021, mode="audio")              # 仅下载音频到 output/video/<UP主昵称>/
-
-# 9. 收藏表情包下载：支持单个或多个 package id；动态表情优先下载 GIF
-EmoteService().download_packages("10239")
-EmoteService().download_packages("10239,10238")             # 保存到 output/收藏集/<收藏集名>/<表情包类型>/
-EmoteService().download_packages("10239", use_full_name=True)  # 文件名使用完整 text（默认使用 alias 简称）
-
-# 10. 收藏集 / 装扮下载：按名称搜索，同名结果优先；资源统一保存到 output/收藏集/
-GarbService().download_by_keyword("初音未来")
-GarbService().download_by_keyword("初音未来", resource_types=["emoji_package", "space_bg"])
-
-# 11. 装扮统一搜索：一次同时搜索表情包 / 收藏集 / 主题装扮，勾选后批量并发下载
-items = DressupService().search("洛天依")
-print([item.display_name for item in items])
-DressupService().download_items([item.as_dict() for item in items], threads=2)
-```
-
-收藏夹视频列表获取：`FavService().get_fav_bv(media_id)`、`get_fav_info(media_id)`。
-UP主视频列表获取：`service.list_up_videos(mid)`。
-表情包详情获取：`EmoteService().get_packages("10239,10238")`。
-收藏集/装扮可通过 `GarbService().search_items("关键词")` 搜索；收藏集下载封面、卡图和卡片视频，装扮按素材类别保存。
-GUI 的「装扮」页签默认按关键词同时搜索三类内容，勾选结果后可批量下载，并支持并发线程与多账号分流。
-
-> 注：视频、收藏夹、合集、UP 主、表情包后端接口接收规范 id（BV号 / media_id / mid / sid / package id）；
-> 收藏集/装扮接口接收名称关键词。BV号、av号、完整链接、b23.tv 短链的解析统一由 GUI 前端完成（`frontend/pyside6/utils.py`）。
-
-更多示例见 `examples/quick_start.py`，命令行入口见 `main.py`。
-
-## 功能
-
-| 模块 | 服务类 | 功能 |
-|------|--------|------|
-| 视频 | `VideoService` | 获取信息 / 下载视频 / 音频 / 封面 / 音视频合成（ffmpeg）/ **分P下载 / 合集下载 / 收藏夹下载 / UP主下载** |
-| 登录 | `LoginService` | 扫码登录 / 登录状态查询 |
-| 历史 | `HistoryService` | 历史记录分页 / 失效视频查找 / 导出 xlsx |
-| 用户 | `UserService` / `ContractService` | 用户信息 / 老粉签约 |
-| 评论 | `ReplyService` | 发表评论 |
-| 私信 | `MessageService` | 发送私信 |
-| 排行 | `RankService` | 综合热门 / 排行榜 |
-| 收藏 | `FavService` | 收藏夹视频列表 / 收藏夹全部视频·音频下载 |
-| 表情包 | `EmoteService` | 按一个或多个 package id 获取并下载全部表情（动态表情优先 GIF） |
-| 收藏集/装扮 | `GarbService` | 按名称搜索并下载收藏集卡片或主题装扮素材（含表情包、空间海报等） |
-| 装扮统一 | `DressupService` | 一次搜索表情包/收藏集/装扮，勾选后并发批量下载（可多账号分流） |
-| 合集 | `ArchiveService` | 视频合集列表 |
-
-## 项目结构
-
-```
-BiliTools/
-├── main.py                # 命令行入口
-├── examples/              # 使用示例
-├── src/
-│   ├── api/               # 统一请求层（BiliSession）、wbi签名、异常体系
-│   ├── config/            # 路径锚点(path)、常量、Cookie
-│   ├── models/            # 业务数据模型（dataclass）
-│   ├── services/          # 业务服务（核心 API）
-│   ├── urls/              # API URL 统一管理
-│   └── util/              # BV/AV转换、文件名清洗、下载工具
-├── assets/cookie/         # 扫码登录后的 cookie
-├── output/                # 下载输出（video/ 视频，收藏集/ 表情包/装扮素材，history/ 表格）
-└── tests/                 # 测试
-```
-
-## 依赖
-
-- 运行时依赖见 `requirements.txt`：`requests, pandas, openpyxl, pillow, qrcode` 等。
-- 音视频合成依赖系统安装 **ffmpeg** 并加入 PATH（通过 `subprocess` 调用，无法用 pip 安装）。参考安装视频 [BV1qw4m1d7hx](https://www.bilibili.com/video/BV1qw4m1d7hx/)。
-- 开发测试依赖：`pytest`。
-
-## 测试
+## 1. 安装与运行
 
 ```bash
-pip install pytest
-pytest tests/ -m "not network"    # 仅跑单元测试（不联网）
-pytest tests/                     # 全部测试（含真实网络，需可访问 B 站）
+# 建议在项目根目录创建并激活虚拟环境
+pip install -r requirements.txt
+
+# 启动桌面 GUI
+python -m frontend.pyside6
+
+# 或使用命令行
+python main.py --help
 ```
 
-## 迁移说明
+下载视频并合成音频需要 ffmpeg。可以安装系统 ffmpeg 并加入 PATH，也可以安装项目支持的内置后端：
 
-本项目已从「示例脚本集合」重构为「分层 SDK」。旧模块（`src/video.py` 等）已删除，
-新代码统一使用 `src/services/` 下的服务类，数据通过 `src/models/` 的 dataclass 传递，
-路径由 `src/config/path.py` 统一管理，失败通过 `src/api/errors.py` 的异常体系表达。
+```bash
+pip install imageio-ffmpeg
+```
+
+GUI 首次启动会在后台检查登录状态。点击「登录」页的「登录新账号」，使用哔哩哔哩 App 扫码即可；账号 cookie 默认保存在 `%APPDATA%/xiaoman/BiliTools/cookie/`（Windows），多账号映射保存在同目录的 `accounts.json`。
+
+## 2. 最快下载一个视频
+
+### 桌面 GUI
+
+1. 启动 `python -m frontend.pyside6`。
+2. 在「登录」页扫码登录。
+3. 回到「下载」页，在「视频 BV」页签粘贴 BV 号、av 号或视频链接（支持短链b23.tv）。
+4. 选择保存目录、清晰度和分P（可以只使用默认值而不调整），点击「开始下载」。
+5. 进度、ffmpeg 合成阶段和错误信息会显示在任务区/日志区。
+
+### Python SDK
+
+```python
+from src.models import VideoQuality
+from src.services import LoginService, VideoService
+
+# 只需首次执行，cookie 会被保存并供后续 BiliSession 自动使用
+LoginService().qr_login()
+
+service = VideoService()
+
+# 获取信息：返回 VideoInfo，而不是未约定结构的字典
+info = service.fetch_info("BV1ov42117yC")
+print(info.title, info.owner.name, info.stat.num_view)
+
+# 下载视频 + 音频合成；默认目标为 4K，实际没有该档位时回退到最高可用档
+result = service.download_video_with_audio("BV1ov42117yC")
+print(result.path, result.cached)
+
+# 指定清晰度时精确匹配；没有 1080P 时才回退到最高可用档
+result = service.download_video_with_audio("BV1ov42117yC", quality=VideoQuality.P1080)
+```
+
+统一下载入口会自动判断范围：属于合集时下载整个合集；普通视频时下载全部分P。
+
+```python
+service.download("BV1ov42117yC")
+```
+
+## 3. 主要功能
+
+| 模块 | 入口 | 说明 |
+|---|---|---|
+| 视频 | `VideoService` | 信息、标签、视频流、音频、封面、音视频合成、分P、合集、收藏夹、UP主投稿下载 |
+| 登录/账号 | `LoginService` / `AccountManager` | 扫码登录、登录状态、多账号切换、cookie 管理 |
+| 历史 | `HistoryService` | 游标分页、失效视频查找、导出 xlsx |
+| 收藏/合集 | `FavService` / `ArchiveService` | 获取收藏夹信息、BV 列表和合集结构 |
+| 表情/装扮 | `EmoteService` / `GarbService` / `DressupService` | 表情包、收藏集、主题装扮搜索与批量下载 |
+| 用户/互动 | `UserService`、`ReplyService`、`MessageService`、`ContractService` | 用户信息、评论、私信、老粉签约 |
+| 榜单 | `RankService` | 综合热门、排行榜、新视频 |
+
+其他常用示例：
+
+```python
+from src.services import EmoteService, GarbService, VideoService
+
+# 多P、合集、收藏夹、UP主
+service = VideoService()
+service.download_video_with_audio("BV1Q43w6QETb", page=2)
+service.download_all_pages("BV1Q43w6QETb")
+service.download_season(season_id=8683221)
+service.download_fav(3953119978, mode="audio")
+service.download_up(249056021)
+
+# 表情包、收藏集和装扮
+EmoteService().download_packages("10239,10238")
+GarbService().download_by_keyword("初音未来")
+```
+
+完整参数、接口返回值、后端调用链和 GUI 的每个来源页签见 [`docs/功能介绍.md`](docs/功能介绍.md)。示例已按功能拆分到 [`examples/`](examples/)（索引见 [`examples/README.md`](examples/README.md)）；最简单的扫码登录+视频下载示例是 [`examples/quick_start.py`](examples/quick_start.py)。
+
+## 4. 命令行快速入口
+
+```bash
+python main.py info BV1ov42117yC   # 标题、UP主、播放/弹幕/评论、标签
+python main.py video BV1ov42117yC  # 下载视频并合成音频
+python main.py cover BV1ov42117yC  # 下载封面
+python main.py rank                # 获取热门视频 BV 号
+```
+
+## 5. 数据流概览
+
+```text
+GUI / CLI / examples
+        │ 规范化输入：BV、fid、sid、mid、package id
+        ▼
+src/services/                 面向场景的业务流程
+        │ 调用统一 URL + BiliSession
+        ▼
+src/api/session.py            Cookie、User-Agent、Referer、重试、code 检查
+src/api/auth.py               wbi 签名（需要时）
+        │ 返回 API data
+        ▼
+src/models/                   dataclass：VideoInfo、DashStreams、HistoryPage…
+        │
+        ├─ 下载工具：断点续传、ffmpeg、文件名、进度
+        └─ GUI 信号：进度/阶段/完成/错误
+```
+
+以视频下载为例：`bvid → VIEW 获取 VideoInfo → 解析 pages 得 cid → PLAY 获取 DASH 视频/音频 URL → 下载到临时文件 → ffmpeg 合成 → DownloadResult`。已有文件会先命中缓存，避免重复请求。
+
+## 6. 测试与打包
+
+```bash
+pytest tests/ -m "not network"  # 单元测试，不联网
+pytest tests/                   # 包含真实网络测试
+pyinstaller bilitools.spec --noconfirm
+```
+
+写操作（评论、私信、老粉签约）需要有效登录和 `bili_jct`；4K/HDR/杜比等档位还取决于账号权限。
+请遵守 bilibili 用户协议及相关法律法规，仅将本项目用于个人学习和合规用途。

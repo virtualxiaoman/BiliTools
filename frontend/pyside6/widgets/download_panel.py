@@ -5,7 +5,7 @@ from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QRadioButton, QTabWidget, QVBoxLayout, QWidget,
+    QPushButton, QRadioButton, QSizePolicy, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from src.config.path import COLLECTION_OUTPUT_DIR
@@ -85,6 +85,7 @@ class DownloadPanel(QWidget):
         dir_row = QHBoxLayout()
         self.dir_label = QLabel("保存到")
         self.dir_edit = QLineEdit(settings.get("save_dir"))
+        self.dir_edit.setFixedHeight(34)
         self._normal_save_dir = self.dir_edit.text()
         self._collection_asset_active = False
         self.btn_browse = QPushButton("浏览…")
@@ -106,8 +107,11 @@ class DownloadPanel(QWidget):
         self._inputs = [
             self.input_bv, self.input_fav, self.input_season, self.input_up,
         ]
-        for w, name in zip(self._inputs, ["视频BV", "收藏夹", "合集", "UP主"]):
-            self.tabs.addTab(w, name)
+        # QTabWidget 会把直接作为页签内容的 QLineEdit 拉伸到整个内容区。
+        # 不仅固定输入框高度，还用一个带顶部对齐的容器承载它，避免不同
+        # Qt 样式或全局缩放策略再次把单行输入框拉伸成多行区域。
+        for input_edit, name in zip(self._inputs, ["视频", "收藏夹", "合集", "UP主"]):
+            self.tabs.addTab(self._make_input_tab(input_edit), name)
         self.dressup_panel = DressupPanel()
         self.tabs.addTab(self.dressup_panel, "装扮")
         outer.addWidget(self.tabs)
@@ -115,19 +119,8 @@ class DownloadPanel(QWidget):
         self.hint.setObjectName("Hint")
         outer.addWidget(self.hint)
 
-        # ---- 表情包命名（仅装扮页签显示） ----
-        self.emote_name_row = QWidget()
-        emote_name_layout = QHBoxLayout(self.emote_name_row)
-        emote_name_layout.setContentsMargins(0, 0, 0, 0)
-        self.emote_full_name_check = QCheckBox("使用表情全名")
-        self.emote_full_name_check.setToolTip(
-            "默认用 alias 中的简称；勾选后用接口 text 中的完整名称，例如“洛天依14周年·纯蓝幻乐 动态表情包_登场”")
-        emote_name_layout.addWidget(self.emote_full_name_check)
-        emote_name_layout.addStretch(1)
-        self.emote_name_row.setVisible(False)
-        outer.addWidget(self.emote_name_row)
 
-        # ---- 范围（仅视频BV页签显示） ----
+        # ---- 范围（仅视频页签显示） ----
         self.range_row = QWidget()
         rr = QHBoxLayout(self.range_row)
         rr.setContentsMargins(0, 0, 0, 0)
@@ -223,6 +216,8 @@ class DownloadPanel(QWidget):
         self.btn_download.clicked.connect(self._on_download)
         self.btn_open_dir.clicked.connect(self._on_open_output_dir)
         self.input_bv.textChanged.connect(self._on_bv_input_changed)
+        # 普通来源只需要一行输入；装扮页则需要把搜索结果列表展开。
+        self._update_tabs_layout(self.tabs.currentIndex())
 
     # ---- 供 DownloadPage 连接 manager 信号 ----
 
@@ -240,13 +235,43 @@ class DownloadPanel(QWidget):
 
     # ---- 内部 ----
 
+    @staticmethod
+    def _make_input_tab(input_edit: QLineEdit) -> QWidget:
+        """将单行输入框放在页签顶部，避免 QTabWidget 拉伸输入框本身。"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        input_edit.setFixedHeight(34)
+        layout.addWidget(input_edit, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addStretch(1)
+        return page
+
+    def _update_tabs_layout(self, idx: int) -> None:
+        """按当前页签内容调整高度，避免普通输入页留下大片空白区域。
+
+        视频、收藏夹、合集和 UP 主页签只有一个单行输入框；如果让
+        ``QTabWidget`` 使用默认的 Expanding 策略，页签内容区会填满左侧面板，
+        输入框下方就会出现一整块无意义的背景。装扮页需要展示可滚动结果列表，
+        因此仅该页签保留可扩展高度。
+        """
+        if idx == 4:
+            self.tabs.setMinimumHeight(0)
+            self.tabs.setMaximumHeight(16777215)
+            self.tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        else:
+            # 24px 左右的页签栏 + 34px 输入框 + 少量边距。
+            self.tabs.setFixedHeight(64)
+            self.tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.tabs.updateGeometry()
+
     def _on_tab_changed(self, idx):
+        self._update_tabs_layout(idx)
         is_dressup = idx == 4
-        self.range_row.setVisible(idx == 0)  # 范围选项仅视频BV页签可用
+        self.range_row.setVisible(idx == 0)  # 范围选项仅视频页签可用
         self.type_row.setVisible(not is_dressup)
         self.quality_row.setVisible(not is_dressup)
         self.threads_row.setVisible(idx == 0 or is_dressup)
-        self.emote_name_row.setVisible(is_dressup)
         self.btn_download.setText("下载选中" if is_dressup else "下载")
         if is_dressup:
             # 在固定目录页签间切换时，不要把 ``output/收藏集`` 误记为普通保存目录。
@@ -310,7 +335,6 @@ class DownloadPanel(QWidget):
                 "save_dir": str(COLLECTION_OUTPUT_DIR),
                 "threads": self.threads_edit.value(),
                 "distribute_accounts": self.distribute_check.isChecked(),
-                "emote_full_name": self.emote_full_name_check.isChecked(),
                 "desc": f"装扮 {names}{suffix}",
             }
         raw = self._current_input().text().strip()

@@ -102,6 +102,8 @@ class QrLoginWorker(QThread):
         self._stop = False
         try:
             ensure_cookie_file()
+            # 登录线程只负责 QR 生成和轮询；成功后的 set-cookie 交给 AccountManager，
+            # 由账号管理器写文件、更新映射、切换当前路径并清理 Cookie 缓存。
             service = LoginService()
             url, qrcode_key = service.generate_qr()
             self.qr_ready.emit()

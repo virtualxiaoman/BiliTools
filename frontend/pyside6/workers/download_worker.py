@@ -64,6 +64,8 @@ class DownloadWorker(QThread):
         return str(canonical[1]) if source == "season" else str(canonical)
 
     def run(self):
+        # worker 是 GUI 到 SDK 的数据流汇合点：spec（来源/规范 id/选项）
+        # -> service API -> DownloadResult -> Qt 信号；所有异常在这里转换成可读摘要。
         try:
             service = VideoService()
             self._service = service
@@ -95,6 +97,8 @@ class DownloadWorker(QThread):
         threads = int(spec.get("threads", 1))
 
         if src == "bv":
+            # 视频页签已经把 BV/av/URL 归一化为 bvid；这里再调用 VideoService，
+            # 单P走单文件下载，全部分P先取 VideoInfo.pages 再批量下载。
             bvid = spec["input"]
             if spec["scope"] == "single":
                 adapter = ProgressAdapter(1, f"视频 {bvid}", self)
@@ -116,6 +120,8 @@ class DownloadWorker(QThread):
             )
 
         if src == "fav":
+            # 收藏夹先拉详情与 BV 列表，用列表长度初始化进度，随后将同一列表
+            # 传给 VideoService，避免服务层为了下载再次请求一次 resource/ids。
             fid = spec["input"]
             # 先取一次收藏夹视频列表：既用于进度总数，也传回 service 复用，避免内部再拉取一次
             bvids = FavService(service.session).get_fav_bv(fid)
@@ -153,6 +159,8 @@ class DownloadWorker(QThread):
                 use_full_name=bool(spec.get("emote_full_name", False)),
             )
         if src == "dressup":
+            # 装扮页传入的 item 已是 DressupService.search 返回的可序列化 dict；
+            # service 根据 kind 分流到 EmoteService 或 GarbService。
             items = spec["input"]
             if not isinstance(items, list) or not items:
                 raise ValueError("未选择要下载的装扮/表情包")

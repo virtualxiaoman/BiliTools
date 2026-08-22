@@ -75,6 +75,11 @@ class DressupService:
 
     # ---- 搜索 ----
 
+    # 装扮商城和表情包搜索接口实际常按 10 条返回，即使 ps 传入更大的值；
+    # 因此当一页恰好返回 10 条时，还要继续请求下一页，避免结果被接口分页截断。
+    _SEARCH_PAGE_CAPACITY = 10
+    _MAX_SEARCH_PAGES = 100
+
     def search(self, keyword: str, *, page: int = 1, page_size: int = 50) -> list[DressupItem]:
         """同时搜索三类内容，按 表情包 → 收藏集 → 主题装扮 的顺序返回。"""
         keyword = str(keyword or "").strip()
@@ -83,11 +88,13 @@ class DressupService:
         if page < 1 or page_size < 1:
             raise ValueError("page 和 page_size 必须为正整数")
 
-        garb_items = GarbService(self.session).search_items(
-            keyword, page=page, page_size=page_size,
+        garb_service = GarbService(self.session)
+        garb_items = self._search_all_pages(
+            garb_service.search_items, keyword, page=page, page_size=page_size,
         )
-        emote_items = EmoteService(self.session).search_packages(
-            keyword, page=page, page_size=page_size,
+        emote_service = EmoteService(self.session)
+        emote_items = self._search_all_pages(
+            emote_service.search_packages, keyword, page=page, page_size=page_size,
         )
 
         collections: list[DressupItem] = []
@@ -113,6 +120,26 @@ class DressupService:
             emojis.append(DressupItem("emoji", name, raw))
 
         return emojis + collections + suits
+
+    def _search_all_pages(self, search_method, keyword: str, *, page: int, page_size: int) -> list[dict]:
+        """连续读取搜索分页，避免接口单页最多返回 10 条导致结果被截断。
+
+        ``search_method`` 分别对应商城装扮搜索和表情包搜索；两者都使用
+        ``pn``/``ps`` 分页参数。接口返回少于单页容量时，说明已经到达最后一页。
+        最多读取 ``_MAX_SEARCH_PAGES`` 页，防止异常接口持续返回重复满页。
+        """
+        page_capacity = min(page_size, self._SEARCH_PAGE_CAPACITY)
+        results: list[dict] = []
+        for current_page in range(page, page + self._MAX_SEARCH_PAGES):
+            items = search_method(
+                keyword, page=current_page, page_size=page_size,
+            )
+            if not items:
+                break
+            results.extend(item for item in items if isinstance(item, dict))
+            if len(items) < page_capacity:
+                break
+        return results
 
     # ---- 批量下载 ----
 

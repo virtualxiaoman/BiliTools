@@ -85,6 +85,8 @@ def _get_wbi_keys() -> tuple[str, str]:
     global _wbi_keys_cache
     if _wbi_keys_cache is not None:
         return _wbi_keys_cache
+    # nav 同时提供当前账号状态和 wbi_img；这里匿名获取最新签名密钥，
+    # 后续 playurl 等需要 wbi 的接口复用进程内缓存，避免每次下载都请求 nav。
     headers = {
         'User-Agent': UserAgent().pcChrome,
         'Referer': 'https://www.bilibili.com/'
@@ -112,6 +114,8 @@ def get_wbi(params: Optional[dict] = None) -> tuple[int, str]:
     """
     if params is None:
         params = {}
+    # 业务参数（例如 bvid/cid/fnval）先由调用方放入 params，再在这里追加
+    # wts/w_rid；调用方随后把同一个 dict 交给 BiliSession，签名参数不会丢失。
     img_key, sub_key = _get_wbi_keys()
     signed_params = _enc_wbi(params=params, img_key=img_key, sub_key=sub_key)
     # _enc_wbi 已在原 dict 上追加 wts/w_rid；signed_params 与 params 是同一对象

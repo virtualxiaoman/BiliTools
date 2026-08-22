@@ -81,6 +81,7 @@ class VideoPage:
 
     @classmethod
     def from_dict(cls, data: dict) -> "VideoPage":
+        """把 view 接口 pages 数组中的一项转换为下载阶段使用的分P模型。"""
         dim = data.get("dimension") or {}
         return cls(
             page=data.get("page", 1),
@@ -104,6 +105,7 @@ class VideoSeason:
 
     @classmethod
     def from_dict(cls, data: dict) -> "VideoSeason":
+        """展开 sections/episodes/pages，供合集下载按稿件、分P逐级遍历。"""
         episodes = []
         for section in data.get("sections") or []:
             for ep in section.get("episodes") or []:

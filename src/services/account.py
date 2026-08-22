@@ -221,6 +221,8 @@ class AccountManager:
             save_path = self.default_cookie_path(mid)
             save_path.parent.mkdir(parents=True, exist_ok=True)
             save_path.write_text(set_cookie.strip(), encoding="utf-8")
+            # 登录响应先落盘并登记账号，再切换全局 cookie 路径；
+            # 只有 switch 完成后，下面的昵称查询才会读取新账号凭证。
             account = self.upsert(mid, "", save_path)
             self.switch(mid)  # 先切换，下面的昵称查询读的才是新账号 cookie
             account.user_name = self._resolve_uname() or f"账号{mid}"

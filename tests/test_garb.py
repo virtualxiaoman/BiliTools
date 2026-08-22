@@ -35,6 +35,21 @@ def _fake_download(calls):
     return download
 
 
+def test_search_items_treats_empty_response_as_no_results():
+    for empty_value in (None, "", {}, []):
+        session = _FakeSession({
+            _key(GarbUrls.SEARCH, key_word="不存在", pn=1, ps=20): {"list": empty_value},
+        })
+        assert GarbService(session).search_items("不存在") == []
+
+
+def test_search_items_rejects_nonempty_invalid_list():
+    session = _FakeSession({
+        _key(GarbUrls.SEARCH, key_word="异常", pn=1, ps=20): {"list": {"items": []}},
+    })
+    with pytest.raises(ValueError, match="list 不是列表"):
+        GarbService(session).search_items("异常")
+
 def test_collection_uses_search_and_detail_contracts(tmp_path, monkeypatch):
     item = {
         "name": "测试收藏集",

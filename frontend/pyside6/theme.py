@@ -166,7 +166,7 @@ QPushButton#TitleBtnClose:hover {{ background-color: #e81123; color: #ffffff; }}
 
 QLineEdit {{
     background-color: {p['input_bg']}; border: 1px solid {p['input_border']};
-    border-radius: 4px; padding: 5px 8px; color: {p['text']};
+    border-radius: 4px; padding: 3px 8px; color: {p['text']};
     selection-background-color: {p['accent']}; selection-color: {p['btn_primary_text']};
 }}
 QLineEdit:hover {{ border-color: {p['input_hover_border']}; }}

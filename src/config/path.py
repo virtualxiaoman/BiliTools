@@ -23,7 +23,8 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-# 项目根目录
+# 先确定项目根目录，再由它派生资源和输出目录；服务层不再自己拼接相对路径。
+# GUI 启动时还会通过 set_cookie_dir/set_cookie_path 覆盖 cookie 的实际生效位置。
 PROJECT_ROOT = _project_root()
 
 # 资源目录（图标等静态资源；cookie 已迁往用户目录）
@@ -71,7 +72,11 @@ def get_cookie_dir() -> Path:
 
 
 def get_cookie_path() -> Path:
-    """当前生效的 cookie 文件路径（当前账号的 cookie；无账号时落在 cookie 目录下）。"""
+    """当前生效的 cookie 文件路径（当前账号的 cookie；无账号时落在 cookie 目录下）。
+
+    BiliSession/BiliCookies/登录服务都从这个 getter 取路径，账号切换只需更新
+    override 并清空 cookie 缓存，后续新建的会话就会自动使用新账号。
+    """
     if _cookie_path_override is not None:
         return _cookie_path_override
     return get_cookie_dir() / "qr_login.txt"

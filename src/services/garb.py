@@ -61,7 +61,13 @@ class GarbService:
         self.default_dir = Path(default_dir) if default_dir is not None else COLLECTION_OUTPUT_DIR
 
     def search_items(self, keyword: str, *, page: int = 1, page_size: int = 20) -> list[dict]:
-        """搜索收藏集或装扮，返回商城接口的原始条目列表。"""
+        """搜索收藏集或装扮，返回商城接口的原始条目列表。
+
+        搜索接口在“没有匹配结果”时可能返回 ``{"list": None}`` 或其他空值，
+        这表示空结果而不是接口故障，因此统一转换为空列表交给上层处理；只有
+        ``list`` 存在且是明显错误的类型时，才抛出格式异常，避免把真实的
+        API 变更静默当成“没有搜索结果”。
+        """
         keyword = self._normalize_keyword(keyword)
         if page < 1 or page_size < 1:
             raise ValueError("page 和 page_size 必须为正整数")
@@ -69,7 +75,13 @@ class GarbService:
             GarbUrls.SEARCH,
             params={"key_word": keyword, "pn": page, "ps": page_size},
         )
-        items = data.get("list", []) if isinstance(data, dict) else []
+        if not isinstance(data, dict):
+            raise ValueError("装扮搜索接口返回格式异常：响应不是对象")
+        items = data.get("list", [])
+        # B 站在无结果时可能返回 null 或其他空值；此时应沿着空结果流程继续，
+        # 由界面提示“未找到相关装扮或表情包”，而不是显示红色报错。
+        if not items:
+            return []
         if not isinstance(items, list):
             raise ValueError("装扮搜索接口返回格式异常：list 不是列表")
         return [item for item in items if isinstance(item, dict)]
