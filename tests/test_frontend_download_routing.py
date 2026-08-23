@@ -163,10 +163,12 @@ def test_emote(monkeypatch):
 
 
 def test_up():
-    _worker("up", 249056021)._execute(_FakeService())
+    _worker("up", 249056021, cache_dirs=["archive"], force=True)._execute(_FakeService())
     assert any(c[0] == "list_up_videos" for c in CALLS)
     (_, mid, _dir, kw), = [c for c in CALLS if c[0] == "download_up"]
     assert kw["progress"].__class__.__name__ == "ProgressAdapter"
+    assert kw["cache_dirs"] == ["archive"]
+    assert kw["force"] is True
 
 
 def test_bv_all_pages():

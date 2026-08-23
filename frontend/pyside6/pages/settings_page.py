@@ -84,6 +84,21 @@ class SettingsPage(QWidget):
         dir_row.addWidget(btn_dir)
         form.addRow("默认保存目录", dir_row)
 
+        # 额外缓存查验目录（当前保存目录由下载任务自动加入）
+        cache_values = self.settings.get("cache_dirs", [])
+        if not isinstance(cache_values, list):
+            cache_values = []
+        self.cache_dirs_edit = QLineEdit(";".join(str(p) for p in cache_values))
+        self.cache_dirs_edit.setPlaceholderText("多个目录用分号 ; 分隔")
+        self.cache_dirs_edit.setToolTip("查验缓存时会同时搜索这些目录；当前任务的保存目录始终自动加入")
+        btn_cache = QPushButton("添加目录…")
+        btn_cache.clicked.connect(self._on_add_cache_dir)
+        cache_row = QHBoxLayout()
+        cache_row.addWidget(self.cache_dirs_edit, 1)
+        cache_row.addWidget(btn_cache)
+        form.addRow("额外缓存目录", cache_row)
+        self.cache_dirs_edit.editingFinished.connect(self._on_cache_dirs_edited)
+
         # 默认清晰度
         self.quality_combo = QComboBox()
         default_q = getattr(VideoQuality, self.settings.get("quality", "HD4K"), VideoQuality.HD4K)
@@ -273,6 +288,28 @@ class SettingsPage(QWidget):
         if folder:
             self.dir_edit.setText(folder)
             self.settings.set("save_dir", folder)
+
+    def _cache_dir_values(self):
+        values = []
+        for raw in self.cache_dirs_edit.text().split(";"):
+            value = raw.strip()
+            if value and value not in values:
+                values.append(value)
+        return values
+
+    def _on_cache_dirs_edited(self):
+        values = self._cache_dir_values()
+        self.cache_dirs_edit.setText(";".join(values))
+        self.settings.set("cache_dirs", values)
+
+    def _on_add_cache_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "添加缓存查验目录")
+        if folder:
+            values = self._cache_dir_values()
+            if folder not in values:
+                values.append(folder)
+            self.cache_dirs_edit.setText(";".join(values))
+            self.settings.set("cache_dirs", values)
 
     def _on_quality_changed(self, _idx):
         q = self.quality_combo.currentData()

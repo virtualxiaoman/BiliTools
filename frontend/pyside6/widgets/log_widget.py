@@ -39,7 +39,7 @@ class LogWidget(QWidget):
 
         self.text = QPlainTextEdit()
         self.text.setReadOnly(True)
-        # 日志字体：系统字体、基准 9pt 不随界面调大（随全局缩放）。
+        # 日志字体：系统字体、基准 9pt（随全局缩放）。
         # 必须用 setFont 设置——QSS 字体不会进入 QPlainTextEdit 的文档默认字体。
         self.text.setFont(log_font())
         self.text.setMaximumBlockCount(max(50, settings.get("log_max_lines", 1000)))

@@ -74,6 +74,7 @@ def download_stream(
     progress_cb: Optional[ProgressCallback] = None,
     chunk_size: int = 1024 * 256,
     max_retries: int = 3,
+    overwrite: bool = False,
 ) -> int:
     """
     下载单个媒体流（如 DASH 视频/音频流）到本地文件。
@@ -92,6 +93,7 @@ def download_stream(
     :param progress_cb: 进度回调 (downloaded, total)
     :param chunk_size: 分块大小（字节）
     :param max_retries: 断点续传的最大重试次数
+    :param overwrite: 是否先删除已有目标文件，强制从头写入（不进行断点续传）
     :return: 下载的文件大小（字节）
     :raises DownloadError: 下载失败（重试后仍失败）
     """
@@ -102,6 +104,9 @@ def download_stream(
 
     total: Optional[int] = None
     last_error: Optional[Exception] = None
+
+    if overwrite and save_path.exists():
+        save_path.unlink()
 
     for attempt in range(max_retries + 1):
         downloaded = save_path.stat().st_size if save_path.exists() else 0

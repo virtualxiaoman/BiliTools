@@ -242,3 +242,23 @@ def test_download_stream_gives_up_after_retries(tmp_path):
     with patch("requests.get", return_value=BadResp()):
         with pytest.raises(DownloadError):
             dl.download_stream("http://x", tmp_path / "f.bin", max_retries=2)
+
+
+
+def test_download_stream_overwrite_starts_from_empty_file(tmp_path):
+    """overwrite=True 不应把新内容追加到旧文件，也不应发 Range。"""
+    class FakeResp:
+        status_code = 200
+        headers = {"Content-Length": "3"}
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size):
+            yield b"new"
+
+    target = tmp_path / "f.bin"
+    target.write_bytes(b"old-content")
+    with patch("requests.get", return_value=FakeResp()) as mock_get:
+        size = dl.download_stream("http://x", target, overwrite=True)
+
+    assert size == 3
+    assert target.read_bytes() == b"new"
+    assert "Range" not in mock_get.call_args.kwargs["headers"]

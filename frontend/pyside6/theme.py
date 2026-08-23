@@ -43,8 +43,9 @@ _PALETTES = {
         "nav_active": "#0a86c9",
         "progress_bg": "#e4e9ef",
         "progress_fg": "#3fb1e8",
-        "scroll_handle": "#c2ccd8",
-        "scroll_bg": "transparent",
+        "scroll_track": "#e7edf3",
+        "scroll_handle": "#9eacbb",
+        "scroll_handle_hover": "#778b9f",
     },
     "dark": {
         "bg": "#1e1e1e",
@@ -72,8 +73,9 @@ _PALETTES = {
         "nav_active": "#66CCFF",
         "progress_bg": "#3a3d44",
         "progress_fg": "#66CCFF",
-        "scroll_handle": "#55585f",
-        "scroll_bg": "transparent",
+        "scroll_track": "#202125",
+        "scroll_handle": "#626873",
+        "scroll_handle_hover": "#858d99",
     },
 }
 
@@ -166,7 +168,7 @@ QPushButton#TitleBtnClose:hover {{ background-color: #e81123; color: #ffffff; }}
 
 QLineEdit {{
     background-color: {p['input_bg']}; border: 1px solid {p['input_border']};
-    border-radius: 4px; padding: 3px 8px; color: {p['text']};
+    border-radius: 4px; padding: 4px 8px; color: {p['text']};
     selection-background-color: {p['accent']}; selection-color: {p['btn_primary_text']};
 }}
 QLineEdit:hover {{ border-color: {p['input_hover_border']}; }}
@@ -233,11 +235,15 @@ QPlainTextEdit {{
     border-radius: 4px; color: {p['text']};
     selection-background-color: {p['accent']}; selection-color: {p['btn_primary_text']};
 }}
-QScrollBar:vertical {{ background: {p['scroll_bg']}; width: 10px; margin: 0; }}
-QScrollBar::handle:vertical {{ background: {p['scroll_handle']}; border-radius: 5px; min-height: 30px; }}
+QScrollBar:vertical {{ background: {p['scroll_track']}; width: 10px; margin: 0; border-radius: 5px; }}
+QScrollBar::handle:vertical {{ background: {p['scroll_handle']}; border-radius: 5px; min-height: 30px; margin: 1px; }}
+QScrollBar::handle:vertical:hover {{ background: {p['scroll_handle_hover']}; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: {p['scroll_track']}; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-QScrollBar:horizontal {{ background: {p['scroll_bg']}; height: 10px; margin: 0; }}
-QScrollBar::handle:horizontal {{ background: {p['scroll_handle']}; border-radius: 5px; min-width: 30px; }}
+QScrollBar:horizontal {{ background: {p['scroll_track']}; height: 10px; margin: 0; border-radius: 5px; }}
+QScrollBar::handle:horizontal {{ background: {p['scroll_handle']}; border-radius: 5px; min-width: 30px; margin: 1px; }}
+QScrollBar::handle:horizontal:hover {{ background: {p['scroll_handle_hover']}; }}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: {p['scroll_track']}; }}
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 
 QToolTip {{ background-color: {p['panel_bg']}; color: {p['text']}; border: 1px solid {p['border']}; padding: 4px; }}

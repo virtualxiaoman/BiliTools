@@ -1,5 +1,6 @@
 """下载线程：每个任务一个 QThread，内部自建 VideoService（独立会话）。"""
 import logging
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -67,12 +68,13 @@ class DownloadWorker(QThread):
         # worker 是 GUI 到 SDK 的数据流汇合点：spec（来源/规范 id/选项）
         # -> service API -> DownloadResult -> Qt 信号；所有异常在这里转换成可读摘要。
         try:
+            started_at = time.perf_counter()
             service = VideoService()
             self._service = service
             self._resolve_pending()
             self.milestone(LogCategory.NORMAL, f"开始任务：{self.spec['desc']}")
             results = self._execute(service)
-            summary = self._summary(results)
+            summary = self._summary(results, time.perf_counter() - started_at)
             # 单文件任务的完成里程碑由 ProgressAdapter.finish() 输出（"下载完成/已存在"），
             # 这里只为批量任务额外输出一条汇总。
             if isinstance(results, list):
@@ -95,6 +97,8 @@ class DownloadWorker(QThread):
         src = spec["source"]
         media_type = "audio" if mt == "audio" else "video_with_audio"
         threads = int(spec.get("threads", 1))
+        cache_dirs = spec.get("cache_dirs") or []
+        force = bool(spec.get("force", False))
 
         if src == "bv":
             # 视频页签已经把 BV/av/URL 归一化为 bvid；这里再调用 VideoService，
@@ -105,10 +109,14 @@ class DownloadWorker(QThread):
                 page = spec["page"]
                 adapter.start(1, f"{bvid}（P{page}）")
                 if mt == "audio":
-                    result = service.download_audio(bvid, save_dir, page=page, progress=adapter)
+                    result = service.download_audio(
+                        bvid, save_dir, page=page, progress=adapter,
+                        cache_dirs=cache_dirs, force=force,
+                    )
                 else:
                     result = service.download_video_with_audio(
-                        bvid, save_dir, page=page, quality=quality, progress=adapter
+                        bvid, save_dir, page=page, quality=quality, progress=adapter,
+                        cache_dirs=cache_dirs, force=force,
                     )
                 adapter.finish()
                 return result
@@ -116,7 +124,8 @@ class DownloadWorker(QThread):
             n = len(info.pages) if info.pages else 1
             adapter = ProgressAdapter(n, f"视频 {bvid}", self)
             return service.download_all_pages(
-                bvid, save_dir, quality=quality, media_type=media_type, progress=adapter
+                bvid, save_dir, quality=quality, media_type=media_type, progress=adapter,
+                cache_dirs=cache_dirs, force=force,
             )
 
         if src == "fav":
@@ -129,7 +138,8 @@ class DownloadWorker(QThread):
             mode = "audio" if mt == "audio" else "video"
             return service.download_fav(fid, save_dir, mode=mode, quality=quality,
                                         progress=adapter, bvids=bvids, threads=threads,
-                                        account_sessions=self._account_sessions(threads, spec))
+                                        account_sessions=self._account_sessions(threads, spec),
+                                         cache_dirs=cache_dirs, force=force)
 
         if src == "season":
             kind, val, mid = spec["input"]
@@ -147,6 +157,7 @@ class DownloadWorker(QThread):
                 bvid=bvid, dir=save_dir, season_id=season_id, mid=mid or 0,
                 quality=quality, media_type=media_type, progress=adapter, season=season,
                 threads=threads, account_sessions=self._account_sessions(threads, spec),
+                cache_dirs=cache_dirs, force=force,
             )
 
         if src == "emote":
@@ -192,7 +203,8 @@ class DownloadWorker(QThread):
             mode = "audio" if mt == "audio" else "video"
             return service.download_up(mid, save_dir, mode=mode, quality=quality,
                                        progress=adapter, bvids=bvids, threads=threads,
-                                       account_sessions=self._account_sessions(threads, spec))
+                                       account_sessions=self._account_sessions(threads, spec),
+                                       cache_dirs=cache_dirs, force=force)
 
         raise ValueError(f"未知下载来源：{src}")
 
@@ -226,15 +238,20 @@ class DownloadWorker(QThread):
             return ParallelProgressAdapter(n, label, self)
         return ProgressAdapter(n, label, self)
 
-    def _summary(self, results) -> str:
+    def _summary(self, results, elapsed: float | None = None) -> str:
         if results is None:
-            return "任务完成：无结果"
-        if isinstance(results, list):
+            summary = "任务完成：无结果"
+        elif isinstance(results, list):
             cached = sum(1 for r in results if getattr(r, "cached", False))
-            return f"任务完成：共 {len(results)} 个文件（其中缓存 {cached} 个）"
-        if getattr(results, "cached", False):
+            summary = f"任务完成：共 {len(results)} 个文件（其中缓存 {cached} 个）"
+        elif getattr(results, "cached", False):
             return f"已存在，跳过下载：{results.path}"
-        return f"下载完成：{results.path}"
+        else:
+            return f"下载完成：{results.path}"
+
+        if elapsed is not None:
+            summary += f"，用时 {elapsed:.2f} 秒"
+        return summary
 
     def _error_kind(self, e) -> int:
         if isinstance(e, BiliAuthError):

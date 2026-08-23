@@ -78,12 +78,12 @@ def bold_font(size: int = 13) -> QFont:
 
 
 def log_font() -> QFont:
-    """下载日志内容字体：系统字体，基准 11pt（随全局缩放）。
+    """下载日志内容字体：系统字体，基准 9pt（随全局缩放）。
 
     日志内容必须用代码 setFont 设置（QSS 字体不会进入 QPlainTextEdit 的文档默认字体）。
     """
     f = QFont(_SYSTEM_FAMILY)
-    f.setPointSizeF(11 * _zoom)
+    f.setPointSizeF(9 * _zoom)
     return f
 
 

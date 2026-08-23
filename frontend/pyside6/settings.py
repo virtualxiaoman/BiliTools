@@ -8,6 +8,7 @@ UI_SETTINGS_PATH = ASSETS_DIR / "ui_settings.json"
 
 DEFAULTS = {
     "save_dir": str(VIDEO_OUTPUT_DIR),
+    "cache_dirs": [],               # 额外缓存查验目录；当前保存目录始终自动加入
     "quality": "HD4K",
     "media_type": "video_with_audio",  # 视频（含音频）/ 仅音频
     "theme": "light",                  # light / dark

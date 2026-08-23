@@ -85,7 +85,7 @@ class DownloadPanel(QWidget):
         dir_row = QHBoxLayout()
         self.dir_label = QLabel("保存到")
         self.dir_edit = QLineEdit(settings.get("save_dir"))
-        self.dir_edit.setFixedHeight(34)
+        self.dir_edit.setFixedHeight(38)
         self._normal_save_dir = self.dir_edit.text()
         self._collection_asset_active = False
         self.btn_browse = QPushButton("浏览…")
@@ -187,10 +187,14 @@ class DownloadPanel(QWidget):
             "有多个账号时，把并发线程均匀分摊到各账号上（各自用自己账号的 cookie），"
             "降低单个账号的风控风险")
         self.distribute_check.toggled.connect(lambda on: self.settings.set("distribute_accounts", on))
+        self.force_check = QCheckBox("忽略缓存")
+        self.force_check.setToolTip("忽略所有缓存；目标文件名完全一致时覆盖，否则保留旧文件并下载新文件")
         th_row.addWidget(QLabel("并发线程："))
         th_row.addWidget(self.threads_edit)
         th_row.addSpacing(8)
         th_row.addWidget(self.distribute_check)
+        th_row.addSpacing(8)
+        th_row.addWidget(self.force_check)
         th_row.addStretch(1)
         outer.addWidget(self.threads_row)
 
@@ -242,7 +246,7 @@ class DownloadPanel(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        input_edit.setFixedHeight(34)
+        input_edit.setFixedHeight(38)
         layout.addWidget(input_edit, 0, Qt.AlignmentFlag.AlignTop)
         layout.addStretch(1)
         return page
@@ -355,25 +359,33 @@ class DownloadPanel(QWidget):
                 return {"source": "bv", "input": bvid, "scope": scope, "page": page,
                         "media_type": media_type, "quality": quality,
                         "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(), "desc": desc}
+                        "distribute_accounts": self.distribute_check.isChecked(),
+                         "cache_dirs": self.settings.get("cache_dirs", []),
+                         "force": self.force_check.isChecked(), "desc": desc}
             if tab == 1:
                 fid = normalize_fav(raw)
                 return {"source": "fav", "input": fid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
                         "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(), "desc": f"收藏夹 {fid}"}
+                        "distribute_accounts": self.distribute_check.isChecked(),
+                         "cache_dirs": self.settings.get("cache_dirs", []),
+                         "force": self.force_check.isChecked(), "desc": f"收藏夹 {fid}"}
             if tab == 2:
                 kind, val, mid = normalize_season(raw)
                 return {"source": "season", "input": (kind, val, mid), "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
                         "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(), "desc": f"合集 {val}"}
+                        "distribute_accounts": self.distribute_check.isChecked(),
+                         "cache_dirs": self.settings.get("cache_dirs", []),
+                         "force": self.force_check.isChecked(), "desc": f"合集 {val}"}
             if tab == 3:
                 mid = normalize_mid(raw)
                 return {"source": "up", "input": mid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
                         "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(), "desc": f"UP主 {mid}"}
+                        "distribute_accounts": self.distribute_check.isChecked(),
+                         "cache_dirs": self.settings.get("cache_dirs", []),
+                         "force": self.force_check.isChecked(), "desc": f"UP主 {mid}"}
         except NeedsUrlResolution:
             # 短链等本地解析不了的链接：先建 pending 任务，交给下载线程跟随跳转，
             # 避免在界面线程发 HTTP 请求卡住 UI
@@ -400,6 +412,8 @@ class DownloadPanel(QWidget):
             "save_dir": save_dir,
             "threads": self.threads_edit.value(),
             "distribute_accounts": self.distribute_check.isChecked(),
+            "cache_dirs": self.settings.get("cache_dirs", []),
+            "force": self.force_check.isChecked(),
             "desc": f"{labels[tab]}（解析链接中…）",
         }
 
