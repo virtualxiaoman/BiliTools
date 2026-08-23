@@ -14,7 +14,11 @@ mid 唯一；cookie_path 显式存储（默认落在全局 cookie 目录下的 <
 
 import json
 import logging
+import os
 import shutil
+import tempfile
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +27,72 @@ from src.config.path import ACCOUNTS_FILE, get_cookie_dir, set_cookie_path
 from src.models.account_model import Account
 
 logger = logging.getLogger(__name__)
+
+_LOCKS: dict[str, threading.RLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _thread_lock(path: Path) -> threading.RLock:
+    key = str(path.expanduser().resolve()).casefold()
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(key, threading.RLock())
+
+
+@contextmanager
+def _file_lock(path: Path):
+    """跨进程锁：Windows 用 msvcrt，POSIX 用 flock。"""
+    lock_path = path.with_name(path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            handle.write(b"0")
+            handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+
+
+def atomic_write_text(path: Path, text: str, mode: int = 0o600) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    tmp = Path(tmp_name)
+    try:
+        try:
+            os.chmod(tmp, mode)
+        except OSError:
+            pass
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            fd = -1
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        try:
+            os.chmod(path, mode)
+        except OSError:
+            pass
+    finally:
+        if fd != -1:
+            os.close(fd)
+        tmp.unlink(missing_ok=True)
 
 
 class AccountManager:
@@ -33,6 +103,8 @@ class AccountManager:
         self.accounts: list[Account] = []
         self.current_mid: Optional[int] = None
         self.default_mid: Optional[int] = None  # 启动时默认使用的账号（设为默认）
+        self._loaded_current_mid: Optional[int] = None
+        self._loaded_default_mid: Optional[int] = None
         self._load()
 
     # ---- 持久化 ----
@@ -41,6 +113,8 @@ class AccountManager:
         self.accounts = []
         self.current_mid = None
         self.default_mid = None
+        self._loaded_current_mid = None
+        self._loaded_default_mid = None
         if not self.accounts_file.exists():
             return
         try:
@@ -48,41 +122,95 @@ class AccountManager:
         except (json.JSONDecodeError, OSError):
             logger.warning("[AccountManager] 账号表损坏，回退为空表：%s", self.accounts_file)
             return
-        for a in data.get("accounts") or []:
-            if a.get("mid") is None or not a.get("cookie_path"):
+        if not isinstance(data, dict):
+            logger.warning("[AccountManager] 账号表顶层必须是对象：%s", self.accounts_file)
+            return
+        raw_accounts = data.get("accounts")
+        if raw_accounts is None:
+            raw_accounts = []
+        if not isinstance(raw_accounts, list):
+            logger.warning("[AccountManager] accounts 必须是列表：%s", self.accounts_file)
+            raw_accounts = []
+        for raw in raw_accounts:
+            if not isinstance(raw, dict):
                 continue
-            self.accounts.append(Account(
-                mid=int(a["mid"]),
-                user_name=str(a.get("user_name", "")),
-                cookie_path=Path(a["cookie_path"]),
-            ))
-        current = data.get("current_mid")
-        self.current_mid = int(current) if current is not None else None
-        if self.current_mid is not None and self.get(self.current_mid) is None:
-            self.current_mid = None  # 当前账号已不存在（表被手动改坏等）
-        default = data.get("default_mid")
-        self.default_mid = int(default) if default is not None else None
-        if self.default_mid is not None and self.get(self.default_mid) is None:
-            self.default_mid = None
+            try:
+                mid = int(raw.get("mid"))
+                cookie_path = raw.get("cookie_path")
+                if mid <= 0 or not isinstance(cookie_path, str) or not cookie_path.strip():
+                    continue
+                self.accounts.append(Account(
+                    mid=mid,
+                    user_name=str(raw.get("user_name", "")),
+                    cookie_path=Path(cookie_path).expanduser().resolve(),
+                ))
+            except (TypeError, ValueError, OSError):
+                logger.warning("[AccountManager] 跳过无效账号记录：%r", raw)
+
+        for attr in ("current_mid", "default_mid"):
+            raw_value = data.get(attr)
+            try:
+                value = int(raw_value) if raw_value is not None else None
+            except (TypeError, ValueError):
+                value = None
+            if value is not None and value <= 0:
+                value = None
+            setattr(self, attr, value)
+            if value is not None and self.get(value) is None:
+                setattr(self, attr, None)
+        self._loaded_current_mid = self.current_mid
+        self._loaded_default_mid = self.default_mid
 
     def reload(self) -> None:
         """重新从磁盘读取映射表（账号列表可能被其他实例/登录流程修改）。"""
         self._load()
 
     def save(self) -> None:
-        """原子写映射表（先写临时文件再替换，避免写一半损坏）。"""
-        data = {
-            "current_mid": self.current_mid,
-            "default_mid": self.default_mid,
-            "accounts": [
-                {"mid": a.mid, "user_name": a.user_name, "cookie_path": str(a.cookie_path)}
-                for a in self.accounts
-            ],
+        """在跨进程锁内以 fsync + replace 原子写入账号表。"""
+        local_accounts = {
+            a.mid: {"mid": a.mid, "user_name": a.user_name, "cookie_path": str(a.cookie_path)}
+            for a in self.accounts
         }
         self.accounts_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.accounts_file.with_name(self.accounts_file.name + ".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(self.accounts_file)
+        lock = _thread_lock(self.accounts_file)
+        with lock, _file_lock(self.accounts_file):
+            # 在锁内读取并合并其他进程刚提交的账号，避免两个实例同时登录时
+            # 后写入者把先写入者整表覆盖。相同 mid 以当前实例的最新值为准。
+            disk_accounts = {}
+            existing_data = {}
+            if self.accounts_file.exists():
+                try:
+                    raw = json.loads(self.accounts_file.read_text(encoding="utf-8"))
+                    existing_data = raw if isinstance(raw, dict) else {}
+                    for item in existing_data.get("accounts", []):
+                        if isinstance(item, dict):
+                            try:
+                                mid = int(item.get("mid"))
+                            except (TypeError, ValueError):
+                                continue
+                            if mid > 0:
+                                disk_accounts[mid] = item
+                except (OSError, json.JSONDecodeError):
+                    logger.warning("[AccountManager] 保存时无法读取旧账号表，将以当前实例内容覆盖：%s", self.accounts_file)
+            merged_accounts = {**disk_accounts, **local_accounts}
+            current_mid = self.current_mid
+            if self.current_mid == self._loaded_current_mid:
+                current_mid = existing_data.get("current_mid")
+            default_mid = self.default_mid
+            if self.default_mid == self._loaded_default_mid:
+                default_mid = existing_data.get("default_mid")
+            data = {
+                "current_mid": current_mid,
+                "default_mid": default_mid,
+                "accounts": list(merged_accounts.values()),
+            }
+            atomic_write_text(
+                self.accounts_file,
+                json.dumps(data, ensure_ascii=False, indent=2),
+                mode=0o600,
+            )
+            self._loaded_current_mid = self.current_mid
+            self._loaded_default_mid = self.default_mid
 
     # ---- 查询 ----
 
@@ -216,11 +344,11 @@ class AccountManager:
         try:
             cookies = BiliCookies(cookie=set_cookie)
             mid = cookies.mid if cookies.mid is not None else self._resolve_mid_online(set_cookie)
-            if mid is None:
-                mid = 0  # 解析不出 uid 的兜底占位，避免重复登录叠账号
+            if mid is None or int(mid) <= 0:
+                raise ValueError("登录凭证中无法解析有效 UID")
+            mid = int(mid)
             save_path = self.default_cookie_path(mid)
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            save_path.write_text(set_cookie.strip(), encoding="utf-8")
+            atomic_write_text(save_path, set_cookie.strip(), mode=0o600)
             # 登录响应先落盘并登记账号，再切换全局 cookie 路径；
             # 只有 switch 完成后，下面的昵称查询才会读取新账号凭证。
             account = self.upsert(mid, "", save_path)
@@ -243,8 +371,12 @@ class AccountManager:
 
             with tempfile.TemporaryDirectory() as tmp:
                 p = Path(tmp) / "cookie.txt"
-                p.write_text(set_cookie.strip(), encoding="utf-8")
-                return LoginService(BiliSession(cookie_path=str(p))).get_login_state().mid
+                atomic_write_text(p, set_cookie.strip(), mode=0o600)
+                session = BiliSession(cookie_path=str(p))
+                try:
+                    return LoginService(session).get_login_state().mid
+                finally:
+                    session.close()
         except Exception as e:
             logger.warning("[AccountManager] 在线解析 uid 失败：%s", e)
             return None

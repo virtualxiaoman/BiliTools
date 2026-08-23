@@ -64,6 +64,8 @@ def test_switch_unknown_mid_clears_current(tmp_path):
     m.switch(999)  # 不存在的 mid → 无当前账号，回落默认
     assert m.get_current() is None
     assert path_mod.get_cookie_path() == path_mod.get_cookie_dir() / "qr_login.txt"
+    data = json.loads((tmp_path / "accounts.json").read_text(encoding="utf-8"))
+    assert data["current_mid"] is None
 
 
 def test_remove_deletes_file_and_switches_next(tmp_path):
@@ -156,9 +158,9 @@ def test_handle_login_fallback_mid_zero(tmp_path, monkeypatch):
     monkeypatch.setattr(AccountManager, "_resolve_mid_online", staticmethod(lambda _c: None))
     monkeypatch.setattr(AccountManager, "_resolve_uname", staticmethod(lambda: ""))
     account = m.handle_login("SESSDATA=abc")
-    assert account is not None
-    assert account.mid == 0
-    assert m.get_current().mid == 0
+    # 无法验证 UID 时必须拒绝登录，不能创建 mid=0 的伪账号。
+    assert account is None
+    assert m.get_current() is None
 
 
 def test_set_default_marks_and_switches(tmp_path):

@@ -11,6 +11,8 @@ cookie 的路径全局统一管理，默认读取 `get_cookie_path()`（多账�
 cookie 文件），除非显式传入自定义路径，否则不需要也不应到处传 cookie 路径。
 """
 
+import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar, Optional
@@ -38,6 +40,7 @@ class BiliCookies:
 
     # ---- 进程内缓存：同一路径只解析一次 ----
     _cache: ClassVar[dict] = {}
+    _cache_lock: ClassVar[threading.RLock] = threading.RLock()
 
     def __post_init__(self) -> None:
         self._parse()
@@ -82,9 +85,23 @@ class BiliCookies:
         if path is None:
             path = get_cookie_path()
         path = Path(path)
-        if str(path) not in cls._cache:
-            cls._cache[str(path)] = cls._read_file(path)
-        return cls._cache[str(path)]
+        path = path.expanduser().resolve()
+        with cls._cache_lock:
+            if str(path) not in cls._cache:
+                cls._ensure_private_file(path)
+                cls._cache[str(path)] = cls._read_file(path)
+            return cls._cache[str(path)]
+
+    @classmethod
+    def _ensure_private_file(cls, path: Path) -> None:
+        if not path.exists() or os.name == "nt":
+            return
+        try:
+            os.chmod(path, 0o600)
+            if path.stat().st_mode & 0o077:
+                raise PermissionError(f"Cookie 文件权限过宽：{path}")
+        except OSError as exc:
+            raise PermissionError(f"无法检查 Cookie 文件权限：{path}") from exc
 
     @classmethod
     def _read_file(cls, path: Path) -> "BiliCookies":
@@ -107,13 +124,16 @@ class BiliCookies:
         """
         if path is None:
             path = get_cookie_path()
-        cls._cache.pop(str(Path(path)), None)
+        path = Path(path).expanduser().resolve()
+        with cls._cache_lock:
+            cls._cache.pop(str(path), None)
         return cls.from_file(path)
 
     @classmethod
     def clear_cache(cls) -> None:
         """清空进程内 cookie 缓存（账号切换/删除后调用，避免旧路径缓存残留）。"""
-        cls._cache.clear()
+        with cls._cache_lock:
+            cls._cache.clear()
 
     # ---- 请求头 ----
 

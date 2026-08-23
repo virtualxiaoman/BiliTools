@@ -51,14 +51,21 @@ def test_merge_uses_imageio_binary(tmp_path):
     audio = tmp_path / "a.m4a"
     video.write_bytes(b"v")
     audio.write_bytes(b"a")
+    class FakeProcess:
+        def __init__(self, cmd, **kwargs):
+            self.cmd = cmd
+            self.returncode = 0
+            Path(cmd[-1]).write_bytes(b"merged")
+        def poll(self): return self.returncode
+        def wait(self, timeout=None): return self.returncode
+        def terminate(self): self.returncode = 0
+        def kill(self): self.returncode = 0
+
     with patch("shutil.which", return_value=None), patch.object(
         dl, "_imageio_ffmpeg_path", return_value=r"C:\imageio\ffmpeg.exe"
-    ), patch(
-        "subprocess.run",
-        return_value=__import__("subprocess").CompletedProcess(args=[], returncode=0),
-    ) as mock_run:
+    ), patch("subprocess.Popen", side_effect=FakeProcess) as mock_popen:
         dl.merge_video_audio(video, audio, tmp_path / "out.mp4")
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_popen.call_args[0][0]
         assert cmd[0] == r"C:\imageio\ffmpeg.exe"
         assert "-c" in cmd and "copy" in cmd
 
@@ -77,12 +84,20 @@ def test_merge_command_has_yes_flag(tmp_path):
     audio = tmp_path / "a.m4a"
     video.write_bytes(b"v")
     audio.write_bytes(b"a")
+    class FakeProcess:
+        def __init__(self, cmd, **kwargs):
+            self.returncode = 0
+            Path(cmd[-1]).write_bytes(b"merged")
+        def poll(self): return self.returncode
+        def wait(self, timeout=None): return self.returncode
+        def terminate(self): self.returncode = 0
+        def kill(self): self.returncode = 0
+
     with patch("shutil.which", return_value="ffmpeg"), patch(
-        "subprocess.run",
-        return_value=__import__("subprocess").CompletedProcess(args=[], returncode=0),
-    ) as mock_run:
+        "subprocess.Popen", side_effect=FakeProcess
+    ) as mock_popen:
         dl.merge_video_audio(video, audio, tmp_path / "out.mp4")
-        cmd = mock_run.call_args[0][0]
+        cmd = mock_popen.call_args[0][0]
         assert "-y" in cmd
         assert "-i" in cmd
 
@@ -92,9 +107,14 @@ def test_merge_ffmpeg_failure(tmp_path):
     audio = tmp_path / "a.m4a"
     video.write_bytes(b"v")
     audio.write_bytes(b"a")
-    failed = __import__("subprocess").CompletedProcess(args=[], returncode=1,
-                                                       stderr=b"bad input")
-    with patch("shutil.which", return_value="ffmpeg"), patch("subprocess.run", return_value=failed):
+    class FailedProcess:
+        returncode = 1
+        def poll(self): return self.returncode
+        def wait(self, timeout=None): return self.returncode
+        def terminate(self): pass
+        def kill(self): pass
+
+    with patch("shutil.which", return_value="ffmpeg"), patch("subprocess.Popen", return_value=FailedProcess()):
         with pytest.raises(DownloadError):
             dl.merge_video_audio(video, audio, tmp_path / "out.mp4")
 

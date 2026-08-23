@@ -41,11 +41,17 @@ from src.models.video_model import VideoInfo, VideoPage, VideoSeason, VideoSeaso
 from src.services.archive import ArchiveService
 from src.urls.video_urls import VideoUrls
 from src.util.downloader import ProgressCallback, download_stream, ffmpeg_available, merge_video_audio
-from src.util.filename import build_download_filename, build_multi_page_filename
+from src.util.filename import (
+    build_download_filename,
+    build_multi_page_filename,
+    resolve_save_path,
+)
 from src.util.progress import BatchProgress, ParallelBatchProgress
 from src.util.risk_gate import RiskGate
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_MEDIA_TYPES = {"video", "audio", "video_with_audio", "cover"}
 
 
 class _FileCounter:
@@ -93,16 +99,25 @@ def _parallel_run(items, fn, threads: int, on_complete: Optional[Callable[[int, 
     return results
 
 
+def _valid_image_bytes(data: bytes) -> bool:
+    return (data.startswith(b"\xff\xd8\xff") or data.startswith(b"\x89PNG\r\n\x1a\n")
+            or data.startswith((b"GIF87a", b"GIF89a"))
+            or data.startswith(b"RIFF") and data[8:12] == b"WEBP")
+
+
 class VideoService:
     """B 站视频的获取与下载服务。"""
 
-    def __init__(self, session: Optional[BiliSession] = None, default_dir: Path = VIDEO_OUTPUT_DIR):
+    def __init__(self, session: Optional[BiliSession] = None, default_dir: Path = VIDEO_OUTPUT_DIR,
+                 cancel_event: Optional[threading.Event] = None):
         """
         :param session: BiliSession 实例，None 时创建（使用默认 cookie）
         :param default_dir: 默认下载目录，调用下载方法未指定 dir 时使用
         """
+        self._owns_session = session is None
         self.session = session if session is not None else BiliSession()
         self.default_dir = Path(default_dir)
+        self.cancel_event = cancel_event
 
     # ---- 视频信息 ----
 
@@ -139,50 +154,38 @@ class VideoService:
     # ---- 播放流 ----
 
     def get_playurl(self, bvid: str, cid: int, fnval: int = DASH_FNVAL) -> DashStreams:
-        """获取视频 DASH 播放流（视频/音频直链）。
-
-        :param bvid: BV号
-        :param cid: 视频 cid（鉴权参数）
-        :param fnval: 置为 4048 会取到所有可用 DASH 视频流
-        :return: DashStreams（video 按清晰度降序，audio 按码率降序）
-        """
+        """获取并严格校验视频 DASH 播放流。"""
         params = {
-            "bvid": bvid,
-            "cid": cid,
-            "qn": 120,  # 4K（该值在DASH格式下无效，因为DASH会返回所有可用分辨率的流地址，由 pick_video 挑选）
-            "fnver": 0,  # 定值
-            "fnval": fnval,  # 设置为4048则会所有可用 DASH 视频流。
-            "fourk": 1,  # 是否允许4k。取0代表画质最高1080P（这是不传递fourk时的默认值），取1代表最高4K
-            "platform": "pc",  # 平台。pc或html5
-            "high_quality": 1,  # 当platform=html5时，此值为1可使画质为1080p
+            "bvid": bvid, "cid": cid, "qn": 120, "fnver": 0, "fnval": fnval,
+            "fourk": 1, "platform": "pc", "high_quality": 1,
         }
-        # playurl 是下载链路的鉴权边界：先对 bvid/cid/清晰度参数做 wbi 签名，
-        # 再交给 BiliSession 注入 Cookie/Referer；返回的 DASH URL 只在本次任务内使用。
-        get_wbi(params)  # 原地追加 wts 与 w_rid
+        get_wbi(params)
         data = self.session.get(VideoUrls.PLAY, params=params)
-
-        videos = [
-            VideoStream(
-                url=v["baseUrl"],
-                codecs=v.get("codecs", ""),
-                width=v.get("width", 0),
-                height=v.get("height", 0),
-                quality=v.get("id", 0),
-                frame_rate=v.get("frameRate", ""),
-                size=v.get("size", 0),
-            )
-            for v in data["dash"]["video"]
-        ]
-        audios = [
-            AudioStream(
-                url=a["baseUrl"],
-                codecs=a.get("codecs", ""),
-                bandwidth=a.get("bandwidth", 0),
-                size=a.get("size", 0),
-            )
-            for a in data["dash"]["audio"]
-        ]
-        # DashStreams 构造时自动按 quality / bandwidth 降序排序
+        if not isinstance(data, dict):
+            raise BiliAPIError("播放流响应 data 类型错误")
+        dash = data.get("dash")
+        if not isinstance(dash, dict):
+            raise BiliAPIError("播放流响应缺少 dash 数据")
+        raw_videos = dash.get("video")
+        raw_audios = dash.get("audio")
+        if not isinstance(raw_videos, list) or not isinstance(raw_audios, list):
+            raise BiliAPIError("播放流响应的 video/audio 字段类型错误")
+        videos = []
+        for value in raw_videos:
+            if not isinstance(value, dict) or not isinstance(value.get("baseUrl"), str) or not value["baseUrl"]:
+                continue
+            videos.append(VideoStream(url=value["baseUrl"], codecs=value.get("codecs", ""),
+                                      width=value.get("width", 0), height=value.get("height", 0),
+                                      quality=value.get("id", 0), frame_rate=value.get("frameRate", ""),
+                                      size=value.get("size", 0)))
+        audios = []
+        for value in raw_audios:
+            if not isinstance(value, dict) or not isinstance(value.get("baseUrl"), str) or not value["baseUrl"]:
+                continue
+            audios.append(AudioStream(url=value["baseUrl"], codecs=value.get("codecs", ""),
+                                      bandwidth=value.get("bandwidth", 0), size=value.get("size", 0)))
+        if not videos or not audios:
+            raise BiliAPIError("播放流响应不含可用的视频或音频流")
         return DashStreams(video=videos, audio=audios)
 
     # ---- 下载 ----
@@ -330,392 +333,228 @@ class VideoService:
         return roots
 
     def _find_downloaded_file(self, bvid: str, extensions: set[str],
-                              page: Optional[int] = None,
-                              root: Optional[Path] = None,
+                              page: Optional[int] = None, root: Optional[Path] = None,
                               roots: Optional[Iterable[Path]] = None) -> Optional[Path]:
         search_roots = list(roots) if roots is not None else [root or self.default_dir]
-        search_roots = [Path(value) for value in search_roots if value is not None]
-
         extensions = {ext.lower().lstrip(".") for ext in extensions}
-        # 只有需要区分分P时才生成 page_tag，page_tag与 _default_filename 的命名规则保持一致
-        if page is not None and page > 1:
-            page_tag = f"-P{page:02d}".lower()  # 单P也不需要判断
-        else:
-            page_tag = None
-
-        for search_root in search_roots:
-            if not search_root.exists():
+        page_tag = f"-p{page:02d}" if page is not None and page > 1 else None
+        for value in search_roots:
+            if value is None:
+                continue
+            search_root = Path(value).expanduser()
+            if not search_root.is_dir():
                 continue
             for path in search_root.rglob("*"):
-                if not path.is_file():
+                if (not path.is_file() or path.name.endswith((".part", ".tmp"))
+                        or path.stat().st_size <= 0):
                     continue
-                stem = path.stem.lower()
-                # 基础条件：BV号 + 文件扩展名
-                if bvid.lower() not in stem:
+                if bvid.casefold() not in path.stem.casefold():
                     continue
-                if path.suffix.lower().lstrip(".") not in extensions:
+                if path.suffix.casefold().lstrip(".") not in extensions:
                     continue
-                # 视频/音频需要进一步匹配 P 序号
-                if page_tag is not None and page_tag not in stem:
+                if page_tag is not None and page_tag not in path.stem.casefold():
                     continue
                 return path
-
         return None
 
     def download_video(
-            self,
-            bvid: str,
-            dir: Optional[Path] = None,
-            *,
-            page: int = 1,
-            quality: VideoQuality = VideoQuality.HD4K,
-            progress_cb: Optional[ProgressCallback] = None,
-            progress: Optional[BatchProgress] = None,
-            filename: Optional[str] = None,
-            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
-            force: bool = False,
+            self, bvid: str, dir: Optional[Path] = None, *, page: int = 1,
+            quality: VideoQuality = VideoQuality.HD4K, progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None, filename: Optional[str] = None,
+            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
     ) -> DownloadResult:
-        """下载视频流（无音频）。文件名为 `[标题](BV号).{实际格式}`，多P时含 P 序号。
-
-        :param bvid: BV号
-        :param dir: 保存目录。None 时使用默认下载目录
-        :param page: 分P序号（从1开始），多P视频指定要下载的P
-        :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
-        :param progress_cb: 进度回调 (downloaded, total)
-        :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由批量接口传入）
-        :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
-        :param cache_dirs: 额外缓存查验目录；当前保存目录始终自动加入且优先查验
-        :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
-        :return: DownloadResult
-        """
-        # 下载前先递归检查默认下载目录，避免已经下载过的视频再次请求网络
-        # todo: 后缀名应该统一存储
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
-            bvid, {"mp4", "flv", "m4s"}, page=page,
-            roots=self._cache_roots(save_dir, cache_dirs),
-        )
+            bvid, {"mp4", "flv", "m4s"}, page=page, roots=self._cache_roots(save_dir, cache_dirs))
         if existing is not None:
             return DownloadResult(path=existing, media_type="video", size=existing.stat().st_size, cached=True)
         info, dash = self._fetch_streams(bvid, page)
         stream = dash.pick_video(quality)
         if stream is None:
             raise ValueError(f"视频 {bvid} 第 {page} 分P 没有可用的视频流。")
-
-        save_dir.mkdir(parents=True, exist_ok=True)
-        if filename is None:
-            filename = self._default_filename(info, bvid, page, stream.ext)
-        save_path = save_dir / filename
-
-        if save_path.exists() and not force:
+        safe_name = filename or self._default_filename(info, bvid, page, stream.ext)
+        save_path = resolve_save_path(save_dir, safe_name)
+        if save_path.is_file() and save_path.stat().st_size > 0 and not force:
             return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size, cached=True)
-
-        # 单独调用时自动显示进度条
-        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
-
-        if progress:
-            picked = VideoQuality.from_qn(stream.quality)
-            if picked is not None:
-                progress.set_quality(picked)
-        # 流 URL 来自 playurl，下载工具只负责带着会话请求头写入本地文件；
-        # 因此 API 响应、媒体字节和最终 DownloadResult 的职责边界清晰。
-        size = download_stream(
-            stream.url, save_path, self.session.session.headers,
-            progress_cb=progress.make_stream_callback() if progress else progress_cb,
-            overwrite=force,
-        )
-        if auto_progress:
-            progress.finish()
-        return DownloadResult(path=save_path, media_type="video", size=size)
+        progress, auto = self._auto_progress(safe_name, progress, progress_cb)
+        try:
+            if progress:
+                picked = VideoQuality.from_qn(stream.quality)
+                if picked is not None:
+                    progress.set_quality(picked)
+            size = download_stream(stream.url, save_path, self.session.session.headers,
+                                   progress_cb=progress.make_stream_callback() if progress else progress_cb,
+                                   overwrite=force, cancel_event=getattr(self, "cancel_event", None))
+            return DownloadResult(path=save_path, media_type="video", size=size)
+        finally:
+            if auto:
+                progress.finish()
 
     def download_audio(
-            self,
-            bvid: str,
-            dir: Optional[Path] = None,
-            *,
-            page: int = 1,
-            progress_cb: Optional[ProgressCallback] = None,
-            progress: Optional[BatchProgress] = None,
-            filename: Optional[str] = None,
-            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
+            self, bvid: str, dir: Optional[Path] = None, *, page: int = 1,
+            progress_cb: Optional[ProgressCallback] = None, progress: Optional[BatchProgress] = None,
+            filename: Optional[str] = None, cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
             force: bool = False,
     ) -> DownloadResult:
-        """下载音频流。文件名为 `[标题](BV号).{实际格式}`，多P时含 P 序号。
-
-        :param bvid: BV号
-        :param dir: 保存目录。None 时使用默认下载目录
-        :param page: 分P序号（从1开始），多P视频指定要下载的P
-        :param progress_cb: 进度回调 (downloaded, total)
-        :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由批量接口传入）
-        :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
-        :param cache_dirs: 额外缓存查验目录；当前保存目录始终自动加入且优先查验
-        :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
-        :return: DownloadResult
-        """
-        # 音频缓存检查不含 mp4：已存在的「视频」mp4 不能当作音频已下载而跳过（仅音频下载）
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
-            bvid, {"m4a", "mp3", "flac", "aac"}, page=page,
-            roots=self._cache_roots(save_dir, cache_dirs),
-        )
-        # print(f"existing:{existing}")
+            bvid, {"m4a", "mp3", "flac", "aac"}, page=page, roots=self._cache_roots(save_dir, cache_dirs))
         if existing is not None:
             return DownloadResult(path=existing, media_type="audio", size=existing.stat().st_size, cached=True)
-
         info, dash = self._fetch_streams(bvid, page)
         stream = dash.best_audio()
         if stream is None:
             raise ValueError(f"视频 {bvid} 第 {page} 分P 没有可用的音频流。")
-
-        save_dir.mkdir(parents=True, exist_ok=True)
-        if filename is None:
-            filename = self._default_filename(info, bvid, page, stream.ext)
-        save_path = save_dir / filename
-
-        # 修改：如果文件已经存在，则跳过下载
-        if save_path.exists() and not force:
+        safe_name = filename or self._default_filename(info, bvid, page, stream.ext)
+        save_path = resolve_save_path(save_dir, safe_name)
+        if save_path.is_file() and save_path.stat().st_size > 0 and not force:
             return DownloadResult(path=save_path, media_type="audio", size=save_path.stat().st_size, cached=True)
-
-        # 单独调用时自动显示进度条
-        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
-
-        size = download_stream(
-            stream.url, save_path, self.session.session.headers,
-            progress_cb=progress.make_stream_callback() if progress else progress_cb,
-            overwrite=force,
-        )
-        if auto_progress:
-            progress.finish()
-        return DownloadResult(path=save_path, media_type="audio", size=size)
+        progress, auto = self._auto_progress(safe_name, progress, progress_cb)
+        try:
+            size = download_stream(stream.url, save_path, self.session.session.headers,
+                                   progress_cb=progress.make_stream_callback() if progress else progress_cb,
+                                   overwrite=force, cancel_event=getattr(self, "cancel_event", None))
+            return DownloadResult(path=save_path, media_type="audio", size=size)
+        finally:
+            if auto:
+                progress.finish()
 
     def download_video_with_audio(
-            self,
-            bvid: str,
-            dir: Optional[Path] = None,
-            *,
-            page: int = 1,
-            quality: VideoQuality = VideoQuality.HD4K,
-            keep_parts: bool = False,
-            progress_cb: Optional[ProgressCallback] = None,
-            progress: Optional[BatchProgress] = None,
-            filename: Optional[str] = None,
-            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
+            self, bvid: str, dir: Optional[Path] = None, *, page: int = 1,
+            quality: VideoQuality = VideoQuality.HD4K, keep_parts: bool = False,
+            progress_cb: Optional[ProgressCallback] = None, progress: Optional[BatchProgress] = None,
+            filename: Optional[str] = None, cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
             force: bool = False,
     ) -> DownloadResult:
-        """下载视频流 + 音频流，并用 ffmpeg 合成为一个文件。
-
-        视频流与音频流先下载到临时目录（`<dir>/.tmp/`），合成成功后默认删除。
-        [注意] 合成依赖 ffmpeg（系统安装或 imageio-ffmpeg 库内置），两者都不可用时会
-        在下载前直接报错。
-
-        :param bvid: BV号
-        :param dir: 保存目录。None 时使用默认下载目录
-        :param page: 分P序号（从1开始），多P视频指定要下载的P
-        :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
-        :param keep_parts: 是否保留合成前的视频/音频临时文件（默认删除）
-        :param progress_cb: 进度回调 (downloaded, total)。传入时将进度转发给回调
-        :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由批量接口传入）
-        :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
-        :param cache_dirs: 额外缓存查验目录；当前保存目录始终自动加入且优先查验
-        :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
-        :return: DownloadResult
-        :raises FFmpegNotFoundError: 未检测到 ffmpeg 且未安装 imageio-ffmpeg
-        """
-        # 修改：下载前先检查是否已经存在最终视频
+        import tempfile
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
-            bvid, {"mp4", "flv", "m4s"}, page=page,
-            roots=self._cache_roots(save_dir, cache_dirs),
-        )
+            bvid, {"mp4", "flv", "m4s"}, page=page, roots=self._cache_roots(save_dir, cache_dirs))
         if existing is not None:
             return DownloadResult(path=existing, media_type="video", size=existing.stat().st_size, cached=True)
-
-        import tempfile
-
-        # 预检合成后端：避免下载完几十 MB 后才报错
         if not ffmpeg_available():
-            raise FFmpegNotFoundError(
-                "未检测到 ffmpeg，且未安装 imageio-ffmpeg 库，无法进行音视频合成。"
-                "请安装 ffmpeg 并加入系统 PATH，或执行 `pip install imageio-ffmpeg` 使用内置 ffmpeg。"
-            )
-
+            raise FFmpegNotFoundError("未检测到 ffmpeg，且未安装 imageio-ffmpeg 库，无法进行音视频合成。")
         info, dash = self._fetch_streams(bvid, page)
-        video_stream = dash.pick_video(quality)
-        audio_stream = dash.best_audio()
+        video_stream, audio_stream = dash.pick_video(quality), dash.best_audio()
         if video_stream is None or audio_stream is None:
             raise ValueError(f"视频 {bvid} 第 {page} 分P 的视频流或音频流不可用，无法合成。")
-
-        save_dir.mkdir(parents=True, exist_ok=True)
-        if filename is None:
-            filename = self._default_filename(info, bvid, page, "mp4")
-        save_path = save_dir / filename
-
-        if save_path.exists() and not force:
+        safe_name = filename or self._default_filename(info, bvid, page, "mp4")
+        save_path = resolve_save_path(save_dir, safe_name)
+        if save_path.is_file() and save_path.stat().st_size > 0 and not force:
             return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size, cached=True)
+        progress, auto = self._auto_progress(safe_name, progress, progress_cb)
+        try:
+            if progress:
+                picked = VideoQuality.from_qn(video_stream.quality)
+                if picked is not None:
+                    progress.set_quality(picked)
+            with tempfile.TemporaryDirectory(prefix="bilitools_", dir=save_dir) as tmp:
+                tmp_dir = Path(tmp)
+                video_tmp = tmp_dir / f"video.{video_stream.ext}"
+                audio_tmp = tmp_dir / f"audio.{audio_stream.ext}"
+                state = {"id": 0, "last": 0}
 
-        # 单独调用时自动显示进度条
-        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
+                def cb(done: int, total: Optional[int]) -> None:
+                    if progress:
+                        delta = max(0, done - state["last"])
+                        progress.add(delta, total, stream_id=state["id"])
+                        state["last"] = done
+                    elif progress_cb:
+                        progress_cb(done, total)
 
-        if progress:
-            picked = VideoQuality.from_qn(video_stream.quality)
-            if picked is not None:
-                progress.set_quality(picked)
-
-        # 临时目录下载音视频流
-        with tempfile.TemporaryDirectory(prefix="bilitools_", dir=save_dir) as tmp:
-            tmp_dir = Path(tmp)
-            video_tmp = tmp_dir / f"video.{video_stream.ext}"
-            audio_tmp = tmp_dir / f"audio.{audio_stream.ext}"
-            # 进度：视频流+音频流字节增量累加（跨流不重置，总大小为两流之和）
-            _stream_state = {"id": 0, "last": 0}
-
-            def _stream_cb(done: int, total: Optional[int]) -> None:
+                download_stream(video_stream.url, video_tmp, self.session.session.headers,
+                                progress_cb=cb, cancel_event=getattr(self, "cancel_event", None))
                 if progress:
-                    # 每个流的 done 是流内绝对值，算增量后按流累加；流切换时 last 归零由外层处理
-                    delta = done - _stream_state["last"]
-                    progress.add(delta, total, stream_id=_stream_state["id"])
-                    _stream_state["last"] = done
-                elif progress_cb:
-                    progress_cb(done, total)
-
-            download_stream(
-                video_stream.url, video_tmp, self.session.session.headers,
-                progress_cb=_stream_cb,
-            )
-            if progress:
-                progress.status("视频流下载完成，正在下载音频流...")
-                _stream_state["id"] = 1
-                _stream_state["last"] = 0  # 音频流从头计数
-            download_stream(
-                audio_stream.url, audio_tmp, self.session.session.headers,
-                progress_cb=_stream_cb,
-            )
-            if progress:
-                progress.status("正在用 ffmpeg 合成音视频...")
-            # 两条 DASH 流都落盘后才交给 ffmpeg；合成结果写入最终路径，
-            # 临时目录由 TemporaryDirectory 自动清理（keep_parts=True 时显式移出）。
-            merge_video_audio(video_tmp, audio_tmp, save_path, progress_cb=progress_cb)
-            if keep_parts:
-                # 保留临时文件到同级目录（重命名避免冲突）
-                video_tmp.replace(save_dir / f"{save_path.stem}.video.{video_stream.ext}")
-                audio_tmp.replace(save_dir / f"{save_path.stem}.audio.{audio_stream.ext}")
-
-        if auto_progress:
-            progress.finish()
-        return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size)
+                    progress.status("视频流下载完成，正在下载音频流...")
+                    state["id"], state["last"] = 1, 0
+                download_stream(audio_stream.url, audio_tmp, self.session.session.headers,
+                                progress_cb=cb, cancel_event=getattr(self, "cancel_event", None))
+                if progress:
+                    progress.status("正在用 ffmpeg 合成音视频...")
+                merge_video_audio(video_tmp, audio_tmp, save_path, progress_cb=progress_cb,
+                                  cancel_event=getattr(self, "cancel_event", None))
+                if keep_parts:
+                    video_tmp.replace(save_dir / f"{save_path.stem}.video.{video_stream.ext}")
+                    audio_tmp.replace(save_dir / f"{save_path.stem}.audio.{audio_stream.ext}")
+            return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size)
+        finally:
+            if auto:
+                progress.finish()
 
     def download_cover(
-            self,
-            bvid: str,
-            dir: Optional[Path] = None,
-            *,
-            progress_cb: Optional[ProgressCallback] = None,
-            progress: Optional[BatchProgress] = None,
-            filename: Optional[str] = None,
-            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
-            force: bool = False,
+            self, bvid: str, dir: Optional[Path] = None, *, progress_cb: Optional[ProgressCallback] = None,
+            progress: Optional[BatchProgress] = None, filename: Optional[str] = None,
+            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
     ) -> DownloadResult:
-        """下载视频封面。文件名为 `[标题](BV号).jpg/png`。
-
-        :param bvid: BV号
-        :param dir: 保存目录。None 时使用默认下载目录
-        :param progress_cb: 进度回调 (downloaded, total)
-        :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由批量接口传入）
-        :param filename: 自定义文件名（含扩展名），None 时按统一命名规则生成
-        :param cache_dirs: 额外缓存查验目录；当前保存目录始终自动加入且优先查验
-        :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
-        :return: DownloadResult
-        """
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
-            bvid, {"jpg", "jpeg", "png", "webp"},
-            roots=self._cache_roots(save_dir, cache_dirs),
-        )
+            bvid, {"jpg", "jpeg", "png", "webp"}, roots=self._cache_roots(save_dir, cache_dirs))
         if existing is not None:
             return DownloadResult(path=existing, media_type="cover", size=existing.stat().st_size, cached=True)
-
         info = self.fetch_info(bvid)
         if not info.pic:
             raise ValueError(f"视频 {bvid} 的封面地址获取失败。")
-
-        save_dir.mkdir(parents=True, exist_ok=True)
-        if filename is None:
-            ext = "png" if info.pic.endswith(".png") else "jpg"
-            filename = build_download_filename(info.title, bvid, ext)
-        save_path = save_dir / filename
-
-        if save_path.exists() and not force:
+        ext = "png" if info.pic.lower().split("?", 1)[0].endswith(".png") else "jpg"
+        safe_name = filename or build_download_filename(info.title, bvid, ext)
+        save_path = resolve_save_path(save_dir, safe_name)
+        if save_path.is_file() and save_path.stat().st_size > 0 and not force:
             return DownloadResult(path=save_path, media_type="cover", size=save_path.stat().st_size, cached=True)
-
-        # 单独调用时自动显示进度条
-        progress, auto_progress = self._auto_progress(filename, progress, progress_cb)
-
-        content = self.session.get_raw(info.pic)
-        save_path.write_bytes(content)
-        if progress:
-            progress.update(len(content), len(content))
-        elif progress_cb:
-            progress_cb(len(content), len(content))
-        if auto_progress:
-            progress.finish()
-        return DownloadResult(path=save_path, media_type="cover", size=len(content))
+        progress, auto = self._auto_progress(safe_name, progress, progress_cb)
+        try:
+            content = self.session.get_raw(info.pic, max_bytes=16 * 1024 * 1024)
+            if not _valid_image_bytes(content):
+                raise ValueError("封面响应不是受支持的图片格式")
+            part = save_path.with_name(save_path.name + ".part")
+            part.write_bytes(content)
+            part.replace(save_path)
+            if progress:
+                progress.update(len(content), len(content))
+            elif progress_cb:
+                progress_cb(len(content), len(content))
+            return DownloadResult(path=save_path, media_type="cover", size=len(content))
+        finally:
+            if auto:
+                progress.finish()
 
     def download_all_pages(
-            self,
-            bvid: str,
-            dir: Optional[Path] = None,
-            *,
-            quality: VideoQuality = VideoQuality.HD4K,
-            media_type: str = "video_with_audio",
-            progress_cb: Optional[ProgressCallback] = None,
-            progress: Optional[BatchProgress] = None,
-            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
-            force: bool = False,
+            self, bvid: str, dir: Optional[Path] = None, *,
+            quality: VideoQuality = VideoQuality.HD4K, media_type: str = "video_with_audio",
+            progress_cb: Optional[ProgressCallback] = None, progress: Optional[BatchProgress] = None,
+            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
     ) -> list:
-        """下载多P视频的全部分P（单P视频等价于 download_video_with_audio）。
-
-        :param bvid: BV号
-        :param dir: 保存目录。None 时使用默认下载目录
-        :param quality: 目标清晰度（精确匹配，匹配不到回退到最高可用）
-        :param media_type: 下载类型：video / audio / video_with_audio / cover
-        :param progress_cb: 进度回调 (downloaded, total)
-        :param progress: BatchProgress 进度显示；None 时自动创建
-        :param cache_dirs: 额外缓存查验目录；当前保存目录始终自动加入且优先查验
-        :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
-        :return: DownloadResult 列表（每个分P一个）
-        """
+        if media_type not in _ALLOWED_MEDIA_TYPES:
+            raise ValueError(f"不支持的媒体类型：{media_type!r}，允许值：{sorted(_ALLOWED_MEDIA_TYPES)}")
         info = self.fetch_info(bvid)
         if not info.pages:
             raise ValueError(f"视频 {bvid} 没有分P信息，无法批量下载。")
-
-        n = len(info.pages)
-        progress = progress or BatchProgress(n=n, label=f"视频 {bvid}")
+        # 封面属于稿件级资源，没有 page-specific URL；多P只下载一次，避免重复覆盖同一个文件。
+        pages = info.pages if media_type != "cover" else info.pages[:1]
+        progress = progress or BatchProgress(n=len(pages), label=f"视频 {bvid}")
         results = []
-        for i, page_obj in enumerate(info.pages, 1):
-            # 进度显示用的文件名（与最终保存名一致）
+        for i, page_obj in enumerate(pages, 1):
             display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
             display_name = self._default_filename(info, bvid, page_obj.page, display_ext)
             progress.start(i, display_name)
-            # 逐P信息仅保留在 debug 日志（UI 已由 progress 的"正在下载 文件名"行表达）
-            logger.debug("正在下载 %s 第 %d/%d 分P：%s",
-                         bvid, page_obj.page, n, page_obj.part)
-            if media_type == "video":
-                results.append(self.download_video(bvid, dir, page=page_obj.page, quality=quality,
-                                                   progress_cb=progress_cb, progress=progress,
-                                                   cache_dirs=cache_dirs, force=force))
-            elif media_type == "audio":
-                results.append(self.download_audio(bvid, dir, page=page_obj.page,
-                                                   progress_cb=progress_cb, progress=progress,
-                                                   cache_dirs=cache_dirs, force=force))
-            elif media_type == "cover":
-                results.append(self.download_cover(bvid, dir, progress_cb=progress_cb, progress=progress,
-                                                    cache_dirs=cache_dirs, force=force))
-            else:  # video_with_audio
-                results.append(self.download_video_with_audio(bvid, dir, page=page_obj.page,
-                                                              quality=quality, progress_cb=progress_cb,
-                                                              progress=progress, cache_dirs=cache_dirs,
-                                                              force=force))
-            progress.finish()
+            try:
+                logger.debug("正在下载 %s 第 %d/%d 分P：%s", bvid, page_obj.page, len(pages), page_obj.part)
+                if media_type == "video":
+                    result = self.download_video(bvid, dir, page=page_obj.page, quality=quality,
+                                                 progress_cb=progress_cb, progress=progress,
+                                                 cache_dirs=cache_dirs, force=force)
+                elif media_type == "audio":
+                    result = self.download_audio(bvid, dir, page=page_obj.page,
+                                                 progress_cb=progress_cb, progress=progress,
+                                                 cache_dirs=cache_dirs, force=force)
+                elif media_type == "cover":
+                    result = self.download_cover(bvid, dir, progress_cb=progress_cb, progress=progress,
+                                                 cache_dirs=cache_dirs, force=force)
+                else:
+                    result = self.download_video_with_audio(bvid, dir, page=page_obj.page, quality=quality,
+                                                            progress_cb=progress_cb, progress=progress,
+                                                            cache_dirs=cache_dirs, force=force)
+                results.append(result)
+            finally:
+                progress.finish()
         return results
 
     def fetch_season(self, bvid: Optional[str] = None, season_id: Optional[int] = None,
@@ -761,62 +600,75 @@ class VideoService:
         raise ValueError("fetch_season 需要 bvid 或 season_id 至少一个参数")
 
     def _download_episode(
-            self,
-            episode: VideoSeasonEpisode,
-            save_dir: Path,
-            *,
-            media_type: str,
-            quality: VideoQuality,
-            file_idx: int,
-            progress: Optional[BatchProgress] = None,
+            self, episode: VideoSeasonEpisode, save_dir: Path, *, media_type: str,
+            quality: VideoQuality, file_idx: int, progress: Optional[BatchProgress] = None,
             progress_cb: Optional[ProgressCallback] = None,
-            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
-            force: bool = False,
+            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
     ) -> tuple[list, int]:
-        """下载合集内单个稿件（多P稿件逐P下载），返回 (新增结果列表, 更新后的累计文件序号)。
-
-        文件序号用于合集级进度条 `[file_idx/N]` 的累计显示；
-        各分P的下载方法内部会先检查本地缓存，命中的分P直接返回 cached 结果，不再请求网络。
-        """
+        if media_type not in _ALLOWED_MEDIA_TYPES:
+            raise ValueError(f"不支持的媒体类型：{media_type!r}")
         info = self.fetch_info(episode.bvid)
         new_results = []
-        page_objs = episode.pages if episode.is_multi_page else [
+        page_objs = episode.pages if episode.is_multi_page and media_type != "cover" else [
             VideoPage(page=1, cid=info.cid or 0, part=info.title)]
         for page_obj in page_objs:
             file_idx += 1
             display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
             display_name = self._default_filename(info, episode.bvid, page_obj.page, display_ext)
             progress.start(file_idx, display_name)
-            if media_type == "video":
-                result = self.download_video(episode.bvid, save_dir, page=page_obj.page, quality=quality,
-                                             progress_cb=progress_cb, progress=progress,
-                                             cache_dirs=cache_dirs, force=force)
-            elif media_type == "audio":
-                result = self.download_audio(episode.bvid, save_dir, page=page_obj.page,
-                                             progress_cb=progress_cb, progress=progress,
-                                             cache_dirs=cache_dirs, force=force)
-            elif media_type == "cover":
-                result = self.download_cover(episode.bvid, save_dir,
-                                             progress_cb=progress_cb, progress=progress,
-                                             cache_dirs=cache_dirs, force=force)
-            else:  # video_with_audio
-                result = self.download_video_with_audio(episode.bvid, save_dir, page=page_obj.page,
-                                                        quality=quality, progress_cb=progress_cb,
-                                                        progress=progress, cache_dirs=cache_dirs,
-                                                        force=force)
-            new_results.append(result)
-            progress.finish()
+            try:
+                if media_type == "video":
+                    result = self.download_video(episode.bvid, save_dir, page=page_obj.page, quality=quality,
+                                                 progress_cb=progress_cb, progress=progress, cache_dirs=cache_dirs,
+                                                 force=force)
+                elif media_type == "audio":
+                    result = self.download_audio(episode.bvid, save_dir, page=page_obj.page,
+                                                 progress_cb=progress_cb, progress=progress, cache_dirs=cache_dirs,
+                                                 force=force)
+                elif media_type == "cover":
+                    result = self.download_cover(episode.bvid, save_dir, progress_cb=progress_cb, progress=progress,
+                                                 cache_dirs=cache_dirs, force=force)
+                else:
+                    result = self.download_video_with_audio(episode.bvid, save_dir, page=page_obj.page, quality=quality,
+                                                            progress_cb=progress_cb, progress=progress,
+                                                            cache_dirs=cache_dirs, force=force)
+                new_results.append(result)
+            finally:
+                progress.finish()
         return new_results, file_idx
 
-    def _account_services(self, account_sessions: Optional[list]) -> list:
-        """并发分账用的服务列表：每个账号一个独立会话的 VideoService。
-
-        传空/None 时返回 `[self]`（全部任务用当前账号）；否则为每个 session 建一个
-        VideoService（同 default_dir），供并发任务按下标轮询分摊账号。
-        """
-        if not account_sessions:
+    def _account_services(self, account_sessions=None, threads: int = 1) -> list:
+        """为并发 worker 创建互不共享的 requests.Session。"""
+        if account_sessions:
+            return [VideoService(session=session, default_dir=self.default_dir,
+                                 cancel_event=getattr(self, "cancel_event", None))
+                    for session in account_sessions]
+        if threads <= 1:
             return [self]
-        return [VideoService(session=s, default_dir=self.default_dir) for s in account_sessions]
+        # 测试 double 或外部自定义 session 没有 BiliSession 的配置快照时，
+        # 无法安全复制；回退到调用方对象，保持兼容性。真实生产会话始终隔离。
+        if not isinstance(self.session, BiliSession):
+            return [self]
+        services = []
+        for _ in range(threads):
+            session = BiliSession(cookie_path=self.session.cookie_path, referer=self.session.referer,
+                                  max_retry=self.session.max_retry, timeout=self.session.timeout)
+            service = VideoService(session=session, default_dir=self.default_dir,
+                                   cancel_event=getattr(self, "cancel_event", None))
+            service._owns_session = True
+            services.append(service)
+        return services
+
+    @staticmethod
+    def _close_owned_services(services: Optional[Iterable["VideoService"]]) -> None:
+        """关闭并发期间由本服务创建的会话，不关闭调用方传入的会话。"""
+        for service in services or ():
+            if not getattr(service, "_owns_session", False):
+                continue
+            try:
+                service.session.close()
+            except Exception:
+                logger.warning("关闭并发下载会话失败", exc_info=True)
 
     def download_season(
             self,
@@ -864,6 +716,8 @@ class VideoService:
         :return: DownloadResult 列表
         :raises ValueError: 无法定位合集
         """
+        if media_type not in _ALLOWED_MEDIA_TYPES:
+            raise ValueError(f"不支持的媒体类型：{media_type!r}，允许值：{sorted(_ALLOWED_MEDIA_TYPES)}")
         if season is None:
             season = self.fetch_season(bvid, season_id, mid)
         if season is None or not season.episodes:
@@ -882,11 +736,15 @@ class VideoService:
         label = f"合集「{season.title}」"
         total = len(season.episodes)
         if threads > 1:
-            return self._download_season_parallel(
-                season, save_dir, quality=quality, media_type=media_type,
-                progress=progress, progress_cb=progress_cb, label=label, threads=threads,
-                services=self._account_services(account_sessions), cache_dirs=cache_dirs, force=force,
-            )
+            services = self._account_services(account_sessions, threads)
+            try:
+                return self._download_season_parallel(
+                    season, save_dir, quality=quality, media_type=media_type,
+                    progress=progress, progress_cb=progress_cb, label=label, threads=threads,
+                    services=services, cache_dirs=cache_dirs, force=force,
+                )
+            finally:
+                self._close_owned_services(services)
 
         results = []
         download_count = 0
@@ -928,7 +786,7 @@ class VideoService:
                 lambda ep=episode, sidx=start_idx: svc._download_episode(
                     ep, save_dir, media_type=media_type, quality=quality,
                     file_idx=sidx, progress=progress, progress_cb=progress_cb,
-                     cache_dirs=cache_dirs, force=force,
+                    cache_dirs=cache_dirs, force=force,
                 ),
                 label=label, risk_gate=gate,
             )
@@ -983,10 +841,94 @@ class VideoService:
         if info.season and info.season.episodes:
             # 属于合集：下载整个合集
             return self.download_season(bvid=bvid, dir=dir, quality=VideoQuality.HD4K,
-                                         cache_dirs=cache_dirs, force=force)
+                                        cache_dirs=cache_dirs, force=force)
         # 单视频（含多P）：下载全部分P
         return self.download_all_pages(bvid, dir, quality=VideoQuality.HD4K,
                                        cache_dirs=cache_dirs, force=force)
+
+    def _download_bvid_collection(
+            self,
+            bvids: list,
+            save_dir: Path,
+            *,
+            quality: VideoQuality,
+            media_type: str,
+            progress: BatchProgress,
+            progress_cb: Optional[ProgressCallback],
+            threads: int,
+            account_sessions: Optional[list],
+            cache_dirs: Optional[Union[Iterable[Path], Path, str]],
+            force: bool,
+            item_label: Callable[[str], str],
+            on_skip: Optional[Callable[[str, int, int], None]] = None,
+    ) -> list:
+        """统一执行收藏夹、UP 主等 BV 列表批量下载。"""
+        total = len(bvids)
+        if threads > 1:
+            gate = RiskGate()
+            services = self._account_services(account_sessions, threads)
+
+            def work(bvid, index):
+                service = services[index % len(services)]
+                return service._execute_batch_download(
+                    bvid,
+                    lambda current_bvid=bvid: service.download_all_pages(
+                        current_bvid, save_dir, quality=quality, media_type=media_type,
+                        progress=progress, progress_cb=progress_cb,
+                        cache_dirs=cache_dirs, force=force,
+                    ),
+                    label=item_label(bvid), risk_gate=gate,
+                )
+
+            completed_count = 0
+            download_count = 0
+
+            def report_completion(index, outcome):
+                nonlocal completed_count, download_count
+                bvid = bvids[index]
+                completed_count += 1
+                if outcome is None:
+                    if on_skip is not None:
+                        on_skip(bvid, completed_count, total)
+                    return
+                download_count = self._report_bvid_download(
+                    bvid, outcome, download_count, completed_count, total,
+                )
+
+            try:
+                outcomes = _parallel_run(
+                    bvids, work, threads, on_complete=report_completion,
+                )
+                results = []
+                for outcome in outcomes:
+                    if outcome is not None:
+                        results.extend(outcome)
+                return results
+            finally:
+                self._close_owned_services(services)
+
+        results = []
+        download_count = 0
+        for index, bvid in enumerate(bvids, 1):
+            logger.info("%s：%s", item_label(bvid), bvid)
+            new_results = self._execute_batch_download(
+                bvid,
+                lambda current_bvid=bvid: self.download_all_pages(
+                    current_bvid, save_dir, quality=quality, media_type=media_type,
+                    progress=progress, progress_cb=progress_cb,
+                    cache_dirs=cache_dirs, force=force,
+                ),
+                label=item_label(bvid),
+            )
+            if new_results is None:
+                if on_skip is not None:
+                    on_skip(bvid, index, total)
+                continue
+            results.extend(new_results)
+            download_count = self._report_bvid_download(
+                bvid, new_results, download_count, index, total,
+            )
+        return results
 
     def download_fav(
             self,
@@ -1052,64 +994,15 @@ class VideoService:
             progress = (ParallelBatchProgress(n=total, label=label)
                         if threads > 1 else BatchProgress(n=total, label=label))
 
-        if threads > 1:
-            gate = RiskGate()
-            services = self._account_services(account_sessions)
-
-            def _work(bvid, i):
-                svc = services[i % len(services)]
-                return svc._execute_batch_download(
-                    bvid,
-                    lambda b=bvid: svc.download_all_pages(
-                        b, save_dir, quality=quality, media_type=media_type,
-                        progress=progress, progress_cb=progress_cb,
-                        cache_dirs=cache_dirs, force=force,
-                    ),
-                    label=label, risk_gate=gate,
-                )
-
-            completed_count = 0
-            download_count = 0
-
-            def _on_complete(index, outcome):
-                """任务完成时立即输出视频级汇总日志。"""
-                nonlocal completed_count, download_count
-                bvid = bvids[index]
-                completed_count += 1
-                if outcome is None:
-                    print(f"跳过不可见视频 {bvid}，进度 {completed_count}/{total}")
-                    return
-                download_count = self._report_bvid_download(
-                    bvid, outcome, download_count, completed_count, total,
-                )
-
-            outcomes = _parallel_run(bvids, _work, threads, on_complete=_on_complete)
-            # 下载结果仍按输入顺序返回；汇总日志已在每个任务完成时即时输出。
-            results = []
-            for outcome in outcomes:
-                if outcome is not None:
-                    results.extend(outcome)
-            return results
-
-        results = []
-        download_count = 0
-        for i, bvid in enumerate(bvids):
-            logger.info("收藏夹「%s」下载：%s", info.title, bvid)
-            new_results = self._execute_batch_download(
-                bvid,
-                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type,
-                                                progress=progress, progress_cb=progress_cb,
-                                                cache_dirs=cache_dirs, force=force),
-                label=label,
-            )
-            if new_results is None:
-                print(f"跳过不可见视频 {bvid}，进度 {i + 1}/{len(bvids)}")
-                continue
-            results.extend(new_results)
-            download_count = self._report_bvid_download(
-                bvid, new_results, download_count, i + 1, len(bvids),
-            )
-        return results
+        return self._download_bvid_collection(
+            bvids, save_dir, quality=quality, media_type=media_type,
+            progress=progress, progress_cb=progress_cb, threads=threads,
+            account_sessions=account_sessions, cache_dirs=cache_dirs, force=force,
+            item_label=lambda bvid: label,
+            on_skip=lambda bvid, index, count: print(
+                f"跳过不可见视频 {bvid}，进度 {index}/{count}"
+            ),
+        )
 
     # ---- UP主空间 ----
 
@@ -1219,61 +1112,12 @@ class VideoService:
             progress = (ParallelBatchProgress(n=total, label=label)
                         if threads > 1 else BatchProgress(n=total, label=label))
 
-        if threads > 1:
-            gate = RiskGate()
-            services = self._account_services(account_sessions)
-
-            def _work(bvid, i):
-                svc = services[i % len(services)]
-                return svc._execute_batch_download(
-                    bvid,
-                    lambda b=bvid: svc.download_all_pages(
-                        b, save_dir, quality=quality, media_type=media_type,
-                        progress=progress, progress_cb=progress_cb,
-                        cache_dirs=cache_dirs, force=force,
-                    ),
-                    label=label, risk_gate=gate,
-                )
-
-            completed_count = 0
-            download_count = 0
-
-            def _on_complete(index, outcome):
-                """任务完成时立即输出视频级汇总日志。"""
-                nonlocal completed_count, download_count
-                bvid = bvids[index]
-                completed_count += 1
-                if outcome is None:
-                    logger.warning("视频 %s 不可见，跳过。", bvid)
-                    return
-                download_count = self._report_bvid_download(
-                    bvid, outcome, download_count, completed_count, total,
-                )
-
-            outcomes = _parallel_run(bvids, _work, threads, on_complete=_on_complete)
-            # 下载结果仍按输入顺序返回；汇总日志已在每个任务完成时即时输出。
-            results = []
-            for outcome in outcomes:
-                if outcome is not None:
-                    results.extend(outcome)
-            return results
-
-        results = []
-        download_count = 0
-        for i, bvid in enumerate(bvids):
-            logger.info("UP主「%s」下载：%s", up_name, bvid)
-            new_results = self._execute_batch_download(
-                bvid,
-                lambda: self.download_all_pages(bvid, save_dir, quality=quality, media_type=media_type,
-                                                progress=progress, progress_cb=progress_cb,
-                                                cache_dirs=cache_dirs, force=force),
-                label=label,
-            )
-            if new_results is None:
-                logger.warning("视频 %s 不可见，跳过。", bvid)
-                continue
-            results.extend(new_results)
-            download_count = self._report_bvid_download(
-                bvid, new_results, download_count, i + 1, len(bvids),
-            )
-        return results
+        return self._download_bvid_collection(
+            bvids, save_dir, quality=quality, media_type=media_type,
+            progress=progress, progress_cb=progress_cb, threads=threads,
+            account_sessions=account_sessions, cache_dirs=cache_dirs, force=force,
+            item_label=lambda bvid: label,
+            on_skip=lambda bvid, index, count: logger.warning(
+                "视频 %s 不可见，跳过。", bvid
+            ),
+        )

@@ -101,7 +101,7 @@ class TestFetchSeason:
 
         s = VideoService()
         fake_arch_service = MagicMock()
-        fake_arch_service.get_season_by_id.return_value = {
+        fake_arch_service.get_season_by_sid.return_value = {
             "meta": {"season_id": 8683221, "title": "洛天依·纯蓝幻乐", "mid": 1, "total": 2},
             "archives": [{"bvid": "BV1A", "aid": 1, "title": "稿件A"}, {"bvid": "BV1B", "aid": 2, "title": "稿件B"}],
         }

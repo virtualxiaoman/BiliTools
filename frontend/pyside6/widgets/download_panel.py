@@ -246,7 +246,7 @@ class DownloadPanel(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        input_edit.setFixedHeight(38)
+        input_edit.setFixedHeight(34)
         layout.addWidget(input_edit, 0, Qt.AlignmentFlag.AlignTop)
         layout.addStretch(1)
         return page

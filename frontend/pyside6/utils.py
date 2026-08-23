@@ -8,6 +8,9 @@
 跟随跳转后再解析，避免阻塞界面线程。
 """
 import re
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from typing import Optional
 
 import requests
@@ -74,14 +77,55 @@ class NeedsUrlResolution(Exception):
         self.url = url
 
 
+def _is_allowed_hostname(hostname: str) -> bool:
+    host = hostname.rstrip(".").lower()
+    return host == "b23.tv" or host == "bilibili.com" or host.endswith(".bilibili.com")
+
+
+def _validate_public_host(hostname: str) -> None:
+    if not hostname or not _is_allowed_hostname(hostname):
+        raise ValueError(f"不允许访问的重定向域名：{hostname!r}")
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)}
+    except OSError as exc:
+        raise ValueError(f"无法解析重定向域名：{hostname}") from exc
+    for value in addresses:
+        ip = ipaddress.ip_address(value)
+        if (ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved
+                or ip.is_multicast or ip.is_unspecified):
+            raise ValueError(f"重定向域名解析到不安全地址：{value}")
+
+
 def follow_redirect(url: str, timeout: int = 15) -> str:
-    """跟随 HTTP 跳转返回最终 URL（处理 b23.tv 等短链）。仅应在工作线程调用。"""
-    r = requests.get(
-        url, allow_redirects=True, timeout=timeout,
-        headers={"User-Agent": UserAgent().pcChrome},
-    )
-    r.raise_for_status()
-    return r.url
+    """安全跟随短链，限制协议、域名、DNS 地址和重定向次数。"""
+    current = url
+    headers = {"User-Agent": UserAgent().pcChrome}
+    for _ in range(3):
+        parsed = urlparse(current)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("只允许访问 HTTP/HTTPS 链接")
+        _validate_public_host(parsed.hostname)
+        response = requests.get(current, allow_redirects=False, timeout=timeout, headers=headers)
+        try:
+            if 300 <= response.status_code < 400:
+                location = response.headers.get("Location")
+                if not location:
+                    raise ValueError("重定向响应缺少 Location")
+                from urllib.parse import urljoin
+                current = urljoin(current, location)
+                continue
+            response.raise_for_status()
+            final_url = response.url or current
+            final = urlparse(final_url)
+            if final.scheme not in {"http", "https"} or not final.hostname:
+                raise ValueError("最终 URL 不是安全的 HTTP/HTTPS 地址")
+            _validate_public_host(final.hostname)
+            return final_url
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+    raise ValueError("重定向次数超过限制")
 
 
 def resolve_input(source: str, raw: str):

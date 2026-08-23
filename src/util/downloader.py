@@ -12,8 +12,11 @@
 """
 
 import logging
+import os
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -27,6 +30,40 @@ ProgressCallback = Callable[[int, Optional[int]], None]
 # 合成后端探测结果缓存（避免每次调用都执行 which / 导入 imageio）
 _ffmpeg_checked: bool = False
 _ffmpeg_path: Optional[str] = None
+
+_TARGET_LOCKS: dict[str, threading.Lock] = {}
+_TARGET_LOCKS_GUARD = threading.Lock()
+
+
+def _target_lock(path: Path) -> threading.Lock:
+    key = str(path.resolve()).casefold()
+    with _TARGET_LOCKS_GUARD:
+        return _TARGET_LOCKS.setdefault(key, threading.Lock())
+
+
+def _parse_content_range(value: str | None) -> tuple[int, int, Optional[int]] | None:
+    """解析 ``Content-Range``，允许总长度为 ``*``。"""
+    if not isinstance(value, str) or not value.startswith("bytes "):
+        return None
+    try:
+        range_part, total_part = value[6:].split("/", 1)
+        start_text, end_text = range_part.split("-", 1)
+        start, end = int(start_text), int(end_text)
+        if start < 0 or end < start:
+            return None
+        total = None if total_part == "*" else int(total_part)
+        if total is not None and (total <= end or total <= 0):
+            return None
+        return start, end, total
+    except (ValueError, TypeError):
+        return None
+
+
+def _close_response(response) -> None:
+    """关闭 requests 响应，同时兼容最小化的测试 double。"""
+    close = getattr(response, "close", None)
+    if callable(close):
+        close()
 
 
 def _imageio_ffmpeg_path() -> Optional[str]:
@@ -75,82 +112,124 @@ def download_stream(
     chunk_size: int = 1024 * 256,
     max_retries: int = 3,
     overwrite: bool = False,
+    cancel_event: Optional[threading.Event] = None,
 ) -> int:
-    """
-    下载单个媒体流（如 DASH 视频/音频流）到本地文件。
+    """下载到同目录 ``.part`` 文件，成功后原子替换正式文件。
 
-    [注意]
-    下载响应必须带正确的 Referer（B 站要求 referer 为 https://www.bilibili.com）。
-
-    网络中断（连接断开/读取不完整）时会自动**断点续传**：用 Range 头从已下载位置
-    继续，最多重试 `max_retries` 次。续传时会校验服务器是否返回 206（Partial
-    Content）——若服务器忽略 Range 返回 200 全量内容，会丢弃半截文件从头下载，
-    避免把全量内容追加到半截文件后造成文件损坏。
-
-    :param url: 媒体直链
-    :param save_path: 保存路径（父目录需已存在）
-    :param headers: 请求头（用于补充 Cookie/Referer）
-    :param progress_cb: 进度回调 (downloaded, total)
-    :param chunk_size: 分块大小（字节）
-    :param max_retries: 断点续传的最大重试次数
-    :param overwrite: 是否先删除已有目标文件，强制从头写入（不进行断点续传）
-    :return: 下载的文件大小（字节）
-    :raises DownloadError: 下载失败（重试后仍失败）
+    正式文件不会在新下载失败时被删除或覆盖；断点续传只作用于临时文件。
     """
     import requests
 
     save_path = Path(save_path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
+    part_path = save_path.with_name(save_path.name + ".part")
+    if chunk_size <= 0 or max_retries < 0:
+        raise ValueError("chunk_size 必须为正数，max_retries 不能为负数")
 
-    total: Optional[int] = None
-    last_error: Optional[Exception] = None
+    with _target_lock(save_path):
+        if overwrite:
+            # 保留旧的完整文件，只有新文件完成后 os.replace 才会替换它。
+            part_path.unlink(missing_ok=True)
 
-    if overwrite and save_path.exists():
-        save_path.unlink()
-
-    for attempt in range(max_retries + 1):
-        downloaded = save_path.stat().st_size if save_path.exists() else 0
-        req_headers = dict(headers) if headers else {}
-        resuming = downloaded > 0
-        if resuming:
-            # 断点续传：从已下载位置继续
-            req_headers["Range"] = f"bytes={downloaded}-"
-        try:
-            resp = requests.get(url, headers=req_headers, stream=True, timeout=30)
-            resp.raise_for_status()
-            if resuming and resp.status_code != 206:
-                # 服务器忽略/不支持 Range（返回 200 全量内容等）：
-                # 丢弃半截文件从头下载，避免把全量内容追加到半截文件后损坏。
-                logger.warning(
-                    "[download_stream] 断点续传未获 206（status=%s），丢弃半截文件从头下载：%s",
-                    resp.status_code, url,
+        attempt = 0
+        last_error: Optional[Exception] = None
+        while attempt <= max_retries:
+            if cancel_event is not None and cancel_event.is_set():
+                raise DownloadError(f"下载已取消：{url}")
+            downloaded = part_path.stat().st_size if part_path.exists() else 0
+            req_headers = dict(headers or {})
+            if downloaded:
+                req_headers["Range"] = f"bytes={downloaded}-"
+            expected_total: Optional[int] = None
+            restart_without_counting = False
+            response = None
+            try:
+                response = requests.get(
+                    url,
+                    headers=req_headers,
+                    stream=True,
+                    timeout=(10, 60),
                 )
-                save_path.unlink(missing_ok=True)
-                downloaded = 0
-                resuming = False
-            if total is None:
-                total = int(resp.headers.get("Content-Length", 0)) or None
-                if resuming and total is not None:
-                    # 响应的是剩余部分，补上已下载的偏移
-                    total += downloaded
-            with open(save_path, "ab" if resuming else "wb") as f:
-                for chunk in resp.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if progress_cb:
-                            progress_cb(downloaded, total)
+                response.raise_for_status()
+                status_code = getattr(response, "status_code", 200)
+                content_range = _parse_content_range(
+                    getattr(response, "headers", {}).get("Content-Range")
+                )
+                if downloaded:
+                    # 续传必须得到与本地偏移一致的 206；否则丢弃 .part 后
+                    # 立即从零开始，不能把完整响应追加到半截文件后。
+                    if status_code == 200:
+                        logger.warning(
+                            "[download_stream] 服务器忽略 Range，丢弃 .part 并使用完整响应：%s",
+                            url,
+                        )
+                        part_path.unlink(missing_ok=True)
+                        downloaded = 0
+                    elif status_code != 206 or (content_range is not None and content_range[0] != downloaded):
+                        logger.warning(
+                            "[download_stream] 服务器未按要求续传（status=%s, range=%s），从头下载：%s",
+                            status_code, content_range, url,
+                        )
+                        part_path.unlink(missing_ok=True)
+                        restart_without_counting = True
+                    else:
+                        expected_total = content_range[2] if content_range is not None else None
+                elif content_range is not None:
+                    expected_total = content_range[2]
+
+                if not restart_without_counting:
+                    headers_map = getattr(response, "headers", {})
+                    raw_length = headers_map.get("Content-Length")
+                    content_length = None
+                    if raw_length not in (None, ""):
+                        content_length = int(raw_length)
+                        if content_length < 0:
+                            raise ValueError("Content-Length 不能为负数")
+                    if expected_total is None and content_length is not None:
+                        expected_total = downloaded + content_length
+                    if content_range is not None and content_length is not None:
+                        range_length = content_range[1] - content_range[0] + 1
+                        if content_length != range_length:
+                            raise IOError("Content-Length 与 Content-Range 不一致")
+
+                    with part_path.open("ab" if downloaded else "wb") as output:
+                        for chunk in response.iter_content(chunk_size=chunk_size):
+                            if cancel_event is not None and cancel_event.is_set():
+                                raise DownloadError(f"下载已取消：{url}")
+                            if not chunk:
+                                continue
+                            output.write(chunk)
+                            downloaded += len(chunk)
+                            if progress_cb is not None:
+                                progress_cb(downloaded, expected_total)
+                    if expected_total is not None and downloaded != expected_total:
+                        raise IOError(f"下载不完整：{downloaded}/{expected_total} bytes")
+                    if downloaded <= 0:
+                        raise IOError("下载响应为空")
+            except DownloadError:
+                raise
+            except (requests.RequestException, OSError, ValueError, TypeError) as exc:
+                last_error = exc
+                logger.warning(
+                    "[download_stream] 第%d次下载%s失败（.part 已下载%d字节）：%s",
+                    attempt + 1, url, downloaded, exc,
+                )
+                attempt += 1
+                if attempt > max_retries:
+                    break
+                time.sleep(min(0.25 * (2 ** (attempt - 1)), 2.0))
+                continue
+            finally:
+                if response is not None:
+                    _close_response(response)
+
+            if restart_without_counting:
+                continue
+            os.replace(part_path, save_path)
             return downloaded
-        except (requests.RequestException, OSError) as e:
-            last_error = e
-            logger.warning(
-                "[download_stream]第%d次下载%s失败（已下载%d字节）：%s",
-                attempt + 1, url, downloaded, e,
-            )
-            if attempt >= max_retries:
-                break
-            # 继续循环：从 save_path 当前大小续传
-    raise DownloadError(f"下载失败：{url}，原因：{last_error}") from last_error
+
+        raise DownloadError(f"下载失败：{url}，原因：{last_error}") from last_error
+
 
 
 def merge_video_audio(
@@ -159,22 +238,9 @@ def merge_video_audio(
     save_path: Path,
     *,
     progress_cb: Optional[ProgressCallback] = None,
+    cancel_event: Optional[threading.Event] = None,
 ) -> None:
-    """
-    使用 ffmpeg 将视频流与音频流合成为单文件。
-
-    合成后端按优先级自动选择：系统 PATH 中的 ffmpeg → imageio-ffmpeg 库内置的
-    静态 ffmpeg。无系统 ffmpeg 时无需手动安装，`pip install imageio-ffmpeg` 即可。
-
-    [使用方法]:
-        merge_video_audio(Path("video.m4s"), Path("audio.m4a"), Path("output.mp4"))
-    :param video_path: 视频流文件完整路径
-    :param audio_path: 音频流文件完整路径
-    :param save_path: 合成后的文件保存路径
-    :param progress_cb: 进度回调（合成阶段仅作状态提示，无精确字节数）
-    :raises FFmpegNotFoundError: 未检测到 ffmpeg 且未安装 imageio-ffmpeg
-    :raises DownloadError: 合成失败（后端返回非零）
-    """
+    """使用 ffmpeg 原子生成最终文件，支持取消和 10 分钟硬超时。"""
     ffmpeg = _resolve_ffmpeg()
     if ffmpeg is None:
         raise FFmpegNotFoundError(
@@ -185,24 +251,54 @@ def merge_video_audio(
     video_path = Path(video_path)
     audio_path = Path(audio_path)
     save_path = Path(save_path)
-    if not video_path.exists():
+    if not video_path.is_file():
         raise DownloadError(f"视频流文件不存在：{video_path}")
-    if not audio_path.exists():
+    if not audio_path.is_file():
         raise DownloadError(f"音频流文件不存在：{audio_path}")
-
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    # 列表参数传入，避免 shell 拼接（路径含空格/引号也不会出错）。
-    # -y 覆盖已存在的目标文件，避免 ffmpeg 交互式询问导致挂起。
-    cmd = [ffmpeg, "-y", "-i", str(video_path), "-i", str(audio_path), "-c", "copy", str(save_path)]
+    temp_output = save_path.with_name(save_path.name + ".part")
+    temp_output.unlink(missing_ok=True)
+    cmd = [ffmpeg, "-y", "-i", str(video_path), "-i", str(audio_path), "-c", "copy", str(temp_output)]
     logger.debug("[merge_video_audio] 合成命令：%s", " ".join(cmd))
     if progress_cb:
         progress_cb(0, None)
+
+    process = None
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=600)
-    except subprocess.TimeoutExpired:
-        raise DownloadError("音视频合成超时（>600s），请检查视频是否过大。")
-    if result.returncode != 0:
-        err_tail = result.stderr.decode("utf-8", errors="replace")[-500:] if result.stderr else ""
-        raise DownloadError(f"音视频合成失败，返回码 {result.returncode}：{err_tail}")
+        # stdout/stderr 重定向到 DEVNULL，避免 ffmpeg 大量日志填满 PIPE 导致死锁。
+        process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + 600
+        while True:
+            returncode = process.poll()
+            if returncode is not None:
+                break
+            if cancel_event is not None and cancel_event.is_set():
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise DownloadError("音视频合成已取消")
+            if time.monotonic() >= deadline:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise DownloadError("音视频合成超时（>600s）")
+            time.sleep(0.1)
+
+        if returncode != 0:
+            raise DownloadError(f"音视频合成失败，返回码 {returncode}")
+        if not temp_output.is_file() or temp_output.stat().st_size <= 0:
+            raise DownloadError("ffmpeg 未生成有效输出文件")
+        os.replace(temp_output, save_path)
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait()
+        temp_output.unlink(missing_ok=True)
     if progress_cb:
         progress_cb(1, 1)

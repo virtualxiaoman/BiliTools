@@ -8,6 +8,7 @@
 import hashlib
 import hmac
 import random
+import threading
 import time
 import urllib.parse
 from functools import reduce
@@ -18,7 +19,9 @@ import requests
 from src.config.constants import API_BASE, UserAgent
 
 # wbi 签名所需的 img_key / sub_key 缓存（进程内，长时间有效）
-_wbi_keys_cache: Optional[tuple[str, str]] = None
+_wbi_keys_cache: Optional[tuple[str, str, float]] = None
+_WBI_LOCK = threading.Lock()
+_WBI_TTL = 3600.0
 
 
 def get_dev_id() -> str:
@@ -81,25 +84,46 @@ def _enc_wbi(params: dict, img_key: str, sub_key: str) -> dict:
 
 
 def _get_wbi_keys() -> tuple[str, str]:
-    """获取最新的 img_key 和 sub_key（带进程内缓存）"""
+    """获取带 TTL 的 WBI key；并发首次加载只允许一个网络请求。"""
     global _wbi_keys_cache
-    if _wbi_keys_cache is not None:
-        return _wbi_keys_cache
-    # nav 同时提供当前账号状态和 wbi_img；这里匿名获取最新签名密钥，
-    # 后续 playurl 等需要 wbi 的接口复用进程内缓存，避免每次下载都请求 nav。
-    headers = {
-        'User-Agent': UserAgent().pcChrome,
-        'Referer': 'https://www.bilibili.com/'
-    }
-    resp = requests.get(f"{API_BASE}/x/web-interface/nav", headers=headers)
-    resp.raise_for_status()
-    json_content = resp.json()
-    img_url: str = json_content['data']['wbi_img']['img_url']
-    sub_url: str = json_content['data']['wbi_img']['sub_url']
-    img_key = img_url.rsplit('/', 1)[1].split('.')[0]
-    sub_key = sub_url.rsplit('/', 1)[1].split('.')[0]
-    _wbi_keys_cache = (img_key, sub_key)
-    return _wbi_keys_cache
+    with _WBI_LOCK:
+        now = time.monotonic()
+        if _wbi_keys_cache is not None and now - _wbi_keys_cache[2] < _WBI_TTL:
+            return _wbi_keys_cache[0], _wbi_keys_cache[1]
+        headers = {
+            "User-Agent": UserAgent().pcChrome,
+            "Referer": "https://www.bilibili.com/",
+        }
+        last_error = None
+        for attempt in range(3):
+            try:
+                resp = requests.get(
+                    f"{API_BASE}/x/web-interface/nav",
+                    headers=headers,
+                    timeout=(10, 30),
+                )
+                try:
+                    resp.raise_for_status()
+                    payload = resp.json()
+                finally:
+                    close = getattr(resp, "close", None)
+                    if callable(close):
+                        close()
+                wbi = payload.get("data", {}).get("wbi_img", {})
+                img_url, sub_url = wbi.get("img_url"), wbi.get("sub_url")
+                if not isinstance(img_url, str) or not isinstance(sub_url, str):
+                    raise ValueError("WBI 响应缺少 img_url/sub_url")
+                img_key = img_url.rsplit("/", 1)[-1].split(".", 1)[0]
+                sub_key = sub_url.rsplit("/", 1)[-1].split(".", 1)[0]
+                if not img_key or not sub_key:
+                    raise ValueError("WBI key 为空")
+                _wbi_keys_cache = (img_key, sub_key, time.monotonic())
+                return img_key, sub_key
+            except (requests.RequestException, ValueError, KeyError) as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(0.2 * (2 ** attempt) + random.uniform(0, 0.1))
+        raise last_error or RuntimeError("WBI key 获取失败")
 
 
 def get_wbi(params: Optional[dict] = None) -> tuple[int, str]:

@@ -8,6 +8,7 @@
 """
 
 from src.models.download_model import AudioStream, DashStreams, DownloadResult, VideoQuality, VideoStream
+from src.models.download_request import DownloadRequest, DownloadSource, MediaType
 from src.models.fav_model import FavInfo
 from src.models.login_model import LoginUser
 from src.models.video_model import (
@@ -27,6 +28,9 @@ __all__ = [
     "DownloadResult",
     "VideoQuality",
     "VideoStream",
+    "DownloadRequest",
+    "DownloadSource",
+    "MediaType",
     "FavInfo",
     "LoginUser",
     "VideoInfo",

@@ -12,6 +12,7 @@
 """
 
 import logging
+import random
 import time
 from pathlib import Path
 from typing import Optional
@@ -44,7 +45,8 @@ class BiliSession:
         :param max_retry: 请求失败时的最大重试次数（不含首次）。
         :param timeout: 单次请求超时（秒）。
         """
-        self.cookie = self._load_cookie(cookie_path)
+        self.cookie_path = str(cookie_path) if cookie_path is not None else str(get_cookie_path())
+        self.cookie = self._load_cookie(self.cookie_path)
         self.referer = referer
         self.max_retry = max_retry
         self.timeout = timeout
@@ -72,30 +74,67 @@ class BiliSession:
         return self._request("GET", url, params=params, headers=headers, **kwargs)
 
     def post(self, url: str, data: Optional[dict] = None, params: Optional[dict] = None,
-             headers: Optional[dict] = None, **kwargs) -> dict:
-        """POST 请求，返回业务 data 字段（dict）。"""
-        return self._request("POST", url, data=data, params=params, headers=headers, **kwargs)
+             headers: Optional[dict] = None, *, retryable: bool = False, **kwargs) -> dict:
+        """POST 请求，默认不重试；只有确认幂等时显式设置 retryable=True。"""
+        return self._request("POST", url, data=data, params=params, headers=headers,
+                             retryable=retryable, **kwargs)
 
-    def get_raw(self, url: str, headers: Optional[dict] = None, **kwargs) -> bytes:
-        """GET 请求，返回原始二进制内容（用于下载封面、媒体流等非 JSON 资源）。"""
+    def get_raw(
+        self,
+        url: str,
+        headers: Optional[dict] = None,
+        *,
+        max_bytes: int = 16 * 1024 * 1024,
+        **kwargs,
+    ) -> bytes:
+        """流式读取有限大小的二进制响应。"""
+        if max_bytes <= 0:
+            raise ValueError("max_bytes 必须为正数")
         if headers:
             merged = dict(self.session.headers)
             merged.update(headers)
             kwargs["headers"] = merged
-        resp = self.session.request("GET", url, timeout=self.timeout, **kwargs)
-        resp.raise_for_status()
-        return resp.content
+        resp = self.session.request("GET", url, timeout=self.timeout, stream=True, **kwargs)
+        try:
+            resp.raise_for_status()
+            content_length = int(resp.headers.get("Content-Length", "0") or 0)
+            if content_length > max_bytes:
+                raise ValueError(f"响应超过大小限制：{content_length} > {max_bytes}")
+            chunks: list[bytes] = []
+            total = 0
+            iterator = getattr(resp, "iter_content", None)
+            if callable(iterator):
+                source = iterator(chunk_size=256 * 1024)
+            else:
+                source = [getattr(resp, "content", b"")]
+            for chunk in source:
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError(f"响应超过大小限制：{total} > {max_bytes}")
+                chunks.append(chunk)
+            return b"".join(chunks)
+        finally:
+            close = getattr(resp, "close", None)
+            if callable(close):
+                close()
 
-    # ---- 底层实现 ----
+    def close(self) -> None:
+        self.session.close()
 
-    def _request(self, method: str, url: str, **kwargs) -> dict:
-        """带重试与错误检查的请求。成功返回 r_json["data"]。
-
-        重试策略：仅对「网络/传输层」错误重试（连接失败、超时、HTTP 状态码、JSON 解析失败）；
-        业务错误（BiliError，如未登录/风控/视频不存在）不重试，直接抛出。
-        """
-        # 服务层只负责准备 URL 和业务参数；从这里开始统一补齐请求头，
-        # 因此每个 API 都能继承当前账号的 Cookie、User-Agent 与 Referer。
+    def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        retryable: bool | None = None,
+        **kwargs,
+    ) -> dict:
+        """带有限重试的 JSON 请求；默认仅重试幂等 HTTP 方法。"""
+        method = method.upper()
+        if retryable is None:
+            retryable = method in {"GET", "HEAD", "OPTIONS"}
         headers = kwargs.pop("headers", None)
         if headers:
             merged = dict(self.session.headers)
@@ -103,20 +142,27 @@ class BiliSession:
             kwargs["headers"] = merged
 
         last_error: Optional[Exception] = None
-        for attempt in range(self.max_retry + 1):
+        attempts = self.max_retry if retryable else 0
+        for attempt in range(attempts + 1):
             try:
-                # B 站接口统一返回 {code, message, data}；这里只把 data 交给服务层，
-                # 服务层再把字典转换成 dataclass 或提取成下载所需的最小字段。
                 resp = self.session.request(method, url, timeout=self.timeout, **kwargs)
-                resp.raise_for_status()
-                r_json = resp.json()
-                raise_for_code(r_json.get("code", 0), r_json.get("message", ""))
-                return r_json["data"]
-            except (requests.RequestException, ValueError) as e:
-                # 传输层/解析错误：记录并重试；业务 code 错误已在 raise_for_code
-                # 中转换为 BiliError，不会被误当成网络问题重复请求。
-                last_error = e
-                logger.warning("[BiliSession-%s]第%d次请求%s失败：%s", method, attempt + 1, url, e)
-            if attempt < self.max_retry:
-                time.sleep(RETRY_DELAY)
-        raise last_error if last_error is not None else RuntimeError(f"请求失败：{url}")
+                try:
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    raise_for_code(payload.get("code", 0), payload.get("message", ""))
+                    return payload["data"]
+                finally:
+                    close = getattr(resp, "close", None)
+                    if callable(close):
+                        close()
+            except (requests.RequestException, ValueError) as exc:
+                last_error = exc
+                logger.warning(
+                    "[BiliSession-%s] 第%d次请求%s失败：%s",
+                    method, attempt + 1, url, exc,
+                )
+                if attempt >= attempts:
+                    break
+                delay = RETRY_DELAY * (2 ** attempt)
+                time.sleep(delay + random.uniform(0, 0.25))
+        raise last_error or RuntimeError(f"请求失败：{url}")

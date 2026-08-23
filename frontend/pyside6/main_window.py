@@ -81,8 +81,15 @@ class MainWindow(QWidget):
             if ans != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
-        # 停止后台线程，避免进程退出时 QThread 仍运行导致崩溃
-        self.manager.shutdown()
+        # 停止后台线程，避免进程退出时 QThread 仍运行导致崩溃。
+        # 协作取消可能受网络/ffmpeg 阻塞影响；若线程尚未退出，必须阻止窗口销毁，
+        # 否则 QThread 对象会在线程仍运行时被回收并触发 Qt 致命退出。
+        if not self.manager.shutdown():
+            QMessageBox.warning(
+                self, "下载任务仍在退出", "后台下载尚未安全退出，请稍后再次关闭窗口。"
+            )
+            event.ignore()
+            return
         from frontend.pyside6.workers.login_worker import shutdown_all
         shutdown_all()
         from frontend.pyside6.workers import search_worker

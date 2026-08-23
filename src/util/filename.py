@@ -91,7 +91,20 @@ def build_multi_page_filename(title: str, bvid: str, page: int, part: str = "", 
 
 
 def resolve_save_path(directory, filename: str) -> Path:
-    """拼接保存目录与文件名，并确保目录存在（幂等）。"""
-    directory = Path(directory)
+    """安全地解析保存路径，只允许 ``filename`` 是单层文件名。
+
+    下载文件名可能来自用户输入或远端标题，绝不能允许绝对路径、路径分隔符
+    或 ``..`` 穿越下载目录。
+    """
+    if not isinstance(filename, str) or not filename.strip():
+        raise ValueError("文件名不能为空")
+    directory = Path(directory).expanduser().resolve()
+    raw = Path(filename)
+    if (raw.is_absolute() or raw.name != filename or filename in {".", ".."}
+            or any(separator in filename for separator in ("/", "\\"))):
+        raise ValueError(f"非法文件名：{filename!r}")
+    candidate = (directory / raw).resolve()
+    if candidate.parent != directory:
+        raise ValueError(f"文件路径越界：{filename!r}")
     directory.mkdir(parents=True, exist_ok=True)
-    return directory / filename
+    return candidate

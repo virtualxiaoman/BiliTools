@@ -1,7 +1,8 @@
 """下载线程：每个任务一个 QThread，内部自建 VideoService（独立会话）。"""
 import logging
 import time
-from pathlib import Path
+import threading
+from collections.abc import Mapping
 
 from PySide6.QtCore import QThread, Signal
 
@@ -11,6 +12,7 @@ from src.services.fav import FavService
 from src.services.garb import GarbService
 from src.services.video import VideoService
 from src.api.errors import BiliAuthError, BiliRiskError
+from src.models.download_request import DownloadRequest, DownloadSource, MediaType
 
 from frontend.pyside6.signals import LogCategory, app_signals
 from frontend.pyside6.utils import resolve_input
@@ -30,25 +32,39 @@ class DownloadWorker(QThread):
     phase = Signal(str)               # 阶段文本（如 ffmpeg 合成中）
     done = Signal(bool, str, int)     # (success, summary, error_kind)
 
-    def __init__(self, spec: dict, parent=None):
+    def __init__(self, spec: DownloadRequest | Mapping, parent=None):
         super().__init__(parent)
-        self.spec = spec
+        self.request = DownloadRequest.from_legacy_dict(spec)
         self._service = None
+        self._owned_account_sessions = []
+        self._cancel_event = threading.Event()
+
+    @property
+    def spec(self) -> dict:
+        """兼容旧调用方读取任务字典。内部逻辑统一使用 ``request``。"""
+        return self.request.to_legacy_dict()
+
+    def cancel(self) -> None:
+        self._cancel_event.set()
+        self.requestInterruption()
+
+    def is_cancelled(self) -> bool:
+        return self._cancel_event.is_set() or self.isInterruptionRequested()
 
     def milestone(self, category: int, text: str) -> None:
         app_signals.log_message.emit(category, text)
 
     def _resolve_pending(self):
         """短链等输入在工作线程内跟随跳转解析，避免阻塞界面线程。"""
-        if not self.spec.get("pending_resolve"):
+        request = self.request
+        if not request.pending_resolve:
             return
-        raw = self.spec["input"]
-        source = self.spec["source"]
+        raw = request.input_value
+        source = request.source.value
         canonical = resolve_input(source, raw)
-        self.spec["input"] = canonical
-        self.spec["pending_resolve"] = False
         display = self._canonical_display(source, canonical)
-        self.spec["desc"] = f"{self._source_label(source)}（已解析：{display}）"
+        description = f"{self._source_label(source)}（已解析：{display}）"
+        self.request = request.with_resolved_input(canonical, description)
         self.milestone(LogCategory.NORMAL, f"解析链接：{raw} → {display}")
         self.phase.emit(f"已解析：{display}")
 
@@ -67,153 +83,185 @@ class DownloadWorker(QThread):
     def run(self):
         # worker 是 GUI 到 SDK 的数据流汇合点：spec（来源/规范 id/选项）
         # -> service API -> DownloadResult -> Qt 信号；所有异常在这里转换成可读摘要。
+        result_payload = None
         try:
             started_at = time.perf_counter()
-            service = VideoService()
+            service = VideoService(cancel_event=self._cancel_event)
             self._service = service
             self._resolve_pending()
-            self.milestone(LogCategory.NORMAL, f"开始任务：{self.spec['desc']}")
+            self.milestone(LogCategory.NORMAL, f"开始任务：{self.request.description}")
             results = self._execute(service)
             summary = self._summary(results, time.perf_counter() - started_at)
             # 单文件任务的完成里程碑由 ProgressAdapter.finish() 输出（"下载完成/已存在"），
             # 这里只为批量任务额外输出一条汇总。
             if isinstance(results, list):
                 self.milestone(LogCategory.SUCCESS, summary)
-            self.done.emit(True, summary, ERROR_NONE)
+            result_payload = (True, summary, ERROR_NONE)
         except Exception as e:
             kind = self._error_kind(e)
             text = self._error_text(e)
-            logger.exception("[DownloadWorker] 任务失败：%s", self.spec.get("desc"))
+            logger.exception("[DownloadWorker] 任务失败：%s", self.request.description)
             self.milestone(LogCategory.ERROR, f"下载失败：{text}")
-            self.done.emit(False, text, kind)
+            result_payload = (False, text, kind)
+        finally:
+            for session in self._owned_account_sessions:
+                try:
+                    session.close()
+                except Exception:
+                    logger.warning("关闭账号下载会话失败", exc_info=True)
+            self._owned_account_sessions.clear()
+            if self._service is not None:
+                try:
+                    self._service.session.close()
+                except Exception:
+                    logger.warning("关闭下载会话失败", exc_info=True)
+            # 必须在所有会话和资源清理完成后再通知 manager。否则 manager/UI 可能
+            # 在 QThread.finished 之前释放最后一个 worker 引用，触发 Qt 的致命退出。
+            if result_payload is not None:
+                self.done.emit(*result_payload)
 
     # ---- 下载执行 ----
 
     def _execute(self, service):
-        spec = self.spec
-        save_dir = Path(spec["save_dir"])
-        quality = spec["quality"]
-        mt = spec["media_type"]
-        src = spec["source"]
-        media_type = "audio" if mt == "audio" else "video_with_audio"
-        threads = int(spec.get("threads", 1))
-        cache_dirs = spec.get("cache_dirs") or []
-        force = bool(spec.get("force", False))
+        handlers = {
+            DownloadSource.VIDEO: self._execute_video,
+            DownloadSource.FAVORITE: self._execute_favorite,
+            DownloadSource.SEASON: self._execute_season,
+            DownloadSource.UPLOADER: self._execute_uploader,
+            DownloadSource.EMOTE: self._execute_emote,
+            DownloadSource.GARB: self._execute_garb,
+            DownloadSource.DRESSUP: self._execute_dressup,
+        }
+        handler = handlers.get(self.request.source)
+        if handler is None:
+            raise ValueError(f"未知下载来源：{self.request.source.value}")
+        return handler(service)
 
-        if src == "bv":
-            # 视频页签已经把 BV/av/URL 归一化为 bvid；这里再调用 VideoService，
-            # 单P走单文件下载，全部分P先取 VideoInfo.pages 再批量下载。
-            bvid = spec["input"]
-            if spec["scope"] == "single":
-                adapter = ProgressAdapter(1, f"视频 {bvid}", self)
-                page = spec["page"]
-                adapter.start(1, f"{bvid}（P{page}）")
-                if mt == "audio":
-                    result = service.download_audio(
-                        bvid, save_dir, page=page, progress=adapter,
-                        cache_dirs=cache_dirs, force=force,
-                    )
-                else:
-                    result = service.download_video_with_audio(
-                        bvid, save_dir, page=page, quality=quality, progress=adapter,
-                        cache_dirs=cache_dirs, force=force,
-                    )
-                adapter.finish()
-                return result
-            info = service.fetch_info(bvid)
-            n = len(info.pages) if info.pages else 1
-            adapter = ProgressAdapter(n, f"视频 {bvid}", self)
-            return service.download_all_pages(
-                bvid, save_dir, quality=quality, media_type=media_type, progress=adapter,
-                cache_dirs=cache_dirs, force=force,
-            )
-
-        if src == "fav":
-            # 收藏夹先拉详情与 BV 列表，用列表长度初始化进度，随后将同一列表
-            # 传给 VideoService，避免服务层为了下载再次请求一次 resource/ids。
-            fid = spec["input"]
-            # 先取一次收藏夹视频列表：既用于进度总数，也传回 service 复用，避免内部再拉取一次
-            bvids = FavService(service.session).get_fav_bv(fid)
-            adapter = self._make_adapter(threads, len(bvids), f"收藏夹 {fid}")
-            mode = "audio" if mt == "audio" else "video"
-            return service.download_fav(fid, save_dir, mode=mode, quality=quality,
-                                        progress=adapter, bvids=bvids, threads=threads,
-                                        account_sessions=self._account_sessions(threads, spec),
-                                         cache_dirs=cache_dirs, force=force)
-
-        if src == "season":
-            kind, val, mid = spec["input"]
-            if kind == "bvid":
-                season = service.fetch_season(bvid=val)
-                bvid, season_id = val, None
+    def _execute_video(self, service):
+        request = self.request
+        bvid = request.input_value
+        if request.scope == "single":
+            adapter = ProgressAdapter(1, f"视频 {bvid}", self)
+            adapter.start(1, f"{bvid}（P{request.page}）")
+            if request.media_type == MediaType.AUDIO:
+                result = service.download_audio(
+                    bvid, request.save_dir, page=request.page, progress=adapter,
+                    cache_dirs=list(request.cache_dirs), force=request.force,
+                )
             else:
-                season = service.fetch_season(season_id=val, mid=mid)
-                bvid, season_id = None, val
-            if season is None or not season.episodes:
-                raise ValueError("无法定位到合集，请确认参数正确")
-            file_count = sum(len(ep.pages) if ep.is_multi_page else 1 for ep in season.episodes)
-            adapter = self._make_adapter(threads, file_count, f"合集「{season.title}」")
-            return service.download_season(
-                bvid=bvid, dir=save_dir, season_id=season_id, mid=mid or 0,
-                quality=quality, media_type=media_type, progress=adapter, season=season,
-                threads=threads, account_sessions=self._account_sessions(threads, spec),
-                cache_dirs=cache_dirs, force=force,
-            )
+                result = service.download_video_with_audio(
+                    bvid, request.save_dir, page=request.page, quality=request.quality,
+                    progress=adapter, cache_dirs=list(request.cache_dirs), force=request.force,
+                )
+            adapter.finish()
+            return result
+        info = service.fetch_info(bvid)
+        page_count = len(info.pages) if info.pages else 1
+        adapter = ProgressAdapter(page_count, f"视频 {bvid}", self)
+        return service.download_all_pages(
+            bvid, request.save_dir, quality=request.quality,
+            media_type=self._video_media_type(request), progress=adapter,
+            cache_dirs=list(request.cache_dirs), force=request.force,
+        )
 
-        if src == "emote":
-            package_ids = spec["input"]
-            emote_service = EmoteService(service.session)
-            packages, count = emote_service.count_emotes(package_ids)
-            adapter = ProgressAdapter(count, f"表情包 {','.join(map(str, package_ids))}", self)
-            return emote_service.download_packages(
-                package_ids, save_dir, progress=adapter, packages=packages,
-                use_full_name=bool(spec.get("emote_full_name", False)),
-            )
-        if src == "dressup":
-            # 装扮页传入的 item 已是 DressupService.search 返回的可序列化 dict；
-            # service 根据 kind 分流到 EmoteService 或 GarbService。
-            items = spec["input"]
-            if not isinstance(items, list) or not items:
-                raise ValueError("未选择要下载的装扮/表情包")
-            threads = int(spec.get("threads", 1))
-            dressup_service = DressupService(service.session)
-            adapter = self._make_adapter(threads, len(items), f"装扮 {len(items)} 项")
-            return dressup_service.download_items(
-                items,
-                save_dir,
-                threads=threads,
-                account_sessions=self._account_sessions(threads, spec),
-                progress=adapter,
-                use_full_name=bool(spec.get("emote_full_name", False)),
-            )
-        if src == "garb":
-            keyword = spec["input"]
-            garb_service = GarbService(service.session)
-            item, detail, count = garb_service.prepare_download(keyword)
-            adapter = ProgressAdapter(count, f"收藏集/装扮 {item.get('name') or keyword}", self)
-            return garb_service.download_item(
-                item, save_dir, detail=detail, progress=adapter,
-            )
+    def _execute_favorite(self, service):
+        request = self.request
+        favorite_id = request.input_value
+        bvids = FavService(service.session).get_fav_bv(favorite_id)
+        adapter = self._make_adapter(request.threads, len(bvids), f"收藏夹 {favorite_id}")
+        return service.download_fav(
+            favorite_id, request.save_dir,
+            mode=self._download_mode(request), quality=request.quality,
+            progress=adapter, bvids=bvids, threads=request.threads,
+            account_sessions=self._account_sessions(request),
+            cache_dirs=list(request.cache_dirs), force=request.force,
+        )
 
-        if src == "up":
-            mid = spec["input"]
-            # 先取一次 UP 主视频列表：既用于进度总数，也传回 service 复用，避免内部再翻页一次
-            bvids = service.list_up_videos(mid)
-            adapter = self._make_adapter(threads, len(bvids), f"UP主 {mid}")
-            mode = "audio" if mt == "audio" else "video"
-            return service.download_up(mid, save_dir, mode=mode, quality=quality,
-                                       progress=adapter, bvids=bvids, threads=threads,
-                                       account_sessions=self._account_sessions(threads, spec),
-                                       cache_dirs=cache_dirs, force=force)
+    def _execute_season(self, service):
+        request = self.request
+        kind, value, mid = request.input_value
+        if kind == "bvid":
+            season = service.fetch_season(bvid=value)
+            bvid, season_id = value, None
+        else:
+            season = service.fetch_season(season_id=value, mid=mid)
+            bvid, season_id = None, value
+        if season is None or not season.episodes:
+            raise ValueError("无法定位到合集，请确认参数正确")
+        file_count = sum(
+            len(episode.pages) if episode.is_multi_page else 1
+            for episode in season.episodes
+        )
+        adapter = self._make_adapter(request.threads, file_count, f"合集「{season.title}」")
+        return service.download_season(
+            bvid=bvid, dir=request.save_dir, season_id=season_id, mid=mid or 0,
+            quality=request.quality, media_type=self._video_media_type(request),
+            progress=adapter, season=season, threads=request.threads,
+            account_sessions=self._account_sessions(request),
+            cache_dirs=list(request.cache_dirs), force=request.force,
+        )
 
-        raise ValueError(f"未知下载来源：{src}")
+    def _execute_emote(self, service):
+        request = self.request
+        package_ids = request.input_value
+        emote_service = EmoteService(service.session)
+        packages, count = emote_service.count_emotes(package_ids)
+        adapter = ProgressAdapter(count, f"表情包 {','.join(map(str, package_ids))}", self)
+        return emote_service.download_packages(
+            package_ids, request.save_dir, progress=adapter, packages=packages,
+            use_full_name=request.emote_full_name,
+        )
 
-    def _account_sessions(self, threads, spec):
+    def _execute_dressup(self, service):
+        request = self.request
+        items = request.input_value
+        if not isinstance(items, list) or not items:
+            raise ValueError("未选择要下载的装扮/表情包")
+        dressup_service = DressupService(service.session)
+        adapter = self._make_adapter(request.threads, len(items), f"装扮 {len(items)} 项")
+        return dressup_service.download_items(
+            items, request.save_dir, threads=request.threads,
+            account_sessions=self._account_sessions(request), progress=adapter,
+            use_full_name=request.emote_full_name,
+        )
+
+    def _execute_garb(self, service):
+        request = self.request
+        garb_service = GarbService(service.session)
+        item, detail, count = garb_service.prepare_download(request.input_value)
+        adapter = ProgressAdapter(
+            count, f"收藏集/装扮 {item.get('name') or request.input_value}", self
+        )
+        return garb_service.download_item(
+            item, request.save_dir, detail=detail, progress=adapter,
+        )
+
+    def _execute_uploader(self, service):
+        request = self.request
+        bvids = service.list_up_videos(request.input_value)
+        adapter = self._make_adapter(request.threads, len(bvids), f"UP主 {request.input_value}")
+        return service.download_up(
+            request.input_value, request.save_dir,
+            mode=self._download_mode(request), quality=request.quality,
+            progress=adapter, bvids=bvids, threads=request.threads,
+            account_sessions=self._account_sessions(request),
+            cache_dirs=list(request.cache_dirs), force=request.force,
+        )
+
+    @staticmethod
+    def _video_media_type(request: DownloadRequest) -> str:
+        return "audio" if request.media_type == MediaType.AUDIO else "video_with_audio"
+
+    @staticmethod
+    def _download_mode(request: DownloadRequest) -> str:
+        return "audio" if request.media_type == MediaType.AUDIO else "video"
+
+    def _account_sessions(self, request: DownloadRequest):
         """多账号分流：并发且开启分流时，为每个登录有效的账号建一个独立 BiliSession。
 
         :return: BiliSession 列表；未开启或没有可用账号时返回 None（沿用当前账号）
         """
-        if threads <= 1 or not spec.get("distribute_accounts"):
+        if request.threads <= 1 or not request.distribute_accounts:
             return None
         try:
             from src.api.session import BiliSession
@@ -229,6 +277,8 @@ class DownloadWorker(QThread):
                 continue
             if cookies.has_valid_session:
                 sessions.append(BiliSession(cookie_path=str(acc.cookie_path)))
+        if sessions:
+            self._owned_account_sessions.extend(sessions)
         return sessions or None
 
     def _make_adapter(self, threads, n, label):
