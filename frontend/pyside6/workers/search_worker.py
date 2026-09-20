@@ -44,6 +44,49 @@ def search_dressup(keyword: str, on_results, on_error) -> DressupSearchWorker:
     return worker
 
 
+
+
+class DirectDressupImportWorker(QThread):
+    """后台校验按 ID 导入的收藏集或主题装扮。"""
+
+    result = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, *, act_id=None, lottery_id=None, item_id=None, parent=None):
+        super().__init__(parent)
+        self.act_id = act_id
+        self.lottery_id = lottery_id
+        self.item_id = item_id
+        self._stop = False
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self):
+        if self._stop:
+            return
+        try:
+            item = DressupService().import_by_ids(
+                act_id=self.act_id, lottery_id=self.lottery_id, item_id=self.item_id,
+            )
+            if not self._stop:
+                self.result.emit(item.as_dict())
+        except Exception as exc:
+            if not self._stop:
+                self.failed.emit(str(exc) or exc.__class__.__name__)
+
+
+def import_dressup_by_ids(*, act_id=None, lottery_id=None, item_id=None, on_result, on_error) -> DirectDressupImportWorker:
+    """启动按 ID 导入的详情校验线程。"""
+    worker = DirectDressupImportWorker(act_id=act_id, lottery_id=lottery_id, item_id=item_id)
+    worker.result.connect(on_result)
+    worker.failed.connect(on_error)
+    worker.finished.connect(lambda: _drop(worker))
+    _keepalive.append(worker)
+    worker.start()
+    return worker
+
+
 def shutdown_all() -> None:
     """应用退出前停止装扮搜索线程（尽力而为，避免后台 QThread 残留）。"""
     for worker in list(_keepalive):

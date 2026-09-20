@@ -148,6 +148,68 @@ def test_download_season_reuses_external_season(tmp_path):
     assert calls["fetch_season"] == 1  # 未传时保持原有行为
 
 
+def test_download_dirs_sanitize_blank_titles(tmp_path, monkeypatch):
+    """空白标题会被清洗成安全目录名，避免 Windows 路径创建失败。"""
+    svc = _svc(tmp_path)
+
+    class FakeFav:
+        def __init__(self, session):
+            pass
+
+        def get_fav_info(self, fid):
+            return type("FavInfo", (), {"title": "   "})()
+
+        def get_fav_bv(self, fid):
+            return ["BV1"]
+
+    class FakeUser:
+        def __init__(self, session):
+            pass
+
+        def get_name(self, mid):
+            return "   "
+
+    monkeypatch.setattr("src.services.fav.FavService", FakeFav)
+    monkeypatch.setattr("src.services.user.UserService", FakeUser)
+
+    fav_dirs = []
+    up_dirs = []
+    season_dirs = []
+
+    def fake_download_collection(bvids, save_dir, **kwargs):
+        fav_dirs.append(save_dir)
+        return []
+
+    def fake_download_collection_up(bvids, save_dir, **kwargs):
+        up_dirs.append(save_dir)
+        return []
+
+    def fake_download_episode(ep, save_dir, **kwargs):
+        season_dirs.append(save_dir)
+        return ([], 1)
+
+    svc._download_bvid_collection = fake_download_collection
+    svc.download_fav(1, tmp_path, mode="video")
+    svc._download_bvid_collection = fake_download_collection_up
+    svc.download_up(1, tmp_path, mode="video")
+
+    class FakeSeason:
+        def __init__(self):
+            self.title = "   "
+            self.episodes = [_Episode()]
+
+    svc.fetch_season = lambda bvid=None, season_id=None, mid=0: FakeSeason()
+    svc._download_episode = fake_download_episode
+    svc.download_season(season_id=1, dir=tmp_path, season=FakeSeason())
+
+    assert fav_dirs[0].name == "untitled"
+    assert up_dirs[0].name == "untitled"
+    assert season_dirs[0].name == "untitled"
+    assert fav_dirs[0].is_dir()
+    assert up_dirs[0].is_dir()
+    assert season_dirs[0].is_dir()
+
+
 # ---- 并发下载（threads>1）----
 
 
@@ -296,3 +358,4 @@ def test_download_fav_no_accounts_uses_current(tmp_path, monkeypatch):
 
     svc.download_fav(1, tmp_path, mode="video", threads=2)
     assert used == [True, True]  # 两个任务都在原 service 上执行
+

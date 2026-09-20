@@ -143,4 +143,4 @@ def test_resource_type_filter_cache_and_invalid_category(tmp_path, monkeypatch):
     assert results[0].cached is True
     assert calls == []
     with pytest.raises(ValueError, match="不支持的资源类型"):
-        service.list_resources(item, detail, resource_types=["emoji_package"])
+        service.list_resources(item, detail, resource_types=["not-a-category"])

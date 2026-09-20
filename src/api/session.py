@@ -94,6 +94,7 @@ class BiliSession:
             merged = dict(self.session.headers)
             merged.update(headers)
             kwargs["headers"] = merged
+        logger.debug("[BiliSession-GET] 访问 URL：%s", self._request_url("GET", url, kwargs))
         resp = self.session.request("GET", url, timeout=self.timeout, stream=True, **kwargs)
         try:
             resp.raise_for_status()
@@ -123,6 +124,16 @@ class BiliSession:
     def close(self) -> None:
         self.session.close()
 
+    @staticmethod
+    def _request_url(method: str, url: str, kwargs: dict) -> str:
+        """构造会实际访问的完整 URL，用于日志而不暴露请求头。"""
+        try:
+            prepared = requests.Request(method, url, params=kwargs.get("params")).prepare()
+            return prepared.url or url
+        except (TypeError, ValueError):
+            # 日志不能影响请求；遇到非常规 params 时至少保留原始 URL。
+            return url
+
     def _request(
         self,
         method: str,
@@ -145,6 +156,7 @@ class BiliSession:
         attempts = self.max_retry if retryable else 0
         for attempt in range(attempts + 1):
             try:
+                logger.debug("[BiliSession-%s] 访问 URL：%s", method, self._request_url(method, url, kwargs))
                 resp = self.session.request(method, url, timeout=self.timeout, **kwargs)
                 try:
                     resp.raise_for_status()

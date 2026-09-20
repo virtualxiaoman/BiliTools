@@ -1,5 +1,6 @@
 """B 站收藏表情包的获取与下载服务。"""
 
+import logging
 from pathlib import Path
 import re
 from typing import Optional
@@ -12,6 +13,9 @@ from src.urls.emote_urls import EmoteUrls
 from src.util.downloader import ProgressCallback, download_stream
 from src.util.filename import sanitize_filename
 from src.util.progress import BatchProgress
+
+
+logger = logging.getLogger(__name__)
 
 
 class EmoteService:
@@ -59,6 +63,12 @@ class EmoteService:
             params={"business": "reply", "ids": ",".join(map(str, ids))},
         )
         packages = data.get("packages", []) if isinstance(data, dict) else []
+        # 收藏集奖励链可能包含已下架、尚未公开或当前账号不可见的表情包。
+        # 该接口对此类包会合法返回 ``packages: null``，它表示没有可下载内容，
+        # 而不是响应格式损坏；不能因此中断同批其它收藏集/装扮的下载。
+        if packages is None:
+            logger.debug("表情包接口未返回可用 packages，跳过：%s", ids)
+            return []
         if not isinstance(packages, list):
             raise ValueError("表情包接口返回格式异常：packages 不是列表")
         return packages

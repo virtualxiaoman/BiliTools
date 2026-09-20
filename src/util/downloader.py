@@ -144,6 +144,7 @@ def download_stream(
             restart_without_counting = False
             response = None
             try:
+                logger.debug("[download_stream] 访问 URL：%s", url)
                 response = requests.get(
                     url,
                     headers=req_headers,
@@ -256,7 +257,10 @@ def merge_video_audio(
     if not audio_path.is_file():
         raise DownloadError(f"音频流文件不存在：{audio_path}")
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_output = save_path.with_name(save_path.name + ".part")
+    # ffmpeg 依据输出文件扩展名选择封装格式。不能使用 ``video.mp4.part``：
+    # 它会把 ``.part`` 当作未知格式并以 EINVAL（Windows 上显示为 4294967274）失败。
+    # 将临时标记置于扩展名前，既保留原子替换语义，又让 ffmpeg 正确识别 mp4。
+    temp_output = save_path.with_name(f"{save_path.stem}.part{save_path.suffix}")
     temp_output.unlink(missing_ok=True)
     cmd = [ffmpeg, "-y", "-i", str(video_path), "-i", str(audio_path), "-c", "copy", str(temp_output)]
     logger.debug("[merge_video_audio] 合成命令：%s", " ".join(cmd))

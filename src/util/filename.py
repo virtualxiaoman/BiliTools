@@ -48,6 +48,7 @@ def sanitize_filename(name: str, *, keep_whitespace: bool = True) -> str:
     else:
         name = re.sub(r"\s+", "", name)
     name = _TRAILING_DOT_SPACE_RE.sub("", name)
+    # print(name)
     if not name:
         name = "untitled"
     if name.upper() in _WINDOWS_RESERVED_NAMES:

@@ -12,6 +12,9 @@
     result = service.download_video_with_audio("BV1ov42117yC")
     print(result.path)
 """
+
+# todo: BV1MyHHzEECq应该因为空格无法下载。
+
 import time
 import random
 import logging
@@ -45,6 +48,7 @@ from src.util.filename import (
     build_download_filename,
     build_multi_page_filename,
     resolve_save_path,
+    sanitize_filename,
 )
 from src.util.progress import BatchProgress, ParallelBatchProgress
 from src.util.risk_gate import RiskGate
@@ -724,7 +728,8 @@ class VideoService:
             loc = f"bvid={bvid}" if bvid else f"season_id={season_id}"
             raise ValueError(f"{loc} 无法定位到合集，请确认参数正确。")
 
-        save_dir = (Path(dir) if dir is not None else self.default_dir) / season.title
+        season_dir = sanitize_filename(season.title)
+        save_dir = (Path(dir) if dir is not None else self.default_dir) / season_dir
         save_dir.mkdir(parents=True, exist_ok=True)
 
         # 计算总共要下载的文件数（多P稿件按分P数计），驱动进度
@@ -984,7 +989,8 @@ class VideoService:
         if not bvids:
             raise ValueError(f"收藏夹「{info.title}」没有视频。")
 
-        save_dir = (Path(dir) if dir is not None else self.default_dir) / info.title
+        fav_dir = sanitize_filename(info.title)
+        save_dir = (Path(dir) if dir is not None else self.default_dir) / fav_dir
         save_dir.mkdir(parents=True, exist_ok=True)
 
         media_type = "audio" if mode == "audio" else "video_with_audio"
@@ -1102,7 +1108,8 @@ class VideoService:
             raise ValueError(f"UP主 {mid} 没有视频。")
 
         up_name = UserService(self.session).get_name(mid) or f"up_{mid}"
-        save_dir = (Path(dir) if dir is not None else self.default_dir) / up_name
+        up_dir = sanitize_filename(up_name)
+        save_dir = (Path(dir) if dir is not None else self.default_dir) / up_dir
         save_dir.mkdir(parents=True, exist_ok=True)
 
         media_type = "audio" if mode == "audio" else "video_with_audio"
@@ -1121,3 +1128,4 @@ class VideoService:
                 "视频 %s 不可见，跳过。", bvid
             ),
         )
+

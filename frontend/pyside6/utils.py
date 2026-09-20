@@ -9,6 +9,7 @@
 """
 import re
 import ipaddress
+import logging
 import socket
 from urllib.parse import urlparse
 from typing import Optional
@@ -19,6 +20,8 @@ from src.config.constants import UserAgent
 from src.config.cookie import BiliCookies
 from src.config.path import get_cookie_path
 from src.util.bvid import av2bv
+
+logger = logging.getLogger(__name__)
 
 _BV_RE = re.compile(r"bv[0-9a-zA-Z]{10}", re.IGNORECASE)
 # av 号：前缀（^）或非字母数字边界，避免误匹配 query 值里嵌入的 "av123" 之类文本
@@ -105,6 +108,7 @@ def follow_redirect(url: str, timeout: int = 15) -> str:
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ValueError("只允许访问 HTTP/HTTPS 链接")
         _validate_public_host(parsed.hostname)
+        logger.debug("[follow_redirect] 访问 URL：%s", current)
         response = requests.get(current, allow_redirects=False, timeout=timeout, headers=headers)
         try:
             if 300 <= response.status_code < 400:

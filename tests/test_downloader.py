@@ -102,6 +102,33 @@ def test_merge_command_has_yes_flag(tmp_path):
         assert "-i" in cmd
 
 
+def test_merge_temp_output_keeps_container_extension(tmp_path):
+    """临时合成文件仍须以 .mp4 结尾，供 ffmpeg 识别输出封装格式。"""
+    video = tmp_path / "v.mp4"
+    audio = tmp_path / "a.m4a"
+    video.write_bytes(b"v")
+    audio.write_bytes(b"a")
+
+    class FakeProcess:
+        def __init__(self, cmd, **kwargs):
+            self.returncode = 0
+            Path(cmd[-1]).write_bytes(b"merged")
+        def poll(self): return self.returncode
+        def wait(self, timeout=None): return self.returncode
+        def terminate(self): self.returncode = 0
+        def kill(self): self.returncode = 0
+
+    with patch("shutil.which", return_value="ffmpeg"), patch(
+        "subprocess.Popen", side_effect=FakeProcess
+    ) as mock_popen:
+        output = tmp_path / "out.mp4"
+        dl.merge_video_audio(video, audio, output)
+
+    assert Path(mock_popen.call_args[0][0][-1]).name == "out.part.mp4"
+    assert output.read_bytes() == b"merged"
+    assert not (tmp_path / "out.part.mp4").exists()
+
+
 def test_merge_ffmpeg_failure(tmp_path):
     video = tmp_path / "v.mp4"
     audio = tmp_path / "a.m4a"

@@ -117,6 +117,7 @@ class LoginService:
 
     def _poll_once(self, qrcode_key: str):
         """轮询一次并返回 (状态码, 响应)。登录成功时响应头含 set-cookie。"""
+        logger.debug("[LoginService] 访问 URL：%s?qrcode_key=%s", LoginUrls.QR_LOGIN, qrcode_key)
         resp = self.session.session.get(
             LoginUrls.QR_LOGIN, params={"qrcode_key": qrcode_key}, timeout=self.session.timeout
         )

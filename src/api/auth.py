@@ -6,6 +6,7 @@
 """
 
 import hashlib
+import logging
 import hmac
 import random
 import threading
@@ -17,6 +18,8 @@ from typing import Optional
 import requests
 
 from src.config.constants import API_BASE, UserAgent
+
+logger = logging.getLogger(__name__)
 
 # wbi 签名所需的 img_key / sub_key 缓存（进程内，长时间有效）
 _wbi_keys_cache: Optional[tuple[str, str, float]] = None
@@ -97,6 +100,7 @@ def _get_wbi_keys() -> tuple[str, str]:
         last_error = None
         for attempt in range(3):
             try:
+                logger.debug("[WBI] 访问 URL：%s/x/web-interface/nav", API_BASE)
                 resp = requests.get(
                     f"{API_BASE}/x/web-interface/nav",
                     headers=headers,

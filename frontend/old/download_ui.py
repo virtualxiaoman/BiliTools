@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import logging
 import random
 import requests
 import threading
@@ -21,6 +22,7 @@ Input_css = Input_css()
 Text_css = Text_css()
 ComboBox_css = ComboBox_css()
 UI_Config = Config()  # 更新时必须是更新UI_Config，这样才能保证config是最新的
+logger = logging.getLogger(__name__)
 
 class DownloadThread(QThread):
     # 定义一个信号，用于在下载完成时发射：
@@ -485,6 +487,7 @@ class Win_Download(QWidget):
                 print("[__transform_bv]用户输入的URL不合法")
                 self.Label_download_video_tip.setText(f"无法获取URL，请检查后重新输入")
                 return False
+            logger.debug("[legacy] 访问 URL：%s", bvORav)
             r = requests.get(bvORav, headers={"User-Agent": UserAgent().pcChrome})
             if r.status_code == 200:
                 url = r.url
@@ -522,6 +525,7 @@ class Win_Download(QWidget):
                 print("[__transform_fav]用户输入的URL不合法")
                 self.Label_download_fav_tip.setText(f"无法获取URL，请检查后重新输入")
                 return False
+            logger.debug("[legacy] 访问 URL：%s", fidORurl)
             r = requests.get(fidORurl, headers={"User-Agent": UserAgent().pcChrome})
             if r.status_code == 200:
                 url = r.url
