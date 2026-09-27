@@ -100,6 +100,7 @@ GarbService().download_by_keyword("初音未来")
 
 ```bash
 python main.py info BV1ov42117yC   # 标题、UP主、播放/弹幕/评论、标签
+python main.py summary BV1ov42117yC # 视频 AI 总结文本
 python main.py video BV1ov42117yC  # 下载视频并合成音频
 python main.py cover BV1ov42117yC  # 下载封面
 python main.py rank                # 获取热门视频 BV 号

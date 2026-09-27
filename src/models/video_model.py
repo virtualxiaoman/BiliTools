@@ -207,3 +207,141 @@ class VideoInfo:
             pages=[VideoPage.from_dict(p) for p in pages],
             season=VideoSeason.from_dict(season_data) if season_data else None,
         )
+
+
+@dataclass
+class VideoAISummaryOutlinePart:
+    """视频 AI 总结中的一个时间点要点。"""
+
+    timestamp: int = 0
+    content: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoAISummaryOutlinePart":
+        return cls(
+            timestamp=int(data.get("timestamp", 0) or 0),
+            content=str(data.get("content", "") or ""),
+        )
+
+
+@dataclass
+class VideoAISummaryOutline:
+    """视频 AI 总结的一个章节。"""
+
+    title: str = ""
+    part_outline: list[VideoAISummaryOutlinePart] = field(default_factory=list)
+    timestamp: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoAISummaryOutline":
+        parts = data.get("part_outline") or []
+        return cls(
+            title=str(data.get("title", "") or ""),
+            part_outline=[
+                VideoAISummaryOutlinePart.from_dict(item)
+                for item in parts
+                if isinstance(item, dict)
+            ],
+            timestamp=int(data.get("timestamp", 0) or 0),
+        )
+
+
+@dataclass
+class VideoAISummarySubtitlePart:
+    """视频 AI 总结中的一条 AI 字幕。"""
+
+    content: str = ""
+    start_timestamp: int = 0
+    end_timestamp: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoAISummarySubtitlePart":
+        return cls(
+            content=str(data.get("content", "") or ""),
+            start_timestamp=int(data.get("start_timestamp", 0) or 0),
+            end_timestamp=int(data.get("end_timestamp", 0) or 0),
+        )
+
+
+@dataclass
+class VideoAISummarySubtitle:
+    """视频 AI 总结中的一个字幕段落。"""
+
+    part_subtitle: list[VideoAISummarySubtitlePart] = field(default_factory=list)
+    timestamp: int = 0
+    title: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoAISummarySubtitle":
+        parts = data.get("part_subtitle") or []
+        return cls(
+            part_subtitle=[
+                VideoAISummarySubtitlePart.from_dict(item)
+                for item in parts
+                if isinstance(item, dict)
+            ],
+            timestamp=int(data.get("timestamp", 0) or 0),
+            title=str(data.get("title", "") or ""),
+        )
+
+
+@dataclass
+class VideoAISummaryResult:
+    """接口 data.model_result 中的 AI 总结内容。"""
+
+    result_type: int = 0
+    summary: str = ""
+    outline: list[VideoAISummaryOutline] = field(default_factory=list)
+    subtitle: list[VideoAISummarySubtitle] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoAISummaryResult":
+        outlines = data.get("outline") or []
+        subtitles = data.get("subtitle") or []
+        return cls(
+            result_type=int(data.get("result_type", 0) or 0),
+            summary=str(data.get("summary", "") or ""),
+            outline=[
+                VideoAISummaryOutline.from_dict(item)
+                for item in outlines
+                if isinstance(item, dict)
+            ],
+            subtitle=[
+                VideoAISummarySubtitle.from_dict(item)
+                for item in subtitles
+                if isinstance(item, dict)
+            ],
+        )
+
+
+@dataclass
+class VideoAISummary:
+    """视频 AI 总结接口返回的 data。"""
+
+    code: int = 0
+    stid: str = ""
+    status: int = 0
+    like_num: int = 0
+    dislike_num: int = 0
+    model_result: Optional[VideoAISummaryResult] = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VideoAISummary":
+        model_result = data.get("model_result")
+        return cls(
+            code=int(data.get("code", 0) or 0),
+            stid=str(data.get("stid", "") or ""),
+            status=int(data.get("status", 0) or 0),
+            like_num=int(data.get("like_num", 0) or 0),
+            dislike_num=int(data.get("dislike_num", 0) or 0),
+            model_result=(
+                VideoAISummaryResult.from_dict(model_result)
+                if isinstance(model_result, dict)
+                else None
+            ),
+        )
+
+    @property
+    def summary_text(self) -> str:
+        """返回 AI 生成的概括性总结文本；没有总结时返回空字符串。"""
+        return self.model_result.summary if self.model_result is not None else ""

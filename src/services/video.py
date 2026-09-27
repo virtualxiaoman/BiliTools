@@ -40,7 +40,13 @@ from src.models.download_model import (
     VideoQuality,
     VideoStream,
 )
-from src.models.video_model import VideoInfo, VideoPage, VideoSeason, VideoSeasonEpisode
+from src.models.video_model import (
+    VideoAISummary,
+    VideoInfo,
+    VideoPage,
+    VideoSeason,
+    VideoSeasonEpisode,
+)
 from src.services.archive import ArchiveService
 from src.urls.video_urls import VideoUrls
 from src.util.downloader import ProgressCallback, download_stream, ffmpeg_available, merge_video_audio
@@ -135,6 +141,95 @@ class VideoService:
         # 的组装，后续下载流程只依赖 VideoInfo，不再直接读取接口字典。
         data = self.session.get(VideoUrls.VIEW, params={"bvid": bvid})
         return VideoInfo.from_view_json(data)
+
+    def fetch_ai_summary(
+        self,
+        bvid: str = "",
+        aid: int = 0,
+        cid: Optional[int] = None,
+        up_mid: Optional[int] = None,
+    ) -> VideoAISummary:
+        """获取视频 AI 总结。
+
+        ``cid`` 是必需的接口参数；未传入时会先请求视频信息自动取首个
+        分 P 的 cid。``up_mid`` 是可选参数，未传入时会尽量从视频信息中
+        自动补全。视频标识支持 BV 号或 AV 号，二者只能传一个。
+
+        :param bvid: 视频 BV 号，与 ``aid`` 二选一
+        :param aid: 视频 AV 号，与 ``bvid`` 二选一
+        :param cid: 分 P cid；默认使用首个分 P
+        :param up_mid: UP 主 mid，可选
+        :return: :class:`VideoAISummary`
+        """
+        if isinstance(aid, bool) or (not bvid and not aid):
+            raise ValueError("bvid 和 aid 必须二选一")
+        if bvid and aid:
+            raise ValueError("bvid 和 aid 不能同时传入")
+        if not bvid:
+            try:
+                aid = int(aid)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("aid 必须是正整数") from exc
+            if aid <= 0:
+                raise ValueError("aid 必须是正整数")
+
+        if cid is not None:
+            try:
+                cid = int(cid)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("cid 必须是正整数") from exc
+            if cid <= 0:
+                raise ValueError("cid 必须是正整数")
+        if up_mid is not None:
+            try:
+                up_mid = int(up_mid)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("up_mid 必须是正整数") from exc
+            if up_mid <= 0:
+                raise ValueError("up_mid 必须是正整数")
+
+        # cid 缺失时需要查询 view；查询 view 的同时可补全可选 up_mid。
+        if cid is None:
+            view_params = {"bvid": bvid} if bvid else {"aid": int(aid)}
+            info = VideoInfo.from_view_json(
+                self.session.get(VideoUrls.VIEW, params=view_params)
+            )
+            if cid is None:
+                cid = info.cid
+            if up_mid is None and info.owner is not None and info.owner.mid > 0:
+                up_mid = info.owner.mid
+
+        if cid is None or cid <= 0:
+            raise ValueError("无法获取视频 cid，请显式传入 cid")
+
+        params: dict[str, Any] = {"cid": cid}
+        if bvid:
+            params["bvid"] = bvid
+        else:
+            params["aid"] = int(aid)
+        if up_mid is not None:
+            params["up_mid"] = up_mid
+        get_wbi(params)
+        data = self.session.get(VideoUrls.AI_SUMMARY, params=params)
+        if not isinstance(data, dict):
+            raise ValueError("视频 AI 总结响应 data 类型错误")
+        return VideoAISummary.from_dict(data)
+
+    def get_ai_summary(self, *args, **kwargs) -> VideoAISummary:
+        """``fetch_ai_summary`` 的简易别名，返回 dataclass。"""
+        return self.fetch_ai_summary(*args, **kwargs)
+
+    def fetch_ai_summary_text(self, *args, **kwargs) -> str:
+        """获取视频 AI 总结的纯文本摘要。
+
+        与 ``fetch_ai_summary`` 相比，该方法只返回 ``model_result.summary``；
+        视频没有可用 AI 总结时返回空字符串。
+        """
+        return self.fetch_ai_summary(*args, **kwargs).summary_text
+
+    def get_ai_summary_text(self, *args, **kwargs) -> str:
+        """``fetch_ai_summary_text`` 的简易别名，直接返回字符串。"""
+        return self.fetch_ai_summary_text(*args, **kwargs)
 
     def fetch_tags(self, bvid: str) -> list:
         """获取视频标签（tag_name 列表）。

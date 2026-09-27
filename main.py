@@ -7,6 +7,7 @@
     info      BV号                  获取视频信息
     comments  BV号 [排序] [条数]    获取视频评论（排序：latest 或 hot；条数默认 -1）
     dynamic-comments 动态ID/opus链接 [排序] [条数]  获取动态评论
+    summary   BV号 [cid]              获取视频 AI 总结文本
     video     BV号                  下载视频（含音频）
     cover     BV号                  下载封面
     rank                            获取热门视频
@@ -66,6 +67,19 @@ def cmd_dynamic_comments(dynamic_id: str, sort: str = "latest", max_count: str =
     print(f"共获取 {len(comments)} 条评论")
 
 
+def cmd_summary(bvid: str, cid: str = ""):
+    """获取并打印视频 AI 总结文本；未传 cid 时自动使用首个分 P。"""
+    service = VideoService()
+    if cid:
+        try:
+            summary = service.get_ai_summary_text(bvid=bvid, cid=int(cid))
+        except ValueError as exc:
+            raise ValueError("cid 必须是整数") from exc
+    else:
+        summary = service.get_ai_summary_text(bvid=bvid)
+    print(summary)
+
+
 def cmd_video(bvid: str):
     service = VideoService()
     result = service.download_video_with_audio(bvid)
@@ -88,6 +102,7 @@ COMMANDS = {
     "info": cmd_info,
     "comments": cmd_comments,
     "dynamic-comments": cmd_dynamic_comments,
+    "summary": cmd_summary,
     "video": cmd_video,
     "cover": cmd_cover,
     "rank": cmd_rank,

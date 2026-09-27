@@ -12,6 +12,12 @@ from src.models.download_request import DownloadRequest, DownloadSource, MediaTy
 from src.models.fav_model import FavInfo
 from src.models.login_model import LoginUser
 from src.models.video_model import (
+    VideoAISummary,
+    VideoAISummaryOutline,
+    VideoAISummaryOutlinePart,
+    VideoAISummaryResult,
+    VideoAISummarySubtitle,
+    VideoAISummarySubtitlePart,
     VideoInfo,
     VideoOwner,
     VideoPage,
@@ -33,6 +39,12 @@ __all__ = [
     "MediaType",
     "FavInfo",
     "LoginUser",
+    "VideoAISummary",
+    "VideoAISummaryOutline",
+    "VideoAISummaryOutlinePart",
+    "VideoAISummaryResult",
+    "VideoAISummarySubtitle",
+    "VideoAISummarySubtitlePart",
     "VideoInfo",
     "VideoOwner",
     "VideoPage",
