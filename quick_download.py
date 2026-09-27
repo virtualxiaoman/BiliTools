@@ -21,7 +21,12 @@
 # #
 # # print(UserService().fetch_info(mid=506925078))
 
-from src.services import EmoteService
+# from src.services import EmoteService
+#
+# # 默认：使用简称
+# EmoteService().download_packages("10239,10238")
 
-# 默认：使用简称
-EmoteService().download_packages("10239,10238")
+# from src.services import ReplyService
+# from pprint import pprint
+# comments = ReplyService().get_comments(bvid="BV1ov42117yC", sort="hot", max_count=10)
+# pprint(comments)

@@ -4,17 +4,18 @@
     python main.py <command> [args]
 
 可用命令（示例）：
-    info   BV号       获取视频信息
-    video  BV号       下载视频（含音频）
-    cover  BV号       下载封面
-    rank              获取热门视频
+    info      BV号                  获取视频信息
+    comments  BV号 [排序] [条数]    获取视频评论（排序：latest 或 hot；条数默认 -1）
+    video     BV号                  下载视频（含音频）
+    cover     BV号                  下载封面
+    rank                            获取热门视频
 
 完整示例见 examples/quick_start.py
 """
 
 import sys
 
-from src.services import RankService, VideoService
+from src.services import RankService, ReplyService, VideoService
 
 
 def cmd_info(bvid: str):
@@ -24,6 +25,25 @@ def cmd_info(bvid: str):
     print(f"UP主：{info.owner.name}（mid={info.owner.mid}）")
     print(f"播放/弹幕/评论：{info.stat.num_view}/{info.stat.num_dm}/{info.stat.num_reply}")
     print(f"标签：{info.tags}")
+
+
+def cmd_comments(bvid: str, sort: str = "latest", max_count: str = "-1"):
+    """获取并打印视频评论；max_count=-1 表示不限制。"""
+    try:
+        count = int(max_count)
+    except ValueError as exc:
+        raise ValueError("评论条数必须是整数，-1 表示不限制") from exc
+
+    comments = ReplyService().get_comments(
+        bvid=bvid, sort=sort, max_count=count
+    )
+    for comment in comments:
+        member = comment.get("member") or {}
+        content = comment.get("content") or {}
+        uname = member.get("uname", "未知用户")
+        message = content.get("message", "")
+        print(f"[{uname}] {message}")
+    print(f"共获取 {len(comments)} 条评论")
 
 
 def cmd_video(bvid: str):
@@ -46,6 +66,7 @@ def cmd_rank():
 
 COMMANDS = {
     "info": cmd_info,
+    "comments": cmd_comments,
     "video": cmd_video,
     "cover": cmd_cover,
     "rank": cmd_rank,
