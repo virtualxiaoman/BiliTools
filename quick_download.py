@@ -30,3 +30,9 @@
 # from pprint import pprint
 # comments = ReplyService().get_comments(bvid="BV1ov42117yC", sort="hot", max_count=10)
 # pprint(comments)
+from src.services import ReplyService
+
+service = ReplyService()
+
+comments = service.get_dynamic_comments("https://www.bilibili.com/opus/1151100571637252104", sort="hot", max_count=20)
+print(comments)

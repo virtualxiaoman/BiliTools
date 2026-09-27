@@ -10,4 +10,5 @@ class CommentUrls:
     """评论接口。"""
 
     ADD = f"{API_BASE}/x/v2/reply/add"  # 发表评论
-    LIST = f"{API_BASE}/x/v2/reply"  # 评论列表（type=1，sort=0 最新 / 1 最热）
+    LIST = f"{API_BASE}/x/v2/reply"  # 评论列表（视频 type=1，动态 type=11/17）
+    DYNAMIC_DETAIL = f"{API_BASE}/x/polymer/web-dynamic/v1/detail"  # opus 动态详情

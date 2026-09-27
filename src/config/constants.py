@@ -16,8 +16,9 @@ MESSAGE_BASE = "https://message.bilibili.com"
 # ---- 请求头 ----
 class UserAgent:
     def __init__(self):
-        # self.pcChrome = """Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"""
-        self.pcChrome = """Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"""
+        # B 站部分接口会将不匹配真实浏览器指纹的过新 UA 判为风控请求（-352）。
+        # 使用稳定的 Chromium UA，避免动态详情接口被拦截。
+        self.pcChrome = """Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0"""
 
 
 # ---- 重试参数（原 Config.MAX_RETRY / RETRY_DELAY） ----

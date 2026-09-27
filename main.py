@@ -6,6 +6,7 @@
 可用命令（示例）：
     info      BV号                  获取视频信息
     comments  BV号 [排序] [条数]    获取视频评论（排序：latest 或 hot；条数默认 -1）
+    dynamic-comments 动态ID/opus链接 [排序] [条数]  获取动态评论
     video     BV号                  下载视频（含音频）
     cover     BV号                  下载封面
     rank                            获取热门视频
@@ -34,8 +35,27 @@ def cmd_comments(bvid: str, sort: str = "latest", max_count: str = "-1"):
     except ValueError as exc:
         raise ValueError("评论条数必须是整数，-1 表示不限制") from exc
 
-    comments = ReplyService().get_comments(
+    comments = ReplyService().get_video_comments(
         bvid=bvid, sort=sort, max_count=count
+    )
+    for comment in comments:
+        member = comment.get("member") or {}
+        content = comment.get("content") or {}
+        uname = member.get("uname", "未知用户")
+        message = content.get("message", "")
+        print(f"[{uname}] {message}")
+    print(f"共获取 {len(comments)} 条评论")
+
+
+def cmd_dynamic_comments(dynamic_id: str, sort: str = "latest", max_count: str = "-1"):
+    """获取并打印动态评论；支持动态 ID 或 bilibili.com/opus/<id> 链接。"""
+    try:
+        count = int(max_count)
+    except ValueError as exc:
+        raise ValueError("评论条数必须是整数，-1 表示不限制") from exc
+
+    comments = ReplyService().get_dynamic_comments(
+        dynamic_id=dynamic_id, sort=sort, max_count=count
     )
     for comment in comments:
         member = comment.get("member") or {}
@@ -67,6 +87,7 @@ def cmd_rank():
 COMMANDS = {
     "info": cmd_info,
     "comments": cmd_comments,
+    "dynamic-comments": cmd_dynamic_comments,
     "video": cmd_video,
     "cover": cmd_cover,
     "rank": cmd_rank,

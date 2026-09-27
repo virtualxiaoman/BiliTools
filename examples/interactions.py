@@ -11,7 +11,20 @@ BVID = "BV1ov42117yC"
 
 def get_comments() -> None:
     """获取视频最热评论；max_count=-1 表示不限制。"""
-    comments = ReplyService().get_comments(bvid=BVID, sort="hot", max_count=20)
+    comments = ReplyService().get_video_comments(bvid=BVID, sort="hot", max_count=20)
+    for comment in comments:
+        member = comment.get("member") or {}
+        content = comment.get("content") or {}
+        print(f"[{member.get('uname', '未知用户')}] {content.get('message', '')}")
+
+
+def get_dynamic_comments() -> None:
+    """获取 opus 动态评论。"""
+    comments = ReplyService().get_dynamic_comments(
+        "https://www.bilibili.com/opus/1151100571637252104",
+        sort="latest",
+        max_count=20,
+    )
     for comment in comments:
         member = comment.get("member") or {}
         content = comment.get("content") or {}
