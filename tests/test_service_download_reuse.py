@@ -191,6 +191,8 @@ def test_download_dirs_sanitize_blank_titles(tmp_path, monkeypatch):
     svc._download_bvid_collection = fake_download_collection
     svc.download_fav(1, tmp_path, mode="video")
     svc._download_bvid_collection = fake_download_collection_up
+    # stub session 不联网：download_up 未传 bvids 时会内部取列表，这里显式提供
+    svc.list_up_videos = lambda mid: ["BV1"]
     svc.download_up(1, tmp_path, mode="video")
 
     class FakeSeason:

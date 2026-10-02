@@ -73,6 +73,7 @@ service.download("BV1ov42117yC")
 | 历史 | `HistoryService` | 游标分页、失效视频查找、导出 xlsx |
 | 收藏/合集 | `FavService` / `ArchiveService` | 获取收藏夹信息、BV 列表和合集结构 |
 | 表情/装扮 | `EmoteService` / `GarbService` / `DressupService` | 表情包、收藏集、主题装扮搜索与批量下载 |
+| 动态 | `DynamicService` | 动态（opus）解析与目录化下载：图片/表情/卡片/抽奖、转发递归、评论存档、UP 主全部动态批量下载 |
 | 用户/互动 | `UserService`、`ReplyService`、`MessageService`、`ContractService` | 用户信息、评论、私信、老粉签约 |
 | 榜单 | `RankService` | 综合热门、排行榜、新视频 |
 

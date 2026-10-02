@@ -1,0 +1,379 @@
+{
+  "id_str": "1224103633988091929",
+  "type": "DYNAMIC_TYPE_COMMON_SQUARE",
+  "basic": {
+    "rid_str": "1224103633988091929",
+    "comment_type": 17,
+    "comment_id_str": "1224103633988091929",
+    "like_icon": {
+      "id": "5768",
+      "start_url": "",
+      "action_url": "https://i0.hdslb.com/bfs/garb/item/7362cb5300eb35041e5fb66120ccf8c94ffb8b19.bin",
+      "end_url": ""
+    },
+    "in_audit": false,
+    "is_only_fans": false,
+    "editable": false,
+    "open_app_extra": "",
+    "jump_url": "",
+    "aigc": false
+  },
+  "visible": true,
+  "modules": {
+    "module_tag": null,
+    "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "avatar": {
+        "container_size": {
+          "width": 1.375,
+          "height": 1.375
+        },
+        "layers": [],
+        "fallback_layers": {
+          "group_id": "",
+          "layers": [
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.6875,
+                  "axis_y": 0.6875
+                },
+                "size_spec": {
+                  "width": 0.787,
+                  "height": 0.787
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "AVATAR_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": true,
+                "allow_over_paint": false,
+                "layer_mask": {
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 2,
+                      "axis_x": 0.6875,
+                      "axis_y": 0.6875
+                    },
+                    "size_spec": {
+                      "width": 0.787,
+                      "height": 0.787
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "mask_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": false,
+                        "day": {
+                          "argb": "#FF000000"
+                        },
+                        "night": null
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 1,
+                    "placeholder": 6,
+                    "remote": {
+                      "url": "https://i0.hdslb.com/bfs/face/ab7b6b46a2c358e914140a0d62ac3322cad44d4f.jpg",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.6875,
+                  "axis_y": 0.6875
+                },
+                "size_spec": {
+                  "width": 1.375,
+                  "height": 1.375
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "PENDENT_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 1,
+                    "placeholder": 0,
+                    "remote": {
+                      "url": "https://i0.hdslb.com/bfs/garb/open/b4519c31be9328fe2eda76b22231e2d441bd8df4.png",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "group_mask": null,
+          "is_critical_group": true
+        },
+        "mid": "506925078"
+      },
+      "face": "https://i0.hdslb.com/bfs/face/ab7b6b46a2c358e914140a0d62ac3322cad44d4f.jpg",
+      "face_nft": false,
+      "nft_info": null,
+      "name": "virtual小满",
+      "name_render": null,
+      "label": "",
+      "mid": 506925078,
+      "jump_url": "//space.bilibili.com/506925078/dynamic",
+      "following": false,
+      "pub_ts": "1783847237",
+      "pub_time": "7月12日",
+      "pub_action": "",
+      "pub_location_text": "",
+      "pendant": {
+        "pid": 1257287161,
+        "name": "洛天依14周年纪念头像框",
+        "image": "https://i0.hdslb.com/bfs/garb/open/b4519c31be9328fe2eda76b22231e2d441bd8df4.png",
+        "expire": "0",
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/b4519c31be9328fe2eda76b22231e2d441bd8df4.png",
+        "image_enhance_frame": "",
+        "n_pid": "1783668715001"
+      },
+      "vip": {
+        "type": 1,
+        "status": 0,
+        "due_date": "1601827200000",
+        "vip_pay_type": 0,
+        "theme_type": 0,
+        "label": {
+          "path": "",
+          "text": "",
+          "label_theme": "",
+          "text_color": "",
+          "bg_style": 0,
+          "bg_color": "",
+          "border_color": "",
+          "use_img_label": true,
+          "img_label_uri_hans": "",
+          "img_label_uri_hant": "",
+          "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/d7b702ef65a976b20ed854cbd04cb9e27341bb79.png",
+          "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/KJunwh19T5.png"
+        },
+        "avatar_subscript": 0,
+        "nickname_color": "",
+        "role": "0",
+        "avatar_subscript_url": "",
+        "tv_vip_status": 0,
+        "tv_vip_pay_type": 0,
+        "tv_due_date": "0",
+        "avatar_icon": {
+          "icon_type": 0,
+          "icon_resource": {
+            "type": 0,
+            "url": ""
+          }
+        }
+      },
+      "official_verify": {
+        "type": -1,
+        "desc": ""
+      },
+      "decorate": null,
+      "decoration_card": {
+        "id": "5789",
+        "item_id": "5789",
+        "name": "洛天依9th生日纪念",
+        "card_url": "https://i0.hdslb.com/bfs/garb/item/ce2d2fef777b2d370a4f434a8b7c17a728be27da.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/item/ce2d2fef777b2d370a4f434a8b7c17a728be27da.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/equity-link/collect-home?item_id=5789&isdiy=0&part=card&from=post&f_source=garb&vmid=506925078&native.theme=1&navhide=1",
+        "fan": {
+          "is_fan": "0",
+          "number": "0",
+          "color": "",
+          "name": "",
+          "num_desc": "",
+          "num_prefix": "",
+          "color_format": null
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/item/ce2d2fef777b2d370a4f434a8b7c17a728be27da.png",
+        "image_group": null
+      },
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": {
+        "id": "5789",
+        "item_id": "5789",
+        "name": "洛天依9th生日纪念",
+        "card_url": "https://i0.hdslb.com/bfs/garb/item/ce2d2fef777b2d370a4f434a8b7c17a728be27da.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/item/ce2d2fef777b2d370a4f434a8b7c17a728be27da.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/equity-link/collect-home?item_id=5789&isdiy=0&part=card&from=post&f_source=garb&vmid=506925078&native.theme=1&navhide=1",
+        "fan": {
+          "is_fan": "0",
+          "number": "0",
+          "color": "",
+          "name": "",
+          "num_desc": "",
+          "num_prefix": "",
+          "color_format": null
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/item/ce2d2fef777b2d370a4f434a8b7c17a728be27da.png",
+        "image_group": null
+      }
+    },
+    "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+        {
+          "label": "置顶",
+          "type": "THREE_POINT_TOP",
+          "params": {
+            "dynamic_id": "1224103633988091929",
+            "status": false
+          },
+          "modal": null,
+          "jump_url": ""
+        },
+        {
+          "label": "删除",
+          "type": "THREE_POINT_DELETE",
+          "params": {
+            "dyn_id_str": "1224103633988091929",
+            "dyn_type": 2048,
+            "rid_str": "1224103633988091929"
+          },
+          "modal": {
+            "title": "要删除动态吗？",
+            "content": "动态删除后将无法恢复，请谨慎操作",
+            "confirm": "确认删除",
+            "cancel": "取消"
+          },
+          "jump_url": ""
+        }
+      ]
+    },
+    "module_dispute": null,
+    "module_dynamic": {
+      "topic": null,
+      "desc": {
+        "text": "#bilibili个性装扮# 我正在使用“洛天依14周年勋章”专属评论背景，你也来试试~",
+        "rich_text_nodes": [],
+        "paragraphs": [],
+        "has_more": false
+      },
+      "major": {
+        "type": "MAJOR_TYPE_COMMON",
+        "none": null,
+        "blocked": null,
+        "archive": null,
+        "pgc": null,
+        "courses": null,
+        "draw": null,
+        "article": null,
+        "music": null,
+        "common": {
+          "id": "1224103633988091929",
+          "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?-Abrowser=live&act_id=113552&f_source=social&from=share&hybrid_set_header=2&navhide=1&q=941400964920260712170717",
+          "cover": "https://i0.hdslb.com/bfs/garb/open/0ad4c5b852ffb24a5d91a5cdddb461846529692a.png",
+          "title": "洛天依14周年勋章",
+          "desc": "评论装扮",
+          "label": "",
+          "biz_type": "231",
+          "biz_id": "0",
+          "sketch_id": "1224474719352258560",
+          "badge": {
+            "icon_url": "",
+            "text": "装扮",
+            "bg_color": "#FB7299",
+            "color": "#FFFFFF"
+          },
+          "style": 1
+        },
+        "upower_common": null,
+        "live": null,
+        "live_rcmd": null,
+        "medialist": null,
+        "subscription": null,
+        "ugc_season": null,
+        "subscription_new": null,
+        "opus": null
+      },
+      "additional": null
+    },
+    "module_extend": null,
+    "module_stat": {
+      "forward": {
+        "status": false,
+        "count": 0,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "comment": {
+        "status": false,
+        "count": 2,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "like": {
+        "status": true,
+        "count": 6,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+    },
+    "module_interaction": null,
+    "module_share_info": null,
+    "module_fold": null
+  },
+  "orig": null
+}

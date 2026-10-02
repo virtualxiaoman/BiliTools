@@ -1,0 +1,1716 @@
+{
+  "id_str": "1251781631619891203",
+  "type": "DYNAMIC_TYPE_FORWARD",
+  "basic": {
+    "rid_str": "1251781631619891203",
+    "comment_type": 17,
+    "comment_id_str": "1251781631619891203",
+    "like_icon": {
+      "id": "5768",
+      "start_url": "",
+      "action_url": "https://i0.hdslb.com/bfs/garb/item/7362cb5300eb35041e5fb66120ccf8c94ffb8b19.bin",
+      "end_url": ""
+    },
+    "in_audit": false,
+    "is_only_fans": false,
+    "editable": false,
+    "open_app_extra": "",
+    "jump_url": "",
+    "aigc": false
+  },
+  "visible": true,
+  "modules": {
+    "module_tag": null,
+    "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "avatar": {
+        "container_size": {
+          "width": 1.8,
+          "height": 1.8
+        },
+        "layers": [
+          {
+            "group_id": "",
+            "layers": [
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 2,
+                    "axis_x": 0.9,
+                    "axis_y": 0.9
+                  },
+                  "size_spec": {
+                    "width": 1.6,
+                    "height": 1.6
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "AVATAR_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": true,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 3,
+                  "res_image": {
+                    "image_src": {
+                      "src_type": 1,
+                      "placeholder": 0,
+                      "remote": {
+                        "url": "https://i0.hdslb.com/bfs/garb/008d2a79f5a5b0916c24d29154bf85ee00ef8cc1.png",
+                        "bfs_style": "widget-layer-avatar"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "group_mask": null,
+            "is_critical_group": true
+          },
+          {
+            "group_id": "",
+            "layers": [
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 1.2000000000000002,
+                    "axis_y": 1.3000000000000003
+                  },
+                  "size_spec": {
+                    "width": 0.325,
+                    "height": 0.325
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 5,
+                  "res_native_draw": {
+                    "draw_src": {
+                      "src_type": 3,
+                      "placeholder": 0,
+                      "draw": {
+                        "draw_type": 1,
+                        "fill_mode": 1,
+                        "color_config": {
+                          "is_dark_mode_aware": true,
+                          "day": {
+                            "argb": "#FFFFFFFF"
+                          },
+                          "night": {
+                            "argb": "#FF17181A"
+                          }
+                        },
+                        "edge_weight": 0
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 1.225,
+                    "axis_y": 1.3250000000000002
+                  },
+                  "size_spec": {
+                    "width": 0.275,
+                    "height": 0.275
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 3,
+                  "res_image": {
+                    "image_src": {
+                      "src_type": 2,
+                      "placeholder": 0,
+                      "local": 3
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 0.8999999999999999,
+                    "axis_y": 1.3000000000000003
+                  },
+                  "size_spec": {
+                    "width": 0.325,
+                    "height": 0.325
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 5,
+                  "res_native_draw": {
+                    "draw_src": {
+                      "src_type": 3,
+                      "placeholder": 0,
+                      "draw": {
+                        "draw_type": 1,
+                        "fill_mode": 1,
+                        "color_config": {
+                          "is_dark_mode_aware": true,
+                          "day": {
+                            "argb": "#FFFFFFFF"
+                          },
+                          "night": {
+                            "argb": "#FF17181A"
+                          }
+                        },
+                        "edge_weight": 0
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 0.9249999999999999,
+                    "axis_y": 1.3250000000000002
+                  },
+                  "size_spec": {
+                    "width": 0.275,
+                    "height": 0.275
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 4,
+                  "res_animation": {
+                    "webp_src": {
+                      "src_type": 1,
+                      "placeholder": 5,
+                      "remote": {
+                        "url": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+                        "bfs_style": "widget-layer-avatar"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "group_mask": null,
+            "is_critical_group": false
+          }
+        ],
+        "fallback_layers": {
+          "group_id": "",
+          "layers": [
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.9,
+                  "axis_y": 0.9
+                },
+                "size_spec": {
+                  "width": 1.3,
+                  "height": 1.3
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "AVATAR_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": true,
+                "allow_over_paint": false,
+                "layer_mask": {
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 2,
+                      "axis_x": 0.9,
+                      "axis_y": 0.9
+                    },
+                    "size_spec": {
+                      "width": 1.3,
+                      "height": 1.3
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "mask_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": false,
+                        "day": {
+                          "argb": "#FF000000"
+                        },
+                        "night": null
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 1,
+                    "placeholder": 6,
+                    "remote": {
+                      "url": "https://i1.hdslb.com/bfs/garb/d9bfee24c093e6a2f4d14cd84b1746c538c7c6ce.png",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 1.25,
+                  "axis_y": 1.25
+                },
+                "size_spec": {
+                  "width": 0.325,
+                  "height": 0.325
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 5,
+                "res_native_draw": {
+                  "draw_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": true,
+                        "day": {
+                          "argb": "#FFFFFFFF"
+                        },
+                        "night": {
+                          "argb": "#FF17181A"
+                        }
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 1.275,
+                  "axis_y": 1.275
+                },
+                "size_spec": {
+                  "width": 0.275,
+                  "height": 0.275
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 2,
+                    "placeholder": 0,
+                    "local": 3
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.95,
+                  "axis_y": 1.25
+                },
+                "size_spec": {
+                  "width": 0.325,
+                  "height": 0.325
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 5,
+                "res_native_draw": {
+                  "draw_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": true,
+                        "day": {
+                          "argb": "#FFFFFFFF"
+                        },
+                        "night": {
+                          "argb": "#FF17181A"
+                        }
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.975,
+                  "axis_y": 1.275
+                },
+                "size_spec": {
+                  "width": 0.275,
+                  "height": 0.275
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 4,
+                "res_animation": {
+                  "webp_src": {
+                    "src_type": 1,
+                    "placeholder": 5,
+                    "remote": {
+                      "url": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "group_mask": null,
+          "is_critical_group": true
+        },
+        "mid": "36081646"
+      },
+      "face": "https://i1.hdslb.com/bfs/garb/d9bfee24c093e6a2f4d14cd84b1746c538c7c6ce.png",
+      "face_nft": false,
+      "nft_info": {
+        "region_type": 1,
+        "region_icon": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+        "region_show_status": 1
+      },
+      "name": "洛天依",
+      "name_render": null,
+      "label": "",
+      "mid": 36081646,
+      "jump_url": "//space.bilibili.com/36081646/dynamic",
+      "following": true,
+      "pub_ts": "1790291523",
+      "pub_time": "9月25日",
+      "pub_action": "",
+      "pub_location_text": "",
+      "pendant": {
+        "pid": 0,
+        "name": "",
+        "image": "",
+        "expire": "0",
+        "image_enhance": "",
+        "image_enhance_frame": "",
+        "n_pid": "0"
+      },
+      "vip": {
+        "type": 2,
+        "status": 1,
+        "due_date": "2125411200000",
+        "vip_pay_type": 0,
+        "theme_type": 0,
+        "label": {
+          "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+          "text": "十年大会员",
+          "label_theme": "ten_annual_vip",
+          "text_color": "#FFFFFF",
+          "bg_style": 1,
+          "bg_color": "#FB7299",
+          "border_color": "",
+          "use_img_label": true,
+          "img_label_uri_hans": "",
+          "img_label_uri_hant": "",
+          "img_label_uri_hans_static": "http://i0.hdslb.com/bfs/vip/6ebc71d481dd3b84412dff9ac958bee7bae97122.png",
+          "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/8u7iRTPE7N.png"
+        },
+        "avatar_subscript": 1,
+        "nickname_color": "#FB7299",
+        "role": "7",
+        "avatar_subscript_url": "",
+        "tv_vip_status": 1,
+        "tv_vip_pay_type": 0,
+        "tv_due_date": "1822406400",
+        "avatar_icon": {
+          "icon_type": 3,
+          "icon_resource": {
+            "type": 1,
+            "url": "http://i0.hdslb.com/bfs/vip/dbe23f4ede5c120f11e18630cdd023010bce03b3.png@80w_80h_1c.webp"
+          }
+        }
+      },
+      "official_verify": {
+        "type": 0,
+        "desc": ""
+      },
+      "decorate": null,
+      "decoration_card": {
+        "id": "73668",
+        "item_id": "73668",
+        "name": "洛天依八音奇响",
+        "card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108477&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A36081646%7D",
+        "fan": {
+          "is_fan": "1",
+          "number": "107",
+          "color": "#E5B261",
+          "name": "XXXX",
+          "num_desc": "000107",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "100,100",
+            "colors": [
+              "#E29D2FFF",
+              "#FDC773FF",
+              "#FDC773FF",
+              "#E19B2EFF"
+            ],
+            "gradients": [
+              "0",
+              "33",
+              "67",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "image_group": null
+      },
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": {
+        "id": "73668",
+        "item_id": "73668",
+        "name": "洛天依八音奇响",
+        "card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108477&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A36081646%7D",
+        "fan": {
+          "is_fan": "1",
+          "number": "107",
+          "color": "#E5B261",
+          "name": "XXXX",
+          "num_desc": "000107",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "100,100",
+            "colors": [
+              "#E29D2FFF",
+              "#FDC773FF",
+              "#FDC773FF",
+              "#E19B2EFF"
+            ],
+            "gradients": [
+              "0",
+              "33",
+              "67",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "image_group": null
+      }
+    },
+    "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+        {
+          "label": "举报",
+          "type": "THREE_POINT_REPORT",
+          "params": {},
+          "modal": null,
+          "jump_url": ""
+        }
+      ]
+    },
+    "module_dispute": null,
+    "module_dynamic": {
+      "topic": null,
+      "desc": {
+        "text": "恭喜@裁冰official中奖，已私信通知，详情请点击抽奖查看。",
+        "rich_text_nodes": [
+          {
+            "text": "恭喜",
+            "orig_text": "恭喜",
+            "type": "RICH_TEXT_NODE_TYPE_TEXT",
+            "jump_url": "",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          },
+          {
+            "text": "@裁冰official",
+            "orig_text": "@裁冰official",
+            "type": "RICH_TEXT_NODE_TYPE_AT",
+            "jump_url": "",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "375109176",
+            "emoji": null,
+            "goods": null,
+            "style": {
+              "color": "",
+              "background": "",
+              "font_size": 17,
+              "font_level": "regular",
+              "bold": false,
+              "italic": false,
+              "underline": false,
+              "strikethrough": false
+            },
+            "pics": [],
+            "video": null
+          },
+          {
+            "text": "中奖，已私信通知，详情请点击抽奖查看。",
+            "orig_text": "中奖，已私信通知，详情请点击抽奖查看。",
+            "type": "RICH_TEXT_NODE_TYPE_TEXT",
+            "jump_url": "",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          }
+        ],
+        "paragraphs": [],
+        "has_more": false
+      },
+      "major": null,
+      "additional": null
+    },
+    "module_extend": null,
+    "module_stat": {
+      "forward": {
+        "status": false,
+        "count": 15,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "comment": {
+        "status": false,
+        "count": 65,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "like": {
+        "status": true,
+        "count": 3755,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+    },
+    "module_interaction": {
+      "items": [
+        {
+          "type": 0,
+          "desc": {
+            "text": "",
+            "rich_text_nodes": [
+              {
+                "text": "亭舟P",
+                "orig_text": "亭舟P",
+                "type": "RICH_TEXT_NODE_TYPE_AT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "670950385",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": " 赞了",
+                "orig_text": " 赞了",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              }
+            ],
+            "paragraphs": [],
+            "has_more": false
+          }
+        }
+      ]
+    },
+    "module_share_info": null,
+    "module_fold": null
+  },
+  "orig": {
+    "id_str": "1245270529937506306",
+    "type": "DYNAMIC_TYPE_DRAW",
+    "basic": {
+      "rid_str": "",
+      "comment_type": 0,
+      "comment_id_str": "",
+      "like_icon": null,
+      "in_audit": false,
+      "is_only_fans": false,
+      "editable": false,
+      "open_app_extra": "",
+      "jump_url": "//www.bilibili.com/opus/1245270529937506306",
+      "aigc": false
+    },
+    "visible": true,
+    "modules": {
+      "module_tag": null,
+      "module_author": {
+        "type": "AUTHOR_TYPE_NORMAL",
+        "avatar": {
+          "container_size": {
+            "width": 1.8,
+            "height": 1.8
+          },
+          "layers": [
+            {
+              "group_id": "",
+              "layers": [
+                {
+                  "layer_id": "",
+                  "visible": true,
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 2,
+                      "axis_x": 0.9,
+                      "axis_y": 0.9
+                    },
+                    "size_spec": {
+                      "width": 1.6,
+                      "height": 1.6
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "layer_config": {
+                    "tags": {
+                      "AVATAR_LAYER": {
+                        "config_type": 0
+                      }
+                    },
+                    "is_critical": true,
+                    "allow_over_paint": false,
+                    "layer_mask": null
+                  },
+                  "resource": {
+                    "res_type": 3,
+                    "res_image": {
+                      "image_src": {
+                        "src_type": 1,
+                        "placeholder": 0,
+                        "remote": {
+                          "url": "https://i0.hdslb.com/bfs/garb/008d2a79f5a5b0916c24d29154bf85ee00ef8cc1.png",
+                          "bfs_style": "widget-layer-avatar"
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "group_mask": null,
+              "is_critical_group": true
+            },
+            {
+              "group_id": "",
+              "layers": [
+                {
+                  "layer_id": "",
+                  "visible": true,
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 1,
+                      "axis_x": 1.2000000000000002,
+                      "axis_y": 1.3000000000000003
+                    },
+                    "size_spec": {
+                      "width": 0.325,
+                      "height": 0.325
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "layer_config": {
+                    "tags": {
+                      "ICON_LAYER": {
+                        "config_type": 0
+                      }
+                    },
+                    "is_critical": false,
+                    "allow_over_paint": false,
+                    "layer_mask": null
+                  },
+                  "resource": {
+                    "res_type": 5,
+                    "res_native_draw": {
+                      "draw_src": {
+                        "src_type": 3,
+                        "placeholder": 0,
+                        "draw": {
+                          "draw_type": 1,
+                          "fill_mode": 1,
+                          "color_config": {
+                            "is_dark_mode_aware": true,
+                            "day": {
+                              "argb": "#FFFFFFFF"
+                            },
+                            "night": {
+                              "argb": "#FF17181A"
+                            }
+                          },
+                          "edge_weight": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "layer_id": "",
+                  "visible": true,
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 1,
+                      "axis_x": 1.225,
+                      "axis_y": 1.3250000000000002
+                    },
+                    "size_spec": {
+                      "width": 0.275,
+                      "height": 0.275
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "layer_config": {
+                    "tags": {
+                      "ICON_LAYER": {
+                        "config_type": 0
+                      }
+                    },
+                    "is_critical": false,
+                    "allow_over_paint": false,
+                    "layer_mask": null
+                  },
+                  "resource": {
+                    "res_type": 3,
+                    "res_image": {
+                      "image_src": {
+                        "src_type": 2,
+                        "placeholder": 0,
+                        "local": 3
+                      }
+                    }
+                  }
+                },
+                {
+                  "layer_id": "",
+                  "visible": true,
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 1,
+                      "axis_x": 0.8999999999999999,
+                      "axis_y": 1.3000000000000003
+                    },
+                    "size_spec": {
+                      "width": 0.325,
+                      "height": 0.325
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "layer_config": {
+                    "tags": {
+                      "ICON_LAYER": {
+                        "config_type": 0
+                      }
+                    },
+                    "is_critical": false,
+                    "allow_over_paint": false,
+                    "layer_mask": null
+                  },
+                  "resource": {
+                    "res_type": 5,
+                    "res_native_draw": {
+                      "draw_src": {
+                        "src_type": 3,
+                        "placeholder": 0,
+                        "draw": {
+                          "draw_type": 1,
+                          "fill_mode": 1,
+                          "color_config": {
+                            "is_dark_mode_aware": true,
+                            "day": {
+                              "argb": "#FFFFFFFF"
+                            },
+                            "night": {
+                              "argb": "#FF17181A"
+                            }
+                          },
+                          "edge_weight": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "layer_id": "",
+                  "visible": true,
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 1,
+                      "axis_x": 0.9249999999999999,
+                      "axis_y": 1.3250000000000002
+                    },
+                    "size_spec": {
+                      "width": 0.275,
+                      "height": 0.275
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "layer_config": {
+                    "tags": {
+                      "ICON_LAYER": {
+                        "config_type": 0
+                      }
+                    },
+                    "is_critical": false,
+                    "allow_over_paint": false,
+                    "layer_mask": null
+                  },
+                  "resource": {
+                    "res_type": 4,
+                    "res_animation": {
+                      "webp_src": {
+                        "src_type": 1,
+                        "placeholder": 5,
+                        "remote": {
+                          "url": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+                          "bfs_style": "widget-layer-avatar"
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "group_mask": null,
+              "is_critical_group": false
+            }
+          ],
+          "fallback_layers": {
+            "group_id": "",
+            "layers": [
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 2,
+                    "axis_x": 0.9,
+                    "axis_y": 0.9
+                  },
+                  "size_spec": {
+                    "width": 1.3,
+                    "height": 1.3
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "AVATAR_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": true,
+                  "allow_over_paint": false,
+                  "layer_mask": {
+                    "general_spec": {
+                      "pos_spec": {
+                        "coordinate_pos": 2,
+                        "axis_x": 0.9,
+                        "axis_y": 0.9
+                      },
+                      "size_spec": {
+                        "width": 1.3,
+                        "height": 1.3
+                      },
+                      "render_spec": {
+                        "opacity": 1
+                      }
+                    },
+                    "mask_src": {
+                      "src_type": 3,
+                      "placeholder": 0,
+                      "draw": {
+                        "draw_type": 1,
+                        "fill_mode": 1,
+                        "color_config": {
+                          "is_dark_mode_aware": false,
+                          "day": {
+                            "argb": "#FF000000"
+                          },
+                          "night": null
+                        },
+                        "edge_weight": 0
+                      }
+                    }
+                  }
+                },
+                "resource": {
+                  "res_type": 3,
+                  "res_image": {
+                    "image_src": {
+                      "src_type": 1,
+                      "placeholder": 6,
+                      "remote": {
+                        "url": "https://i1.hdslb.com/bfs/garb/d9bfee24c093e6a2f4d14cd84b1746c538c7c6ce.png",
+                        "bfs_style": "widget-layer-avatar"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 1.25,
+                    "axis_y": 1.25
+                  },
+                  "size_spec": {
+                    "width": 0.325,
+                    "height": 0.325
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 5,
+                  "res_native_draw": {
+                    "draw_src": {
+                      "src_type": 3,
+                      "placeholder": 0,
+                      "draw": {
+                        "draw_type": 1,
+                        "fill_mode": 1,
+                        "color_config": {
+                          "is_dark_mode_aware": true,
+                          "day": {
+                            "argb": "#FFFFFFFF"
+                          },
+                          "night": {
+                            "argb": "#FF17181A"
+                          }
+                        },
+                        "edge_weight": 0
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 1.275,
+                    "axis_y": 1.275
+                  },
+                  "size_spec": {
+                    "width": 0.275,
+                    "height": 0.275
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 3,
+                  "res_image": {
+                    "image_src": {
+                      "src_type": 2,
+                      "placeholder": 0,
+                      "local": 3
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 0.95,
+                    "axis_y": 1.25
+                  },
+                  "size_spec": {
+                    "width": 0.325,
+                    "height": 0.325
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 5,
+                  "res_native_draw": {
+                    "draw_src": {
+                      "src_type": 3,
+                      "placeholder": 0,
+                      "draw": {
+                        "draw_type": 1,
+                        "fill_mode": 1,
+                        "color_config": {
+                          "is_dark_mode_aware": true,
+                          "day": {
+                            "argb": "#FFFFFFFF"
+                          },
+                          "night": {
+                            "argb": "#FF17181A"
+                          }
+                        },
+                        "edge_weight": 0
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 0.975,
+                    "axis_y": 1.275
+                  },
+                  "size_spec": {
+                    "width": 0.275,
+                    "height": 0.275
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 4,
+                  "res_animation": {
+                    "webp_src": {
+                      "src_type": 1,
+                      "placeholder": 5,
+                      "remote": {
+                        "url": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+                        "bfs_style": "widget-layer-avatar"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "group_mask": null,
+            "is_critical_group": true
+          },
+          "mid": "36081646"
+        },
+        "face": "https://i1.hdslb.com/bfs/garb/d9bfee24c093e6a2f4d14cd84b1746c538c7c6ce.png",
+        "face_nft": false,
+        "nft_info": {
+          "region_type": 1,
+          "region_icon": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+          "region_show_status": 1
+        },
+        "name": "洛天依",
+        "name_render": null,
+        "label": "",
+        "mid": 36081646,
+        "jump_url": "//space.bilibili.com/36081646/dynamic",
+        "following": true,
+        "pub_ts": "1788775539",
+        "pub_time": "",
+        "pub_action": "",
+        "pub_location_text": "",
+        "pendant": {
+          "pid": 0,
+          "name": "",
+          "image": "",
+          "expire": "0",
+          "image_enhance": "",
+          "image_enhance_frame": "",
+          "n_pid": "0"
+        },
+        "vip": {
+          "type": 2,
+          "status": 1,
+          "due_date": "2125411200000",
+          "vip_pay_type": 0,
+          "theme_type": 0,
+          "label": {
+            "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+            "text": "十年大会员",
+            "label_theme": "ten_annual_vip",
+            "text_color": "#FFFFFF",
+            "bg_style": 1,
+            "bg_color": "#FB7299",
+            "border_color": "",
+            "use_img_label": true,
+            "img_label_uri_hans": "",
+            "img_label_uri_hant": "",
+            "img_label_uri_hans_static": "http://i0.hdslb.com/bfs/vip/6ebc71d481dd3b84412dff9ac958bee7bae97122.png",
+            "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/8u7iRTPE7N.png"
+          },
+          "avatar_subscript": 1,
+          "nickname_color": "#FB7299",
+          "role": "7",
+          "avatar_subscript_url": "",
+          "tv_vip_status": 1,
+          "tv_vip_pay_type": 0,
+          "tv_due_date": "1822406400",
+          "avatar_icon": {
+            "icon_type": 3,
+            "icon_resource": {
+              "type": 1,
+              "url": "http://i0.hdslb.com/bfs/vip/dbe23f4ede5c120f11e18630cdd023010bce03b3.png@80w_80h_1c.webp"
+            }
+          }
+        },
+        "official_verify": {
+          "type": 0,
+          "desc": ""
+        },
+        "decorate": null,
+        "decoration_card": {
+          "id": "73668",
+          "item_id": "73668",
+          "name": "洛天依八音奇响",
+          "card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+          "big_card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+          "card_type": "2",
+          "expire_time": "0",
+          "card_type_name": "免费",
+          "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108477&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A36081646%7D",
+          "fan": {
+            "is_fan": "1",
+            "number": "107",
+            "color": "#E5B261",
+            "name": "XXXX",
+            "num_desc": "000107",
+            "num_prefix": "",
+            "color_format": {
+              "start_point": "0,0",
+              "end_point": "100,100",
+              "colors": [
+                "#E29D2FFF",
+                "#FDC773FF",
+                "#FDC773FF",
+                "#E19B2EFF"
+              ],
+              "gradients": [
+                "0",
+                "33",
+                "67",
+                "100"
+              ]
+            }
+          },
+          "image_enhance": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+          "image_group": null
+        },
+        "is_top": false,
+        "icon_badge": null,
+        "views_text": "",
+        "official": null,
+        "more": null,
+        "decorate_card": {
+          "id": "73668",
+          "item_id": "73668",
+          "name": "洛天依八音奇响",
+          "card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+          "big_card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+          "card_type": "2",
+          "expire_time": "0",
+          "card_type_name": "免费",
+          "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108477&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A36081646%7D",
+          "fan": {
+            "is_fan": "1",
+            "number": "107",
+            "color": "#E5B261",
+            "name": "XXXX",
+            "num_desc": "000107",
+            "num_prefix": "",
+            "color_format": {
+              "start_point": "0,0",
+              "end_point": "100,100",
+              "colors": [
+                "#E29D2FFF",
+                "#FDC773FF",
+                "#FDC773FF",
+                "#E19B2EFF"
+              ],
+              "gradients": [
+                "0",
+                "33",
+                "67",
+                "100"
+              ]
+            }
+          },
+          "image_enhance": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+          "image_group": null
+        }
+      },
+      "module_more": null,
+      "module_dispute": null,
+      "module_dynamic": {
+        "topic": {
+          "id": "1340422",
+          "name": "洛天依2026巡演",
+          "jump_url": "https://m.bilibili.com/topic-detail?topic_id=1340422&topic_name=%E6%B4%9B%E5%A4%A9%E4%BE%9D2026%E5%B7%A1%E6%BC%94"
+        },
+        "desc": null,
+        "major": {
+          "type": "MAJOR_TYPE_OPUS",
+          "none": null,
+          "blocked": null,
+          "archive": null,
+          "pgc": null,
+          "courses": null,
+          "draw": null,
+          "article": null,
+          "music": null,
+          "common": null,
+          "upower_common": null,
+          "live": null,
+          "live_rcmd": null,
+          "medialist": null,
+          "subscription": null,
+          "ugc_season": null,
+          "subscription_new": null,
+          "opus": {
+            "jump_url": "//www.bilibili.com/opus/1245270529937506306",
+            "title": "",
+            "summary": {
+              "text": "互动抽奖 洛天依2026「无限共鸣·纯蓝幻乐」巡回演唱会·济南站\n将于9月11日19:00全面开启售票，「济南·华韵」城市特别视觉海报公开\n转发关注天依，揪1位小伙伴送出【SVIP档】门票1张~[洛天依14周年·纯蓝幻乐 动态表情包_送花]\n\n🩵购票方式\n✧ 会员购 https://show.bilibili.com/platform/detail.html?id=1005740 \n✧ 大麦\n\n🩵演出时间&场地\n10月5日 19:12 济南奥林匹克体育中心体育馆\n\n素绡藏日月，丝线绣山河，\n纯蓝魔女以针线为引，将千年的蓝铺陈于齐鲁大地。\n点翠流光缀于发间，非遗鲁绣晕染织入裙裾，\n国风画卷里苏醒的歌者，邀你溯游纯蓝幻境之间~ [洛天依14周年·纯蓝幻乐 动态表情包_邀请]\n",
+              "rich_text_nodes": [
+                {
+                  "text": "互动抽奖",
+                  "orig_text": "互动抽奖",
+                  "type": "RICH_TEXT_NODE_TYPE_LOTTERY",
+                  "jump_url": "",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "424332",
+                  "emoji": null,
+                  "goods": null,
+                  "style": null,
+                  "pics": [],
+                  "video": null
+                },
+                {
+                  "text": " 洛天依2026「无限共鸣·纯蓝幻乐」巡回演唱会·济南站\n将于9月11日19:00全面开启售票，「济南·华韵」城市特别视觉海报公开\n转发关注天依，揪1位小伙伴送出【SVIP档】门票1张~",
+                  "orig_text": " 洛天依2026「无限共鸣·纯蓝幻乐」巡回演唱会·济南站\n将于9月11日19:00全面开启售票，「济南·华韵」城市特别视觉海报公开\n转发关注天依，揪1位小伙伴送出【SVIP档】门票1张~",
+                  "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                  "jump_url": "",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "",
+                  "emoji": null,
+                  "goods": null,
+                  "style": null,
+                  "pics": [],
+                  "video": null
+                },
+                {
+                  "text": "[洛天依14周年·纯蓝幻乐 动态表情包_送花]",
+                  "orig_text": "[洛天依14周年·纯蓝幻乐 动态表情包_送花]",
+                  "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                  "jump_url": "",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "",
+                  "emoji": {
+                    "type": "3",
+                    "size": 2,
+                    "text": "[洛天依14周年·纯蓝幻乐 动态表情包_送花]",
+                    "icon_url": "https://i0.hdslb.com/bfs/garb/212086d29eb517b790b4b64747df931686a1c646.png",
+                    "gif_url": "https://i0.hdslb.com/bfs/garb/250e7a83c9d9a06e2e2768a6f2c0057310d61071.gif",
+                    "webp_url": "https://i0.hdslb.com/bfs/garb/149a4baf84e069969ee5cc10d14e48b9c851d387.webp",
+                    "jump_url": "",
+                    "jump_title": "",
+                    "package_id": "10238",
+                    "id": "145978"
+                  },
+                  "goods": null,
+                  "style": null,
+                  "pics": [],
+                  "video": null
+                },
+                {
+                  "text": "\n\n🩵购票方式\n✧ 会员购 ",
+                  "orig_text": "\n\n🩵购票方式\n✧ 会员购 ",
+                  "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                  "jump_url": "",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "",
+                  "emoji": null,
+                  "goods": null,
+                  "style": null,
+                  "pics": [],
+                  "video": null
+                },
+                {
+                  "text": "网页链接",
+                  "orig_text": "https://show.bilibili.com/platform/detail.html?id=1005740",
+                  "type": "RICH_TEXT_NODE_TYPE_WEB",
+                  "jump_url": "https://show.bilibili.com/platform/detail.html?id=1005740",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "",
+                  "emoji": null,
+                  "goods": null,
+                  "style": {
+                    "color": "",
+                    "background": "",
+                    "font_size": 17,
+                    "font_level": "regular",
+                    "bold": false,
+                    "italic": false,
+                    "underline": false,
+                    "strikethrough": false
+                  },
+                  "pics": [],
+                  "video": null
+                },
+                {
+                  "text": " \n✧ 大麦\n\n🩵演出时间&场地\n10月5日 19:12 济南奥林匹克体育中心体育馆\n\n素绡藏日月，丝线绣山河，\n纯蓝魔女以针线为引，将千年的蓝铺陈于齐鲁大地。\n点翠流光缀于发间，非遗鲁绣晕染织入裙裾，\n国风画卷里苏醒的歌者，邀你溯游纯蓝幻境之间~ ",
+                  "orig_text": " \n✧ 大麦\n\n🩵演出时间&场地\n10月5日 19:12 济南奥林匹克体育中心体育馆\n\n素绡藏日月，丝线绣山河，\n纯蓝魔女以针线为引，将千年的蓝铺陈于齐鲁大地。\n点翠流光缀于发间，非遗鲁绣晕染织入裙裾，\n国风画卷里苏醒的歌者，邀你溯游纯蓝幻境之间~ ",
+                  "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                  "jump_url": "",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "",
+                  "emoji": null,
+                  "goods": null,
+                  "style": null,
+                  "pics": [],
+                  "video": null
+                },
+                {
+                  "text": "[洛天依14周年·纯蓝幻乐 动态表情包_邀请]",
+                  "orig_text": "[洛天依14周年·纯蓝幻乐 动态表情包_邀请]",
+                  "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                  "jump_url": "",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "",
+                  "emoji": {
+                    "type": "3",
+                    "size": 2,
+                    "text": "[洛天依14周年·纯蓝幻乐 动态表情包_邀请]",
+                    "icon_url": "https://i0.hdslb.com/bfs/garb/534e401b5ef65af4926ca76bebdcc38a4137b1ae.png",
+                    "gif_url": "https://i0.hdslb.com/bfs/garb/f7f110a8c874b6bb31a453eed43cf0792bc68b41.gif",
+                    "webp_url": "https://i0.hdslb.com/bfs/garb/b9a27ee36676d63b4a996aa1deb45dd69e8a0352.webp",
+                    "jump_url": "",
+                    "jump_title": "",
+                    "package_id": "10238",
+                    "id": "145985"
+                  },
+                  "goods": null,
+                  "style": null,
+                  "pics": [],
+                  "video": null
+                },
+                {
+                  "text": "\n",
+                  "orig_text": "\n",
+                  "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                  "jump_url": "",
+                  "icon_url": "",
+                  "icon_name": "",
+                  "rid": "",
+                  "emoji": null,
+                  "goods": null,
+                  "style": null,
+                  "pics": [],
+                  "video": null
+                }
+              ],
+              "paragraphs": [],
+              "has_more": false
+            },
+            "style": 0,
+            "pics": [
+              {
+                "url": "http://i0.hdslb.com/bfs/new_dyn/083d15e75cff5745bcb750b2ae0fedba36081646.png",
+                "width": 3400,
+                "height": 1988,
+                "size": 11803.5908203125,
+                "live_url": "",
+                "aigc": 0,
+                "warning": null
+              },
+              {
+                "url": "http://i0.hdslb.com/bfs/new_dyn/f5a1f7055c77af9bafb01b6067eff5c036081646.jpg",
+                "width": 750,
+                "height": 7440,
+                "size": 3938.0322265625,
+                "live_url": "",
+                "aigc": 0,
+                "warning": null
+              }
+            ],
+            "fold_action": [
+              "展开",
+              "收起"
+            ],
+            "paywall": null
+          }
+        },
+        "additional": null
+      },
+      "module_extend": null,
+      "module_stat": null,
+      "module_interaction": null,
+      "module_share_info": null,
+      "module_fold": null
+    },
+    "orig": null
+  }
+}

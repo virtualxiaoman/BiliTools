@@ -26,6 +26,7 @@ python -m examples.quick_start
 | `user.py` | 用户信息 | 查询用户信息 |
 | `rank.py` | 热门、排行榜和新视频 | 查询榜单 |
 | `dressup.py` | 表情包、收藏集和装扮 | 搜索装扮 |
+| `dynamic.py` | 动态（opus）解析与下载 | 只解析，不下载 |
 | `interactions.py` | 评论、私信、老粉签约 | 不自动执行写操作 |
 
 批量下载、评论、私信和签约等行为请先检查示例中的参数，再手动调用对应函数。

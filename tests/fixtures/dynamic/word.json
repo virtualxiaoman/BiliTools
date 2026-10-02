@@ -1,0 +1,377 @@
+{
+  "id_str": "943536810962714642",
+  "type": "DYNAMIC_TYPE_WORD",
+  "basic": {
+    "rid_str": "943536810962714642",
+    "comment_type": 17,
+    "comment_id_str": "943536810962714642",
+    "like_icon": {
+      "id": "5768",
+      "start_url": "",
+      "action_url": "https://i0.hdslb.com/bfs/garb/item/7362cb5300eb35041e5fb66120ccf8c94ffb8b19.bin",
+      "end_url": ""
+    },
+    "in_audit": false,
+    "is_only_fans": false,
+    "editable": false,
+    "open_app_extra": "",
+    "jump_url": "//www.bilibili.com/opus/943536810962714642",
+    "aigc": false
+  },
+  "visible": true,
+  "modules": {
+    "module_tag": {
+      "text": "置顶"
+    },
+    "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "avatar": {
+        "container_size": {
+          "width": 1.35,
+          "height": 1.35
+        },
+        "layers": [],
+        "fallback_layers": {
+          "group_id": "",
+          "layers": [
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.675,
+                  "axis_y": 0.675
+                },
+                "size_spec": {
+                  "width": 1,
+                  "height": 1
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "AVATAR_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": true,
+                "allow_over_paint": false,
+                "layer_mask": {
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 2,
+                      "axis_x": 0.675,
+                      "axis_y": 0.675
+                    },
+                    "size_spec": {
+                      "width": 1,
+                      "height": 1
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "mask_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": false,
+                        "day": {
+                          "argb": "#FF000000"
+                        },
+                        "night": null
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 1,
+                    "placeholder": 6,
+                    "remote": {
+                      "url": "https://i0.hdslb.com/bfs/face/26f18c7dc4a213ba0026db04f55824dddc8e0cfd.jpg",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "group_mask": null,
+          "is_critical_group": true
+        },
+        "mid": "3493133776062465"
+      },
+      "face": "https://i0.hdslb.com/bfs/face/26f18c7dc4a213ba0026db04f55824dddc8e0cfd.jpg",
+      "face_nft": false,
+      "nft_info": null,
+      "name": "从黄昏到水面",
+      "name_render": null,
+      "label": "",
+      "mid": 3493133776062465,
+      "jump_url": "//space.bilibili.com/3493133776062465/dynamic",
+      "following": true,
+      "pub_ts": "1718522683",
+      "pub_time": "2024年6月16日",
+      "pub_action": "",
+      "pub_location_text": "",
+      "pendant": {
+        "pid": 0,
+        "name": "",
+        "image": "",
+        "expire": "0",
+        "image_enhance": "",
+        "image_enhance_frame": "",
+        "n_pid": "0"
+      },
+      "vip": {
+        "type": 0,
+        "status": 0,
+        "due_date": "0",
+        "vip_pay_type": 0,
+        "theme_type": 0,
+        "label": {
+          "path": "",
+          "text": "",
+          "label_theme": "",
+          "text_color": "",
+          "bg_style": 0,
+          "bg_color": "",
+          "border_color": "",
+          "use_img_label": true,
+          "img_label_uri_hans": "",
+          "img_label_uri_hant": "",
+          "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/d7b702ef65a976b20ed854cbd04cb9e27341bb79.png",
+          "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/KJunwh19T5.png"
+        },
+        "avatar_subscript": 0,
+        "nickname_color": "",
+        "role": "0",
+        "avatar_subscript_url": "",
+        "tv_vip_status": 0,
+        "tv_vip_pay_type": 0,
+        "tv_due_date": "0",
+        "avatar_icon": {
+          "icon_type": 0,
+          "icon_resource": {
+            "type": 0,
+            "url": ""
+          }
+        }
+      },
+      "official_verify": {
+        "type": -1,
+        "desc": ""
+      },
+      "decorate": null,
+      "decoration_card": {
+        "id": "73378",
+        "item_id": "73378",
+        "name": "星光咖啡馆与死神之蝶",
+        "card_url": "https://i0.hdslb.com/bfs/garb/open/53e4afbf75cfec572ac3c3dcbec325353e23cb89.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/open/53e4afbf75cfec572ac3c3dcbec325353e23cb89.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108208&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A3493133776062465%7D",
+        "fan": {
+          "is_fan": "1",
+          "number": "2804",
+          "color": "#BFC8D2",
+          "name": "XXXX",
+          "num_desc": "002804",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "100,100",
+            "colors": [
+              "#B8C7D0FF",
+              "#A2A7B0FF"
+            ],
+            "gradients": [
+              "0",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/53e4afbf75cfec572ac3c3dcbec325353e23cb89.png",
+        "image_group": null
+      },
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": {
+        "id": "73378",
+        "item_id": "73378",
+        "name": "星光咖啡馆与死神之蝶",
+        "card_url": "https://i0.hdslb.com/bfs/garb/open/53e4afbf75cfec572ac3c3dcbec325353e23cb89.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/open/53e4afbf75cfec572ac3c3dcbec325353e23cb89.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108208&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A3493133776062465%7D",
+        "fan": {
+          "is_fan": "1",
+          "number": "2804",
+          "color": "#BFC8D2",
+          "name": "XXXX",
+          "num_desc": "002804",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "100,100",
+            "colors": [
+              "#B8C7D0FF",
+              "#A2A7B0FF"
+            ],
+            "gradients": [
+              "0",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/53e4afbf75cfec572ac3c3dcbec325353e23cb89.png",
+        "image_group": null
+      }
+    },
+    "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+        {
+          "label": "举报",
+          "type": "THREE_POINT_REPORT",
+          "params": {},
+          "modal": null,
+          "jump_url": ""
+        }
+      ]
+    },
+    "module_dispute": null,
+    "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+        "type": "MAJOR_TYPE_OPUS",
+        "none": null,
+        "blocked": null,
+        "archive": null,
+        "pgc": null,
+        "courses": null,
+        "draw": null,
+        "article": null,
+        "music": null,
+        "common": null,
+        "upower_common": null,
+        "live": null,
+        "live_rcmd": null,
+        "medialist": null,
+        "subscription": null,
+        "ugc_season": null,
+        "subscription_new": null,
+        "opus": {
+          "jump_url": "//www.bilibili.com/opus/943536810962714642",
+          "title": "",
+          "summary": {
+            "text": "本号主要用于测试，如有发电不要管我[doge]",
+            "rich_text_nodes": [
+              {
+                "text": "本号主要用于测试，如有发电不要管我",
+                "orig_text": "本号主要用于测试，如有发电不要管我",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "[doge]",
+                "orig_text": "[doge]",
+                "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": {
+                  "type": "1",
+                  "size": 1,
+                  "text": "[doge]",
+                  "icon_url": "https://i0.hdslb.com/bfs/emote/3087d273a78ccaff4bb1e9972e2ba2a7583c9f11.png",
+                  "gif_url": "",
+                  "webp_url": "",
+                  "jump_url": "",
+                  "jump_title": "",
+                  "package_id": "1",
+                  "id": "26"
+                },
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              }
+            ],
+            "paragraphs": [],
+            "has_more": false
+          },
+          "style": 0,
+          "pics": [],
+          "fold_action": [
+            "展开",
+            "收起"
+          ],
+          "paywall": null
+        }
+      },
+      "additional": null
+    },
+    "module_extend": null,
+    "module_stat": {
+      "forward": {
+        "status": false,
+        "count": 0,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "comment": {
+        "status": false,
+        "count": 4,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "like": {
+        "status": false,
+        "count": 3,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+    },
+    "module_interaction": null,
+    "module_share_info": null,
+    "module_fold": null
+  },
+  "orig": null
+}

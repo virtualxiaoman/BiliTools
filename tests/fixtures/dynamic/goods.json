@@ -1,0 +1,1062 @@
+{
+  "id_str": "1251579733840232452",
+  "type": "DYNAMIC_TYPE_DRAW",
+  "basic": {
+    "rid_str": "410158223",
+    "comment_type": 11,
+    "comment_id_str": "410158223",
+    "like_icon": {
+      "id": "5768",
+      "start_url": "",
+      "action_url": "https://i0.hdslb.com/bfs/garb/item/7362cb5300eb35041e5fb66120ccf8c94ffb8b19.bin",
+      "end_url": ""
+    },
+    "in_audit": false,
+    "is_only_fans": false,
+    "editable": false,
+    "open_app_extra": "",
+    "jump_url": "//www.bilibili.com/opus/1251579733840232452",
+    "aigc": false
+  },
+  "visible": true,
+  "modules": {
+    "module_tag": null,
+    "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "avatar": {
+        "container_size": {
+          "width": 1.8,
+          "height": 1.8
+        },
+        "layers": [
+          {
+            "group_id": "",
+            "layers": [
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 2,
+                    "axis_x": 0.9,
+                    "axis_y": 0.9
+                  },
+                  "size_spec": {
+                    "width": 1.6,
+                    "height": 1.6
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "AVATAR_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": true,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 3,
+                  "res_image": {
+                    "image_src": {
+                      "src_type": 1,
+                      "placeholder": 0,
+                      "remote": {
+                        "url": "https://i0.hdslb.com/bfs/garb/008d2a79f5a5b0916c24d29154bf85ee00ef8cc1.png",
+                        "bfs_style": "widget-layer-avatar"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "group_mask": null,
+            "is_critical_group": true
+          },
+          {
+            "group_id": "",
+            "layers": [
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 1.2000000000000002,
+                    "axis_y": 1.3000000000000003
+                  },
+                  "size_spec": {
+                    "width": 0.325,
+                    "height": 0.325
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 5,
+                  "res_native_draw": {
+                    "draw_src": {
+                      "src_type": 3,
+                      "placeholder": 0,
+                      "draw": {
+                        "draw_type": 1,
+                        "fill_mode": 1,
+                        "color_config": {
+                          "is_dark_mode_aware": true,
+                          "day": {
+                            "argb": "#FFFFFFFF"
+                          },
+                          "night": {
+                            "argb": "#FF17181A"
+                          }
+                        },
+                        "edge_weight": 0
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 1.225,
+                    "axis_y": 1.3250000000000002
+                  },
+                  "size_spec": {
+                    "width": 0.275,
+                    "height": 0.275
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 3,
+                  "res_image": {
+                    "image_src": {
+                      "src_type": 2,
+                      "placeholder": 0,
+                      "local": 3
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 0.8999999999999999,
+                    "axis_y": 1.3000000000000003
+                  },
+                  "size_spec": {
+                    "width": 0.325,
+                    "height": 0.325
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 5,
+                  "res_native_draw": {
+                    "draw_src": {
+                      "src_type": 3,
+                      "placeholder": 0,
+                      "draw": {
+                        "draw_type": 1,
+                        "fill_mode": 1,
+                        "color_config": {
+                          "is_dark_mode_aware": true,
+                          "day": {
+                            "argb": "#FFFFFFFF"
+                          },
+                          "night": {
+                            "argb": "#FF17181A"
+                          }
+                        },
+                        "edge_weight": 0
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "layer_id": "",
+                "visible": true,
+                "general_spec": {
+                  "pos_spec": {
+                    "coordinate_pos": 1,
+                    "axis_x": 0.9249999999999999,
+                    "axis_y": 1.3250000000000002
+                  },
+                  "size_spec": {
+                    "width": 0.275,
+                    "height": 0.275
+                  },
+                  "render_spec": {
+                    "opacity": 1
+                  }
+                },
+                "layer_config": {
+                  "tags": {
+                    "ICON_LAYER": {
+                      "config_type": 0
+                    }
+                  },
+                  "is_critical": false,
+                  "allow_over_paint": false,
+                  "layer_mask": null
+                },
+                "resource": {
+                  "res_type": 4,
+                  "res_animation": {
+                    "webp_src": {
+                      "src_type": 1,
+                      "placeholder": 5,
+                      "remote": {
+                        "url": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+                        "bfs_style": "widget-layer-avatar"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "group_mask": null,
+            "is_critical_group": false
+          }
+        ],
+        "fallback_layers": {
+          "group_id": "",
+          "layers": [
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.9,
+                  "axis_y": 0.9
+                },
+                "size_spec": {
+                  "width": 1.3,
+                  "height": 1.3
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "AVATAR_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": true,
+                "allow_over_paint": false,
+                "layer_mask": {
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 2,
+                      "axis_x": 0.9,
+                      "axis_y": 0.9
+                    },
+                    "size_spec": {
+                      "width": 1.3,
+                      "height": 1.3
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "mask_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": false,
+                        "day": {
+                          "argb": "#FF000000"
+                        },
+                        "night": null
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 1,
+                    "placeholder": 6,
+                    "remote": {
+                      "url": "https://i1.hdslb.com/bfs/garb/d9bfee24c093e6a2f4d14cd84b1746c538c7c6ce.png",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 1.25,
+                  "axis_y": 1.25
+                },
+                "size_spec": {
+                  "width": 0.325,
+                  "height": 0.325
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 5,
+                "res_native_draw": {
+                  "draw_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": true,
+                        "day": {
+                          "argb": "#FFFFFFFF"
+                        },
+                        "night": {
+                          "argb": "#FF17181A"
+                        }
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 1.275,
+                  "axis_y": 1.275
+                },
+                "size_spec": {
+                  "width": 0.275,
+                  "height": 0.275
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 2,
+                    "placeholder": 0,
+                    "local": 3
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.95,
+                  "axis_y": 1.25
+                },
+                "size_spec": {
+                  "width": 0.325,
+                  "height": 0.325
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 5,
+                "res_native_draw": {
+                  "draw_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": true,
+                        "day": {
+                          "argb": "#FFFFFFFF"
+                        },
+                        "night": {
+                          "argb": "#FF17181A"
+                        }
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.975,
+                  "axis_y": 1.275
+                },
+                "size_spec": {
+                  "width": 0.275,
+                  "height": 0.275
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 4,
+                "res_animation": {
+                  "webp_src": {
+                    "src_type": 1,
+                    "placeholder": 5,
+                    "remote": {
+                      "url": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "group_mask": null,
+          "is_critical_group": true
+        },
+        "mid": "36081646"
+      },
+      "face": "https://i1.hdslb.com/bfs/garb/d9bfee24c093e6a2f4d14cd84b1746c538c7c6ce.png",
+      "face_nft": false,
+      "nft_info": {
+        "region_type": 1,
+        "region_icon": "https://i0.hdslb.com/bfs/activity-plat/static/20220506/334553dd7c506a92b88eaf4d59ac8b4d/j8AeXAkEul.gif",
+        "region_show_status": 1
+      },
+      "name": "洛天依",
+      "name_render": null,
+      "label": "",
+      "mid": 36081646,
+      "jump_url": "//space.bilibili.com/36081646/dynamic",
+      "following": true,
+      "pub_ts": "1790244515",
+      "pub_time": "9月24日",
+      "pub_action": "",
+      "pub_location_text": "",
+      "pendant": {
+        "pid": 0,
+        "name": "",
+        "image": "",
+        "expire": "0",
+        "image_enhance": "",
+        "image_enhance_frame": "",
+        "n_pid": "0"
+      },
+      "vip": {
+        "type": 2,
+        "status": 1,
+        "due_date": "2125411200000",
+        "vip_pay_type": 0,
+        "theme_type": 0,
+        "label": {
+          "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+          "text": "十年大会员",
+          "label_theme": "ten_annual_vip",
+          "text_color": "#FFFFFF",
+          "bg_style": 1,
+          "bg_color": "#FB7299",
+          "border_color": "",
+          "use_img_label": true,
+          "img_label_uri_hans": "",
+          "img_label_uri_hant": "",
+          "img_label_uri_hans_static": "http://i0.hdslb.com/bfs/vip/6ebc71d481dd3b84412dff9ac958bee7bae97122.png",
+          "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/8u7iRTPE7N.png"
+        },
+        "avatar_subscript": 1,
+        "nickname_color": "#FB7299",
+        "role": "7",
+        "avatar_subscript_url": "",
+        "tv_vip_status": 1,
+        "tv_vip_pay_type": 0,
+        "tv_due_date": "1822406400",
+        "avatar_icon": {
+          "icon_type": 3,
+          "icon_resource": {
+            "type": 1,
+            "url": "http://i0.hdslb.com/bfs/vip/dbe23f4ede5c120f11e18630cdd023010bce03b3.png@80w_80h_1c.webp"
+          }
+        }
+      },
+      "official_verify": {
+        "type": 0,
+        "desc": ""
+      },
+      "decorate": null,
+      "decoration_card": {
+        "id": "73668",
+        "item_id": "73668",
+        "name": "洛天依八音奇响",
+        "card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108477&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A36081646%7D",
+        "fan": {
+          "is_fan": "1",
+          "number": "107",
+          "color": "#E5B261",
+          "name": "XXXX",
+          "num_desc": "000107",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "100,100",
+            "colors": [
+              "#E29D2FFF",
+              "#FDC773FF",
+              "#FDC773FF",
+              "#E19B2EFF"
+            ],
+            "gradients": [
+              "0",
+              "33",
+              "67",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "image_group": null
+      },
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": {
+        "id": "73668",
+        "item_id": "73668",
+        "name": "洛天依八音奇响",
+        "card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=108477&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A36081646%7D",
+        "fan": {
+          "is_fan": "1",
+          "number": "107",
+          "color": "#E5B261",
+          "name": "XXXX",
+          "num_desc": "000107",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "100,100",
+            "colors": [
+              "#E29D2FFF",
+              "#FDC773FF",
+              "#FDC773FF",
+              "#E19B2EFF"
+            ],
+            "gradients": [
+              "0",
+              "33",
+              "67",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/6430f6ce0da3ea34371b2054a36b633ffbb78868.png",
+        "image_group": null
+      }
+    },
+    "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+        {
+          "label": "举报",
+          "type": "THREE_POINT_REPORT",
+          "params": {},
+          "modal": null,
+          "jump_url": ""
+        }
+      ]
+    },
+    "module_dispute": null,
+    "module_dynamic": {
+      "topic": {
+        "id": "1340422",
+        "name": "洛天依2026巡演",
+        "jump_url": "https://m.bilibili.com/topic-detail?topic_id=1340422&topic_name=%E6%B4%9B%E5%A4%A9%E4%BE%9D2026%E5%B7%A1%E6%BC%94"
+      },
+      "desc": null,
+      "major": {
+        "type": "MAJOR_TYPE_OPUS",
+        "none": null,
+        "blocked": null,
+        "archive": null,
+        "pgc": null,
+        "courses": null,
+        "draw": null,
+        "article": null,
+        "music": null,
+        "common": null,
+        "upower_common": null,
+        "live": null,
+        "live_rcmd": null,
+        "medialist": null,
+        "subscription": null,
+        "ugc_season": null,
+        "subscription_new": null,
+        "opus": {
+          "jump_url": "//www.bilibili.com/opus/1251579733840232452",
+          "title": "",
+          "summary": {
+            "text": "说到武汉的蓝色，天依第一时间找到了这座蓝色的古田桥~[洛天依14周年·纯蓝幻乐 动态表情包_展示]\n接下来去哪里捕捉蓝色呢？对了，蓝天就是最好的蓝色幕布！[洛天依14周年·纯蓝幻乐 动态表情包_思考]\n秋水共长天一色，一起呼吸来自大自然的新鲜空气，放松放松心情吧~[洛天依14周年·纯蓝幻乐 动态表情包_魔法]\n期待和大家见面的那天啦！[洛天依14周年·纯蓝幻乐 动态表情包_拥抱]\n\n🩵2026洛天依「无限共鸣·纯蓝幻乐」巡回演唱会·武汉站将于9月25日19点全面开票\n✧ https://show.bilibili.com/platform/detail.html?id=1006306\n",
+            "rich_text_nodes": [
+              {
+                "text": "说到武汉的蓝色，天依第一时间找到了这座蓝色的古田桥~",
+                "orig_text": "说到武汉的蓝色，天依第一时间找到了这座蓝色的古田桥~",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "[洛天依14周年·纯蓝幻乐 动态表情包_展示]",
+                "orig_text": "[洛天依14周年·纯蓝幻乐 动态表情包_展示]",
+                "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": {
+                  "type": "3",
+                  "size": 2,
+                  "text": "[洛天依14周年·纯蓝幻乐 动态表情包_展示]",
+                  "icon_url": "https://i0.hdslb.com/bfs/garb/62d83c120c5a909f8430d62784cfa39041a1543f.png",
+                  "gif_url": "https://i0.hdslb.com/bfs/garb/2a0de49c1ca305d19eaff614d79da7d9f2bd611a.gif",
+                  "webp_url": "https://i0.hdslb.com/bfs/garb/7240e27288d46d73db567f8ecb64237826521f37.webp",
+                  "jump_url": "",
+                  "jump_title": "",
+                  "package_id": "10238",
+                  "id": "145976"
+                },
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "\n接下来去哪里捕捉蓝色呢？对了，蓝天就是最好的蓝色幕布！",
+                "orig_text": "\n接下来去哪里捕捉蓝色呢？对了，蓝天就是最好的蓝色幕布！",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "[洛天依14周年·纯蓝幻乐 动态表情包_思考]",
+                "orig_text": "[洛天依14周年·纯蓝幻乐 动态表情包_思考]",
+                "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": {
+                  "type": "3",
+                  "size": 2,
+                  "text": "[洛天依14周年·纯蓝幻乐 动态表情包_思考]",
+                  "icon_url": "https://i0.hdslb.com/bfs/garb/256736a0cc130b3bb773d4457d405ea59383ec9a.png",
+                  "gif_url": "https://i0.hdslb.com/bfs/garb/d66368993a2fcbc1fc5268cdc78df0c5a56bd9ee.gif",
+                  "webp_url": "https://i0.hdslb.com/bfs/garb/fbd0e74623a8c2a671c5edd3e7c58b15fb67659b.webp",
+                  "jump_url": "",
+                  "jump_title": "",
+                  "package_id": "10238",
+                  "id": "145981"
+                },
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "\n秋水共长天一色，一起呼吸来自大自然的新鲜空气，放松放松心情吧~",
+                "orig_text": "\n秋水共长天一色，一起呼吸来自大自然的新鲜空气，放松放松心情吧~",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "[洛天依14周年·纯蓝幻乐 动态表情包_魔法]",
+                "orig_text": "[洛天依14周年·纯蓝幻乐 动态表情包_魔法]",
+                "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": {
+                  "type": "3",
+                  "size": 2,
+                  "text": "[洛天依14周年·纯蓝幻乐 动态表情包_魔法]",
+                  "icon_url": "https://i0.hdslb.com/bfs/garb/bec02c82115e45f62dd4bce84ea749c2b5f20a3f.png",
+                  "gif_url": "https://i0.hdslb.com/bfs/garb/586e20309a26fa9aa927c64ab9f94b6dd2f401f4.gif",
+                  "webp_url": "https://i0.hdslb.com/bfs/garb/06bbc6e262c9451dad6427c6ae853604928488f0.webp",
+                  "jump_url": "",
+                  "jump_title": "",
+                  "package_id": "10238",
+                  "id": "145971"
+                },
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "\n期待和大家见面的那天啦！",
+                "orig_text": "\n期待和大家见面的那天啦！",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "[洛天依14周年·纯蓝幻乐 动态表情包_拥抱]",
+                "orig_text": "[洛天依14周年·纯蓝幻乐 动态表情包_拥抱]",
+                "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": {
+                  "type": "3",
+                  "size": 2,
+                  "text": "[洛天依14周年·纯蓝幻乐 动态表情包_拥抱]",
+                  "icon_url": "https://i0.hdslb.com/bfs/garb/b653c170fa02cf9b622fc5f8b94ca51b39858c7b.png",
+                  "gif_url": "https://i0.hdslb.com/bfs/garb/65eb4c9e4124d9e698ae248af2d5167d1c262ba6.gif",
+                  "webp_url": "https://i0.hdslb.com/bfs/garb/ea018448af169a48f3432f62f19286b4be676761.webp",
+                  "jump_url": "",
+                  "jump_title": "",
+                  "package_id": "10238",
+                  "id": "145982"
+                },
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "\n\n🩵2026洛天依「无限共鸣·纯蓝幻乐」巡回演唱会·武汉站将于9月25日19点全面开票\n✧ ",
+                "orig_text": "\n\n🩵2026洛天依「无限共鸣·纯蓝幻乐」巡回演唱会·武汉站将于9月25日19点全面开票\n✧ ",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "网页链接",
+                "orig_text": "https://show.bilibili.com/platform/detail.html?id=1006306",
+                "type": "RICH_TEXT_NODE_TYPE_WEB",
+                "jump_url": "https://show.bilibili.com/platform/detail.html?id=1006306",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": {
+                  "color": "",
+                  "background": "",
+                  "font_size": 17,
+                  "font_level": "regular",
+                  "bold": false,
+                  "italic": false,
+                  "underline": false,
+                  "strikethrough": false
+                },
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "\n",
+                "orig_text": "\n",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              }
+            ],
+            "paragraphs": [],
+            "has_more": false
+          },
+          "style": 0,
+          "pics": [
+            {
+              "url": "http://i0.hdslb.com/bfs/new_dyn/68ad3cad2233109ffd5756b06c474ebb36081646.jpg",
+              "width": 3000,
+              "height": 4000,
+              "size": 7627.41015625,
+              "live_url": "",
+              "aigc": 0,
+              "warning": null
+            },
+            {
+              "url": "http://i0.hdslb.com/bfs/new_dyn/526bed4c59213cee9b9764b55a449d2636081646.jpg",
+              "width": 3000,
+              "height": 4000,
+              "size": 9926.259765625,
+              "live_url": "",
+              "aigc": 0,
+              "warning": null
+            }
+          ],
+          "fold_action": [
+            "展开",
+            "收起"
+          ],
+          "paywall": null
+        }
+      },
+      "additional": {
+        "type": "ADDITIONAL_TYPE_GOODS",
+        "goods": {
+          "head_icon": "",
+          "head_text": "UP主的推荐",
+          "jump_url": "",
+          "items": [
+            {
+              "cover": "https://i1.hdslb.com/bfs/openplatform/202609/g2B6FlgZ1790750176_1790750176333.jpg",
+              "name": "武汉·2026洛天依「无限共鸣.纯蓝幻乐」巡回演唱会",
+              "brief": "",
+              "price": "¥480",
+              "jump_url": "https://show.bilibili.com/platform/detail.html?id=1006306&noTitleBar=1&track_id=__BGMT__&contentId=&from=&msource=cps_Mdynamic_36081646_cont-2-1251579733840232452",
+              "jump_desc": "去看看",
+              "id": "1006306",
+              "cover_style": 0
+            }
+          ]
+        },
+        "vote": null,
+        "common": null,
+        "match": null,
+        "ugc": null,
+        "reserve": null,
+        "upower_lottery": null
+      }
+    },
+    "module_extend": null,
+    "module_stat": {
+      "forward": {
+        "status": false,
+        "count": 70,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "comment": {
+        "status": false,
+        "count": 205,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "like": {
+        "status": true,
+        "count": 5785,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+    },
+    "module_interaction": {
+      "items": [
+        {
+          "type": 0,
+          "desc": {
+            "text": "",
+            "rich_text_nodes": [
+              {
+                "text": "亭舟P",
+                "orig_text": "亭舟P",
+                "type": "RICH_TEXT_NODE_TYPE_AT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "670950385",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": " 赞了",
+                "orig_text": " 赞了",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              }
+            ],
+            "paragraphs": [],
+            "has_more": false
+          }
+        }
+      ]
+    },
+    "module_share_info": null,
+    "module_fold": null
+  },
+  "orig": null
+}

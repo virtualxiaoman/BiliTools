@@ -143,3 +143,21 @@ def test_get_comments_rejects_invalid_options(kwargs):
 def test_get_comments_requires_video_identifier():
     with pytest.raises(ValueError):
         ReplyService(FakeSession({})).get_video_comments()
+
+
+def test_get_comments_by_oid_public_entry_skips_detail_request():
+    """公共入口直接消费已知的 comment_id_str/comment_type，不再请求动态详情。"""
+    session = FakeSession({1: [_comment(1), _comment(2)]})
+
+    comments = ReplyService(session).get_comments_by_oid(409870383, 11, sort="hot", max_count=20)
+
+    assert [c["rpid"] for c in comments] == [1, 2]
+    assert len(session.calls) == 1
+    assert session.calls[0][0] == CommentUrls.LIST
+    assert session.calls[0][1] == {
+        "type": 11,
+        "oid": 409870383,
+        "sort": 1,
+        "pn": 1,
+        "ps": 20,
+    }

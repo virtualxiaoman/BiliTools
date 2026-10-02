@@ -13,10 +13,12 @@
 - `emote.py`    EmoteService：收藏表情包
 - `garb.py`     GarbService：收藏集 / 装扮素材
 - `dressup.py`  DressupService：装扮页签统一搜索与批量下载
+- `dynamic.py`  DynamicService：动态（opus）解析与下载
 """
 
 from src.services.archive import ArchiveService
 from src.services.dressup import DressupService
+from src.services.dynamic import DynamicService
 from src.services.emote import EmoteService
 from src.services.fav import FavService
 from src.services.garb import GarbService
@@ -31,6 +33,7 @@ from src.services.video import VideoService
 __all__ = [
     "ArchiveService",
     "DressupService",
+    "DynamicService",
     "EmoteService",
     "FavService",
     "GarbService",

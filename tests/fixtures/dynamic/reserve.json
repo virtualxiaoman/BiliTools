@@ -1,0 +1,703 @@
+{
+  "id_str": "1249722456824872963",
+  "type": "DYNAMIC_TYPE_DRAW",
+  "basic": {
+    "rid_str": "409686511",
+    "comment_type": 11,
+    "comment_id_str": "409686511",
+    "like_icon": {
+      "id": "5768",
+      "start_url": "",
+      "action_url": "https://i0.hdslb.com/bfs/garb/item/7362cb5300eb35041e5fb66120ccf8c94ffb8b19.bin",
+      "end_url": ""
+    },
+    "in_audit": false,
+    "is_only_fans": false,
+    "editable": false,
+    "open_app_extra": "",
+    "jump_url": "//www.bilibili.com/opus/1249722456824872963",
+    "aigc": false
+  },
+  "visible": true,
+  "modules": {
+    "module_tag": null,
+    "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "avatar": {
+        "container_size": {
+          "width": 1.375,
+          "height": 1.375
+        },
+        "layers": [],
+        "fallback_layers": {
+          "group_id": "",
+          "layers": [
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.6875,
+                  "axis_y": 0.6875
+                },
+                "size_spec": {
+                  "width": 0.787,
+                  "height": 0.787
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "AVATAR_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": true,
+                "allow_over_paint": false,
+                "layer_mask": {
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 2,
+                      "axis_x": 0.6875,
+                      "axis_y": 0.6875
+                    },
+                    "size_spec": {
+                      "width": 0.787,
+                      "height": 0.787
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "mask_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": false,
+                        "day": {
+                          "argb": "#FF000000"
+                        },
+                        "night": null
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 1,
+                    "placeholder": 6,
+                    "remote": {
+                      "url": "https://i0.hdslb.com/bfs/face/333272448182be0a80645f79ffc642889ef784b2.jpg",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.6875,
+                  "axis_y": 0.6875
+                },
+                "size_spec": {
+                  "width": 1.375,
+                  "height": 1.375
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "PENDENT_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 4,
+                "res_animation": {
+                  "webp_src": {
+                    "src_type": 1,
+                    "placeholder": 0,
+                    "remote": {
+                      "url": "https://i0.hdslb.com/bfs/garb/item/3594b30dfb6e9608d9eb6e67f47a2c90dd2bbf71.webp",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.8059999999999999,
+                  "axis_y": 0.8226666666666665
+                },
+                "size_spec": {
+                  "width": 0.35,
+                  "height": 0.35
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 5,
+                "res_native_draw": {
+                  "draw_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": true,
+                        "day": {
+                          "argb": "#FFFFFFFF"
+                        },
+                        "night": {
+                          "argb": "#FF17181A"
+                        }
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.831,
+                  "axis_y": 0.8476666666666666
+                },
+                "size_spec": {
+                  "width": 0.3,
+                  "height": 0.3
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 2,
+                    "placeholder": 0,
+                    "local": 4
+                  }
+                }
+              }
+            }
+          ],
+          "group_mask": null,
+          "is_critical_group": true
+        },
+        "mid": "27534330"
+      },
+      "face": "https://i0.hdslb.com/bfs/face/333272448182be0a80645f79ffc642889ef784b2.jpg",
+      "face_nft": false,
+      "nft_info": null,
+      "name": "崩坏3第一偶像爱酱",
+      "name_render": null,
+      "label": "",
+      "mid": 27534330,
+      "jump_url": "//space.bilibili.com/27534330/dynamic",
+      "following": false,
+      "pub_ts": "1789812084",
+      "pub_time": "9月19日",
+      "pub_action": "",
+      "pub_location_text": "",
+      "pendant": {
+        "pid": 4036,
+        "name": "崩坏3·天穹流星",
+        "image": "https://i0.hdslb.com/bfs/garb/item/5caf84631f46c32bf31e8fa871b5742a2c1ceb18.png",
+        "expire": "0",
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/item/3594b30dfb6e9608d9eb6e67f47a2c90dd2bbf71.webp",
+        "image_enhance_frame": "https://i0.hdslb.com/bfs/garb/item/d5afe4b28412a982672a7b0eb304b146a457bb5c.png",
+        "n_pid": "4036"
+      },
+      "vip": {
+        "type": 2,
+        "status": 1,
+        "due_date": "1842278400000",
+        "vip_pay_type": 0,
+        "theme_type": 0,
+        "label": {
+          "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+          "text": "年度大会员",
+          "label_theme": "annual_vip",
+          "text_color": "#FFFFFF",
+          "bg_style": 1,
+          "bg_color": "#FB7299",
+          "border_color": "",
+          "use_img_label": true,
+          "img_label_uri_hans": "",
+          "img_label_uri_hant": "",
+          "img_label_uri_hans_static": "http://i0.hdslb.com/bfs/vip/10df1f7f4af1292f773489e36554a05177785143.png",
+          "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/uckjAv3Npy.png"
+        },
+        "avatar_subscript": 1,
+        "nickname_color": "#FB7299",
+        "role": "3",
+        "avatar_subscript_url": "",
+        "tv_vip_status": 1,
+        "tv_vip_pay_type": 0,
+        "tv_due_date": "1822406400",
+        "avatar_icon": {
+          "icon_type": 3,
+          "icon_resource": {
+            "type": 1,
+            "url": "http://i0.hdslb.com/bfs/vip/dbe23f4ede5c120f11e18630cdd023010bce03b3.png@80w_80h_1c.webp"
+          }
+        }
+      },
+      "official_verify": {
+        "type": 1,
+        "desc": ""
+      },
+      "decorate": null,
+      "decoration_card": {
+        "id": "46246",
+        "item_id": "46246",
+        "name": "崩3-粉丝",
+        "card_url": "https://i0.hdslb.com/bfs/garb/item/8f5a79660c1920e514f25f36767651eeba2f8de6.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/item/8f5a79660c1920e514f25f36767651eeba2f8de6.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/equity-link/collect-home?item_id=46246&isdiy=0&part=card&from=post&f_source=garb&vmid=27534330&native.theme=1&navhide=1",
+        "fan": {
+          "is_fan": "1",
+          "number": "1",
+          "color": "#ed2ea4",
+          "name": "崩坏3·终焉归始",
+          "num_desc": "000001",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "0,100",
+            "colors": [
+              "#ed2ea4FF",
+              "#ed2ea4FF"
+            ],
+            "gradients": [
+              "0",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/item/8f5a79660c1920e514f25f36767651eeba2f8de6.png",
+        "image_group": null
+      },
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": {
+        "id": "46246",
+        "item_id": "46246",
+        "name": "崩3-粉丝",
+        "card_url": "https://i0.hdslb.com/bfs/garb/item/8f5a79660c1920e514f25f36767651eeba2f8de6.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/item/8f5a79660c1920e514f25f36767651eeba2f8de6.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/equity-link/collect-home?item_id=46246&isdiy=0&part=card&from=post&f_source=garb&vmid=27534330&native.theme=1&navhide=1",
+        "fan": {
+          "is_fan": "1",
+          "number": "1",
+          "color": "#ed2ea4",
+          "name": "崩坏3·终焉归始",
+          "num_desc": "000001",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "0,100",
+            "colors": [
+              "#ed2ea4FF",
+              "#ed2ea4FF"
+            ],
+            "gradients": [
+              "0",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/item/8f5a79660c1920e514f25f36767651eeba2f8de6.png",
+        "image_group": null
+      }
+    },
+    "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+        {
+          "label": "举报",
+          "type": "THREE_POINT_REPORT",
+          "params": {},
+          "modal": null,
+          "jump_url": ""
+        }
+      ]
+    },
+    "module_dispute": null,
+    "module_dynamic": {
+      "topic": null,
+      "desc": null,
+      "major": {
+        "type": "MAJOR_TYPE_OPUS",
+        "none": null,
+        "blocked": null,
+        "archive": null,
+        "pgc": null,
+        "courses": null,
+        "draw": null,
+        "article": null,
+        "music": null,
+        "common": null,
+        "upower_common": null,
+        "live": null,
+        "live_rcmd": null,
+        "medialist": null,
+        "subscription": null,
+        "ugc_season": null,
+        "subscription_new": null,
+        "opus": {
+          "jump_url": "//www.bilibili.com/opus/1249722456824872963",
+          "title": "",
+          "summary": {
+            "text": "#崩坏3# #崩坏3十周年# #时序照新#\n★崩坏3十周年庆典节目 就是今天！★\n\n「哇——前面好热闹，大家都在等我们了吗？」\n「准备好了吗？那就向着庆典，全速前进——！」\n\n如今，少女不再独自跋涉，她会和所有同伴一起向着明天，拥抱未来！\n\n崩坏3十周年庆典节目将于今日19:30正式开启！\n",
+            "rich_text_nodes": [
+              {
+                "text": "#崩坏3#",
+                "orig_text": "#崩坏3#",
+                "type": "RICH_TEXT_NODE_TYPE_TOPIC",
+                "jump_url": "//search.bilibili.com/all?keyword=%E5%B4%A9%E5%9D%8F3",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": " ",
+                "orig_text": " ",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "#崩坏3十周年#",
+                "orig_text": "#崩坏3十周年#",
+                "type": "RICH_TEXT_NODE_TYPE_TOPIC",
+                "jump_url": "//search.bilibili.com/all?keyword=%E5%B4%A9%E5%9D%8F3%E5%8D%81%E5%91%A8%E5%B9%B4",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": " ",
+                "orig_text": " ",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "#时序照新#",
+                "orig_text": "#时序照新#",
+                "type": "RICH_TEXT_NODE_TYPE_TOPIC",
+                "jump_url": "//search.bilibili.com/all?keyword=%E6%97%B6%E5%BA%8F%E7%85%A7%E6%96%B0",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "\n★崩坏3十周年庆典节目 就是今天！★\n\n「哇——前面好热闹，大家都在等我们了吗？」\n「准备好了吗？那就向着庆典，全速前进——！」\n\n如今，少女不再独自跋涉，她会和所有同伴一起向着明天，拥抱未来！\n\n崩坏3十周年庆典节目将于今日19:30正式开启！",
+                "orig_text": "\n★崩坏3十周年庆典节目 就是今天！★\n\n「哇——前面好热闹，大家都在等我们了吗？」\n「准备好了吗？那就向着庆典，全速前进——！」\n\n如今，少女不再独自跋涉，她会和所有同伴一起向着明天，拥抱未来！\n\n崩坏3十周年庆典节目将于今日19:30正式开启！",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "\n",
+                "orig_text": "\n",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              }
+            ],
+            "paragraphs": [],
+            "has_more": false
+          },
+          "style": 0,
+          "pics": [
+            {
+              "url": "http://i0.hdslb.com/bfs/new_dyn/3f7d27be65d30b90a2d7d4f58e97dd1f27534330.png",
+              "width": 750,
+              "height": 1000,
+              "size": 546.0009765625,
+              "live_url": "",
+              "aigc": 0,
+              "warning": null
+            }
+          ],
+          "fold_action": [
+            "展开",
+            "收起"
+          ],
+          "paywall": null
+        }
+      },
+      "additional": {
+        "type": "ADDITIONAL_TYPE_RESERVE",
+        "goods": null,
+        "vote": null,
+        "common": null,
+        "match": null,
+        "ugc": null,
+        "reserve": {
+          "title": "直播预约：《崩坏3》十周年庆典特别节目",
+          "desc1": {
+            "text": "09-19 19:30 直播",
+            "style": 0,
+            "jump_url": "",
+            "icon_url": "",
+            "visible": false
+          },
+          "desc2": {
+            "text": "5.4万人预约",
+            "style": 0,
+            "jump_url": "",
+            "icon_url": "",
+            "visible": true
+          },
+          "desc3": {
+            "text": "预约有奖：亚克力立牌寻梦者款1份*10份",
+            "style": 1,
+            "jump_url": "https://www.bilibili.com/h5/lottery/result?business_id=5774678&business_type=10",
+            "icon_url": "",
+            "visible": false
+          },
+          "premiere": null,
+          "badge_text": "",
+          "jump_url": "",
+          "button": {
+            "type": 2,
+            "jump_style": null,
+            "jump_url": "",
+            "check": {
+              "icon_url": "",
+              "text": "已预约",
+              "interactive": null,
+              "bg_style": 0,
+              "toast": "",
+              "disable": 0
+            },
+            "uncheck": {
+              "icon_url": "",
+              "text": "已结束",
+              "interactive": null,
+              "bg_style": 0,
+              "toast": "直播已结束",
+              "disable": 1
+            },
+            "status": 1,
+            "click_type": 0
+          },
+          "rid": 5774678,
+          "reserve_total": 54371,
+          "state": 0,
+          "stype": 2,
+          "up_mid": "27534330"
+        },
+        "upower_lottery": null
+      }
+    },
+    "module_extend": null,
+    "module_stat": {
+      "forward": {
+        "status": false,
+        "count": 80,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "comment": {
+        "status": false,
+        "count": 535,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "like": {
+        "status": false,
+        "count": 5789,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+    },
+    "module_interaction": {
+      "items": [
+        {
+          "type": 1,
+          "desc": {
+            "text": "琪一怎么会变成这样啊[大哭]",
+            "rich_text_nodes": [
+              {
+                "text": "夢醒時纷：",
+                "orig_text": "夢醒時纷：",
+                "type": "RICH_TEXT_NODE_TYPE_AT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "87213140",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "琪一怎么会变成这样啊",
+                "orig_text": "琪一怎么会变成这样啊",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "[大哭]",
+                "orig_text": "[大哭]",
+                "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": {
+                  "type": "1",
+                  "size": 1,
+                  "text": "[大哭]",
+                  "icon_url": "https://i0.hdslb.com/bfs/emote/2caafee2e5db4db72104650d87810cc2c123fc86.png",
+                  "gif_url": "",
+                  "webp_url": "",
+                  "jump_url": "",
+                  "jump_title": "",
+                  "package_id": "0",
+                  "id": "0"
+                },
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              }
+            ],
+            "paragraphs": [],
+            "has_more": false
+          }
+        }
+      ]
+    },
+    "module_share_info": null,
+    "module_fold": null
+  },
+  "orig": null
+}

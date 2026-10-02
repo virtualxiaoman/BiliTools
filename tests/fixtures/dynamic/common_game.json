@@ -1,0 +1,666 @@
+{
+  "id_str": "1252969134287749140",
+  "type": "DYNAMIC_TYPE_AV",
+  "basic": {
+    "rid_str": "117343120398899",
+    "comment_type": 1,
+    "comment_id_str": "117343120398899",
+    "like_icon": {
+      "id": "5768",
+      "start_url": "",
+      "action_url": "https://i0.hdslb.com/bfs/garb/item/7362cb5300eb35041e5fb66120ccf8c94ffb8b19.bin",
+      "end_url": ""
+    },
+    "in_audit": false,
+    "is_only_fans": false,
+    "editable": false,
+    "open_app_extra": "",
+    "jump_url": "",
+    "aigc": false
+  },
+  "visible": true,
+  "modules": {
+    "module_tag": {
+      "text": "置顶"
+    },
+    "module_author": {
+      "type": "AUTHOR_TYPE_NORMAL",
+      "avatar": {
+        "container_size": {
+          "width": 1.375,
+          "height": 1.375
+        },
+        "layers": [],
+        "fallback_layers": {
+          "group_id": "",
+          "layers": [
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.6875,
+                  "axis_y": 0.6875
+                },
+                "size_spec": {
+                  "width": 0.787,
+                  "height": 0.787
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "AVATAR_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": true,
+                "allow_over_paint": false,
+                "layer_mask": {
+                  "general_spec": {
+                    "pos_spec": {
+                      "coordinate_pos": 2,
+                      "axis_x": 0.6875,
+                      "axis_y": 0.6875
+                    },
+                    "size_spec": {
+                      "width": 0.787,
+                      "height": 0.787
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    }
+                  },
+                  "mask_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": false,
+                        "day": {
+                          "argb": "#FF000000"
+                        },
+                        "night": null
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 1,
+                    "placeholder": 6,
+                    "remote": {
+                      "url": "https://i2.hdslb.com/bfs/face/e63bacc8b9e68f59f401cc41728a99262ba661a3.jpg",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 2,
+                  "axis_x": 0.6875,
+                  "axis_y": 0.6875
+                },
+                "size_spec": {
+                  "width": 1.375,
+                  "height": 1.375
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "PENDENT_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 4,
+                "res_animation": {
+                  "webp_src": {
+                    "src_type": 1,
+                    "placeholder": 0,
+                    "remote": {
+                      "url": "https://i2.hdslb.com/bfs/garb/item/ff5bde4a6337140b632beffd0cbbaaf927c03ac0.webp",
+                      "bfs_style": "widget-layer-avatar"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.8059999999999999,
+                  "axis_y": 0.8226666666666665
+                },
+                "size_spec": {
+                  "width": 0.35,
+                  "height": 0.35
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 5,
+                "res_native_draw": {
+                  "draw_src": {
+                    "src_type": 3,
+                    "placeholder": 0,
+                    "draw": {
+                      "draw_type": 1,
+                      "fill_mode": 1,
+                      "color_config": {
+                        "is_dark_mode_aware": true,
+                        "day": {
+                          "argb": "#FFFFFFFF"
+                        },
+                        "night": {
+                          "argb": "#FF17181A"
+                        }
+                      },
+                      "edge_weight": 0
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "layer_id": "",
+              "visible": true,
+              "general_spec": {
+                "pos_spec": {
+                  "coordinate_pos": 1,
+                  "axis_x": 0.831,
+                  "axis_y": 0.8476666666666666
+                },
+                "size_spec": {
+                  "width": 0.3,
+                  "height": 0.3
+                },
+                "render_spec": {
+                  "opacity": 1
+                }
+              },
+              "layer_config": {
+                "tags": {
+                  "ICON_LAYER": {
+                    "config_type": 0
+                  }
+                },
+                "is_critical": false,
+                "allow_over_paint": false,
+                "layer_mask": null
+              },
+              "resource": {
+                "res_type": 3,
+                "res_image": {
+                  "image_src": {
+                    "src_type": 2,
+                    "placeholder": 0,
+                    "local": 4
+                  }
+                }
+              }
+            }
+          ],
+          "group_mask": null,
+          "is_critical_group": true
+        },
+        "mid": "401742377"
+      },
+      "face": "https://i2.hdslb.com/bfs/face/e63bacc8b9e68f59f401cc41728a99262ba661a3.jpg",
+      "face_nft": false,
+      "nft_info": null,
+      "name": "原神",
+      "name_render": null,
+      "label": "",
+      "mid": 401742377,
+      "jump_url": "//space.bilibili.com/401742377/dynamic",
+      "following": false,
+      "pub_ts": "1790568010",
+      "pub_time": "9月28日",
+      "pub_action": "投稿了视频",
+      "pub_location_text": "",
+      "pendant": {
+        "pid": 3144,
+        "name": "原神",
+        "image": "https://i2.hdslb.com/bfs/garb/item/6d5969a4f02fa1d4e5776072dc9f0b006478e82b.png",
+        "expire": "0",
+        "image_enhance": "https://i2.hdslb.com/bfs/garb/item/ff5bde4a6337140b632beffd0cbbaaf927c03ac0.webp",
+        "image_enhance_frame": "https://i2.hdslb.com/bfs/garb/item/a1893352f03d1d6b321d504ba2ae0ecc0ea85647.png",
+        "n_pid": "3144"
+      },
+      "vip": {
+        "type": 2,
+        "status": 1,
+        "due_date": "1823616000000",
+        "vip_pay_type": 0,
+        "theme_type": 0,
+        "label": {
+          "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+          "text": "年度大会员",
+          "label_theme": "annual_vip",
+          "text_color": "#FFFFFF",
+          "bg_style": 1,
+          "bg_color": "#FB7299",
+          "border_color": "",
+          "use_img_label": true,
+          "img_label_uri_hans": "",
+          "img_label_uri_hant": "",
+          "img_label_uri_hans_static": "http://i0.hdslb.com/bfs/vip/10df1f7f4af1292f773489e36554a05177785143.png",
+          "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/uckjAv3Npy.png"
+        },
+        "avatar_subscript": 1,
+        "nickname_color": "#FB7299",
+        "role": "3",
+        "avatar_subscript_url": "",
+        "tv_vip_status": 1,
+        "tv_vip_pay_type": 0,
+        "tv_due_date": "1822406400",
+        "avatar_icon": {
+          "icon_type": 3,
+          "icon_resource": {
+            "type": 1,
+            "url": "http://i0.hdslb.com/bfs/vip/dbe23f4ede5c120f11e18630cdd023010bce03b3.png@80w_80h_1c.webp"
+          }
+        }
+      },
+      "official_verify": {
+        "type": 1,
+        "desc": ""
+      },
+      "decorate": null,
+      "decoration_card": {
+        "id": "48625",
+        "item_id": "48625",
+        "name": "原神-须弥 粉丝",
+        "card_url": "https://i0.hdslb.com/bfs/garb/item/516a2e336a4d2f9262784fb1cdd00e93642e29e7.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/item/516a2e336a4d2f9262784fb1cdd00e93642e29e7.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/equity-link/collect-home?item_id=48625&isdiy=0&part=card&from=post&f_source=garb&vmid=401742377&native.theme=1&navhide=1",
+        "fan": {
+          "is_fan": "1",
+          "number": "1",
+          "color": "#83bf54",
+          "name": "原神",
+          "num_desc": "000001",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "0,100",
+            "colors": [
+              "#83bf54FF",
+              "#83bf54FF"
+            ],
+            "gradients": [
+              "0",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/item/516a2e336a4d2f9262784fb1cdd00e93642e29e7.png",
+        "image_group": null
+      },
+      "is_top": false,
+      "icon_badge": null,
+      "views_text": "",
+      "official": null,
+      "more": null,
+      "decorate_card": {
+        "id": "48625",
+        "item_id": "48625",
+        "name": "原神-须弥 粉丝",
+        "card_url": "https://i0.hdslb.com/bfs/garb/item/516a2e336a4d2f9262784fb1cdd00e93642e29e7.png",
+        "big_card_url": "https://i0.hdslb.com/bfs/garb/item/516a2e336a4d2f9262784fb1cdd00e93642e29e7.png",
+        "card_type": "2",
+        "expire_time": "0",
+        "card_type_name": "免费",
+        "jump_url": "https://www.bilibili.com/h5/mall/equity-link/collect-home?item_id=48625&isdiy=0&part=card&from=post&f_source=garb&vmid=401742377&native.theme=1&navhide=1",
+        "fan": {
+          "is_fan": "1",
+          "number": "1",
+          "color": "#83bf54",
+          "name": "原神",
+          "num_desc": "000001",
+          "num_prefix": "",
+          "color_format": {
+            "start_point": "0,0",
+            "end_point": "0,100",
+            "colors": [
+              "#83bf54FF",
+              "#83bf54FF"
+            ],
+            "gradients": [
+              "0",
+              "100"
+            ]
+          }
+        },
+        "image_enhance": "https://i0.hdslb.com/bfs/garb/item/516a2e336a4d2f9262784fb1cdd00e93642e29e7.png",
+        "image_group": null
+      }
+    },
+    "module_more": {
+      "rcmd_text": "",
+      "three_point_items": [
+        {
+          "label": "举报",
+          "type": "THREE_POINT_REPORT",
+          "params": {},
+          "modal": null,
+          "jump_url": ""
+        }
+      ]
+    },
+    "module_dispute": null,
+    "module_dynamic": {
+      "topic": null,
+      "desc": {
+        "text": "#原神# #原神6周年# #风的来信# \n《原神》六周年主题曲《风的来信》",
+        "rich_text_nodes": [
+          {
+            "text": "#原神#",
+            "orig_text": "#原神#",
+            "type": "RICH_TEXT_NODE_TYPE_TOPIC",
+            "jump_url": "//search.bilibili.com/all?keyword=%E5%8E%9F%E7%A5%9E",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          },
+          {
+            "text": " ",
+            "orig_text": " ",
+            "type": "RICH_TEXT_NODE_TYPE_TEXT",
+            "jump_url": "",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          },
+          {
+            "text": "#原神6周年#",
+            "orig_text": "#原神6周年#",
+            "type": "RICH_TEXT_NODE_TYPE_TOPIC",
+            "jump_url": "//search.bilibili.com/all?keyword=%E5%8E%9F%E7%A5%9E6%E5%91%A8%E5%B9%B4",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          },
+          {
+            "text": " ",
+            "orig_text": " ",
+            "type": "RICH_TEXT_NODE_TYPE_TEXT",
+            "jump_url": "",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          },
+          {
+            "text": "#风的来信#",
+            "orig_text": "#风的来信#",
+            "type": "RICH_TEXT_NODE_TYPE_TOPIC",
+            "jump_url": "//search.bilibili.com/all?keyword=%E9%A3%8E%E7%9A%84%E6%9D%A5%E4%BF%A1",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          },
+          {
+            "text": " \n《原神》六周年主题曲《风的来信》",
+            "orig_text": " \n《原神》六周年主题曲《风的来信》",
+            "type": "RICH_TEXT_NODE_TYPE_TEXT",
+            "jump_url": "",
+            "icon_url": "",
+            "icon_name": "",
+            "rid": "",
+            "emoji": null,
+            "goods": null,
+            "style": null,
+            "pics": [],
+            "video": null
+          }
+        ],
+        "paragraphs": [],
+        "has_more": false
+      },
+      "major": {
+        "type": "MAJOR_TYPE_ARCHIVE",
+        "none": null,
+        "blocked": null,
+        "archive": {
+          "type": 1,
+          "bvid": "BV14Baa6JENd",
+          "aid": "117343120398899",
+          "cover": "http://i2.hdslb.com/bfs/archive/e0fff47818224cf8016d5743fb8b35a2c3812eb8.jpg",
+          "jump_url": "//www.bilibili.com/video/BV14Baa6JENd",
+          "stat": {
+            "danmaku": "5.7万",
+            "play": "292.5万",
+            "vt": ""
+          },
+          "duration_text": "14:38",
+          "title": "《原神》六周年主题曲《风的来信》",
+          "desc": "旅途有你，就是意义。\n——————————————————\n音乐出品：HOYO-MiX\n作曲：赵鑫（HOYO-MiX）\n \n中文演唱：孙晔\n英文演唱：Griffin Burns\n日文演唱：西川贵教\n韩文演唱：南度亨\n\n《原神》bilibili服下载地址： https://www.biligame.com/detail/?id=103496",
+          "badge": {
+            "icon_url": "",
+            "text": "投稿视频",
+            "bg_color": "#FB7299",
+            "color": "#FFFFFF"
+          },
+          "enable_vt": 0,
+          "disable_preview": 0,
+          "premiere_online": "",
+          "stat_hidden": 0
+        },
+        "pgc": null,
+        "courses": null,
+        "draw": null,
+        "article": null,
+        "music": null,
+        "common": null,
+        "upower_common": null,
+        "live": null,
+        "live_rcmd": null,
+        "medialist": null,
+        "subscription": null,
+        "ugc_season": null,
+        "subscription_new": null,
+        "opus": null
+      },
+      "additional": {
+        "type": "ADDITIONAL_TYPE_COMMON",
+        "goods": null,
+        "vote": null,
+        "common": {
+          "button": {
+            "type": 1,
+            "jump_style": {
+              "icon_url": "",
+              "text": "进入",
+              "interactive": null,
+              "bg_style": 0,
+              "toast": "",
+              "disable": 0
+            },
+            "jump_url": "https://www.biligame.com/detail?id=103496&sourceFrom=1005&biz_scene=dynamic",
+            "check": null,
+            "uncheck": null,
+            "status": 0,
+            "click_type": 0
+          },
+          "sub_type": "game",
+          "head_text": "相关游戏",
+          "jump_url": "https://www.biligame.com/detail?id=103496&sourceFrom=1005&biz_scene=dynamic",
+          "id_str": "103496",
+          "cover": "https://i0.hdslb.com/bfs/game/536602036762ab7e683f0622fede020bebb874c1.png",
+          "style": 1,
+          "title": "原神",
+          "desc1": "角色扮演/二次元/冒险",
+          "desc2": "跨越尘世的探索之旅"
+        },
+        "match": null,
+        "ugc": null,
+        "reserve": null,
+        "upower_lottery": null
+      }
+    },
+    "module_extend": null,
+    "module_stat": {
+      "forward": {
+        "status": false,
+        "count": 3171,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "comment": {
+        "status": false,
+        "count": 22768,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "like": {
+        "status": true,
+        "count": 449341,
+        "forbidden": false,
+        "disabled": false,
+        "silent": false,
+        "hidden": false
+      },
+      "coin": null,
+      "favorite": null
+    },
+    "module_interaction": {
+      "items": [
+        {
+          "type": 1,
+          "desc": {
+            "text": "我要盖一栋只有“芙芙最可爱了！”的楼[给心心]",
+            "rich_text_nodes": [
+              {
+                "text": "94岁扶墙游走：",
+                "orig_text": "94岁扶墙游走：",
+                "type": "RICH_TEXT_NODE_TYPE_AT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "696278301",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "我要盖一栋只有“芙芙最可爱了！”的楼",
+                "orig_text": "我要盖一栋只有“芙芙最可爱了！”的楼",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": null,
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              },
+              {
+                "text": "[给心心]",
+                "orig_text": "[给心心]",
+                "type": "RICH_TEXT_NODE_TYPE_EMOJI",
+                "jump_url": "",
+                "icon_url": "",
+                "icon_name": "",
+                "rid": "",
+                "emoji": {
+                  "type": "1",
+                  "size": 1,
+                  "text": "[给心心]",
+                  "icon_url": "https://i0.hdslb.com/bfs/emote/1597302b98827463f5b75c7cac1f29ea6ce572c4.png",
+                  "gif_url": "",
+                  "webp_url": "",
+                  "jump_url": "",
+                  "jump_title": "",
+                  "package_id": "0",
+                  "id": "0"
+                },
+                "goods": null,
+                "style": null,
+                "pics": [],
+                "video": null
+              }
+            ],
+            "paragraphs": [],
+            "has_more": false
+          }
+        }
+      ]
+    },
+    "module_share_info": null,
+    "module_fold": null
+  },
+  "orig": null
+}

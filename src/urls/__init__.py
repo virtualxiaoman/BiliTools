@@ -21,6 +21,7 @@ from src.urls.archive_urls import ArchiveUrls
 from src.urls.contract_urls import ContractUrls
 from src.urls.emote_urls import EmoteUrls
 from src.urls.garb_urls import GarbUrls
+from src.urls.dynamic_urls import DynamicUrls
 
 __all__ = [
     "VideoUrls",
@@ -35,4 +36,5 @@ __all__ = [
     "ContractUrls",
     "EmoteUrls",
     "GarbUrls",
+    "DynamicUrls",
 ]

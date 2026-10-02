@@ -53,7 +53,7 @@ class ReplyService:
         if page_size <= 0:
             raise ValueError("page_size 必须为正数")
 
-    def _get_comments_by_oid(
+    def get_comments_by_oid(
         self,
         oid: int,
         comment_type: int,
@@ -61,7 +61,12 @@ class ReplyService:
         max_count: int = -1,
         page_size: int = 20,
     ) -> list[dict[str, Any]]:
-        """按评论区类型和 oid 分页获取一级评论。"""
+        """按评论区类型和 oid 分页获取一级评论（公共入口）。
+
+        视频评论（type=1）与动态评论（type=11/17）共用此实现；
+        动态下载等已知 ``comment_id_str/comment_type`` 的调用方直接使用
+        本方法，避免再次请求动态详情接口。
+        """
         self._validate_comment_options(max_count, page_size)
         sort_value = self._normalize_sort(sort)
         if max_count == 0:
@@ -124,7 +129,7 @@ class ReplyService:
         if not bvid and not aid:
             raise ValueError("bvid 和 aid 不能同时为空")
         oid = bv2av(bvid) if bvid else int(aid)
-        return self._get_comments_by_oid(
+        return self.get_comments_by_oid(
             oid=oid,
             comment_type=1,
             sort=sort,
@@ -207,7 +212,7 @@ class ReplyService:
         if comment_oid <= 0 or comment_type <= 0:
             raise ValueError("动态详情中的评论区信息无效")
 
-        return self._get_comments_by_oid(
+        return self.get_comments_by_oid(
             oid=comment_oid,
             comment_type=comment_type,
             sort=sort,
