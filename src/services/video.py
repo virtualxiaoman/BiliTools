@@ -19,6 +19,8 @@ import time
 import random
 import logging
 import threading
+import zlib
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
@@ -61,7 +63,7 @@ from src.util.risk_gate import RiskGate
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_MEDIA_TYPES = {"video", "audio", "video_with_audio", "cover"}
+_ALLOWED_MEDIA_TYPES = {"video", "audio", "video_with_audio", "cover", "danmaku"}
 
 
 class _FileCounter:
@@ -580,6 +582,204 @@ class VideoService:
             if auto:
                 progress.finish()
 
+    @staticmethod
+    def _decode_danmaku_xml(content: bytes) -> bytes:
+        """Decode the XML danmaku response, including deflate variants."""
+        if not isinstance(content, (bytes, bytearray)) or not content:
+            raise ValueError("弹幕响应为空")
+        data = bytes(content)
+        candidates = [data]
+        for wbits in (zlib.MAX_WBITS, -zlib.MAX_WBITS):
+            try:
+                decoded = zlib.decompress(data, wbits)
+            except zlib.error:
+                continue
+            if decoded not in candidates:
+                candidates.append(decoded)
+        for candidate in candidates:
+            stripped = candidate.lstrip(b"\xef\xbb\xbf \t\r\n")
+            if stripped.startswith(b"<") and b"<i" in stripped[:512]:
+                return candidate
+        raise ValueError("弹幕响应不是有效的 XML")
+
+    @staticmethod
+    def _ass_time(seconds: float) -> str:
+        """Format seconds as an ASS timestamp."""
+        centiseconds = max(0, int(round(seconds * 100)))
+        hours, remainder = divmod(centiseconds, 360000)
+        minutes, remainder = divmod(remainder, 6000)
+        secs, cents = divmod(remainder, 100)
+        return f"{hours}:{minutes:02d}:{secs:02d}.{cents:02d}"
+
+    @staticmethod
+    def _ass_text(text: str) -> str:
+        """Escape user text so it cannot accidentally become an ASS tag."""
+        text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+        text = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+        return text.replace("\n", "\\N")
+
+    @staticmethod
+    def _danmaku_xml_to_ass(content: bytes, *, play_res_x: int = 1920,
+                            play_res_y: int = 1080, scroll_duration: float = 8.0) -> bytes:
+        """Convert Bilibili XML danmaku to a PotPlayer-compatible ASS file."""
+        try:
+            root = ET.fromstring(content.decode("utf-8-sig", errors="replace"))
+        except (ET.ParseError, UnicodeError) as exc:
+            raise ValueError("弹幕 XML 解析失败") from exc
+        if root.tag.rsplit("}", 1)[-1] != "i":
+            raise ValueError("弹幕 XML 根节点不是 i")
+        if play_res_x <= 0 or play_res_y <= 0 or scroll_duration <= 0:
+            raise ValueError("ASS 视频尺寸和弹幕持续时间必须为正数")
+
+        header = [
+            "[Script Info]",
+            "; Converted from Bilibili XML danmaku",
+            "ScriptType: v4.00+",
+            f"PlayResX: {play_res_x}",
+            f"PlayResY: {play_res_y}",
+            "ScaledBorderAndShadow: yes",
+            "WrapStyle: 2",
+            "",
+            "[V4+ Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+            "Style: Danmaku,Microsoft YaHei,36,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2,0,7,20,20,20,1",
+            "",
+            "[Events]",
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+        ]
+        events: list[str] = []
+        lane_height = 52
+        lane_count = max(1, (play_res_y - 100) // lane_height)
+        scroll_lanes: list[list[tuple[float, float]]] = [[] for _ in range(lane_count)]
+        top_lanes: list[float] = []
+        bottom_lanes: list[float] = []
+        top_count = max(1, min(4, lane_count // 3 or 1))
+        bottom_count = top_count
+
+        def choose_lane(lanes: list[list[tuple[float, float]]], start: float, end: float) -> int:
+            for index, occupied in enumerate(lanes):
+                while occupied and occupied[0][1] <= start:
+                    occupied.pop(0)
+                if not occupied or occupied[-1][1] <= start:
+                    occupied.append((start, end))
+                    return index
+            index = min(range(len(lanes)), key=lambda item: lanes[item][0][1])
+            lanes[index] = [(start, end)]
+            return index
+
+        def ass_color(value: str) -> str:
+            try:
+                rgb = int(value or "16777215", 0) if value.lower().startswith("0x") else int(value or "16777215")
+            except (TypeError, ValueError):
+                rgb = 16777215
+            rgb = max(0, min(0xFFFFFF, rgb))
+            red, green, blue = (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF
+            return f"&H{blue:02X}{green:02X}{red:02X}&"
+
+        for node in root:
+            if node.tag.rsplit("}", 1)[-1] != "d":
+                continue
+            parts = (node.attrib.get("p") or "").split(",")
+            if len(parts) < 4:
+                continue
+            try:
+                start = max(0.0, float(parts[0]))
+                mode = int(float(parts[1]))
+                font_size = max(12, min(72, int(float(parts[2] or 36))))
+            except (TypeError, ValueError):
+                continue
+            text = VideoService._ass_text("".join(node.itertext()))
+            if not text:
+                continue
+            end = start + scroll_duration
+            color = ass_color(parts[3])
+            tags = f"{{\\fs{font_size}\\c{color}}}"
+            if mode in (4, 5):
+                if mode == 5:
+                    lane = len(top_lanes) % top_count
+                    y = 40 + lane * lane_height
+                    top_lanes.append(end)
+                    alignment = 8
+                else:
+                    lane = len(bottom_lanes) % bottom_count
+                    y = play_res_y - 40 - lane * lane_height
+                    bottom_lanes.append(end)
+                    alignment = 2
+                text_line = f"{{\\an{alignment}\\pos({play_res_x // 2},{y})}}{tags}{text}"
+            else:
+                lane = choose_lane(scroll_lanes, start, end)
+                y = 45 + lane * lane_height
+                estimate = max(60, len(text.replace("\\N", "")) * font_size)
+                if mode == 6:
+                    effect = f"{{\\move({-estimate},{y},{play_res_x + estimate},{y},0,{int(scroll_duration * 1000)})}}"
+                else:
+                    effect = f"{{\\move({play_res_x + estimate},{y},{-estimate},{y},0,{int(scroll_duration * 1000)})}}"
+                text_line = f"{effect}{tags}{text}"
+            events.append(
+                f"Dialogue: 0,{VideoService._ass_time(start)},{VideoService._ass_time(end)},Danmaku,,0,0,0,,{text_line}"
+            )
+
+        header.extend(events)
+        return ("\n".join(header) + "\n").encode("utf-8-sig")
+
+    def download_danmaku(
+            self, bvid: str, dir: Optional[Path] = None, *, page: int = 1,
+            progress_cb: Optional[ProgressCallback] = None, progress: Optional[BatchProgress] = None,
+            filename: Optional[str] = None,
+            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
+            format: str = "ass",
+    ) -> DownloadResult:
+        """Download danmaku as ASS for PotPlayer, or XML for compatibility.
+
+        ``format`` accepts ``"ass"`` (default) and ``"xml"``. The generated
+        filename follows the video filename and only changes its extension.
+        """
+        output_format = str(format or "ass").lower().lstrip(".")
+        if output_format not in {"ass", "xml"}:
+            raise ValueError("弹幕格式只支持 ass 或 xml")
+        extension = output_format
+        save_dir = Path(dir) if dir is not None else self.default_dir
+        existing = None if force else self._find_downloaded_file(
+            bvid, {extension}, page=page, roots=self._cache_roots(save_dir, cache_dirs)
+        )
+        if existing is not None:
+            return DownloadResult(
+                path=existing, media_type="danmaku", size=existing.stat().st_size, cached=True
+            )
+
+        info = self.fetch_info(bvid)
+        target = self._resolve_page(info, page)
+        if not target.cid:
+            raise ValueError(f"视频 {bvid} 第 {page} 分P 的 cid 获取失败，无法获取弹幕。")
+        safe_name = filename or self._default_filename(info, bvid, page, extension)
+        save_path = resolve_save_path(save_dir, safe_name)
+        if save_path.is_file() and save_path.stat().st_size > 0 and not force:
+            return DownloadResult(
+                path=save_path, media_type="danmaku", size=save_path.stat().st_size, cached=True
+            )
+
+        progress, auto = self._auto_progress(safe_name, progress, progress_cb)
+        try:
+            content = self.session.get_raw(
+                VideoUrls.DANMAKU,
+                params={"oid": target.cid},
+                max_bytes=64 * 1024 * 1024,
+            )
+            content = self._decode_danmaku_xml(content)
+            if output_format == "ass":
+                content = self._danmaku_xml_to_ass(content)
+            part = save_path.with_name(save_path.name + ".part")
+            part.write_bytes(content)
+            part.replace(save_path)
+            if progress:
+                progress.update(len(content), len(content))
+            elif progress_cb:
+                progress_cb(len(content), len(content))
+            return DownloadResult(path=save_path, media_type="danmaku", size=len(content))
+        finally:
+            if auto:
+                progress.finish()
+
     def download_cover(
             self, bvid: str, dir: Optional[Path] = None, *, progress_cb: Optional[ProgressCallback] = None,
             progress: Optional[BatchProgress] = None, filename: Optional[str] = None,
@@ -631,7 +831,7 @@ class VideoService:
         progress = progress or BatchProgress(n=len(pages), label=f"视频 {bvid}")
         results = []
         for i, page_obj in enumerate(pages, 1):
-            display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
+            display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg", "danmaku": "ass"}.get(media_type, "mp4")
             display_name = self._default_filename(info, bvid, page_obj.page, display_ext)
             progress.start(i, display_name)
             try:
@@ -647,6 +847,10 @@ class VideoService:
                 elif media_type == "cover":
                     result = self.download_cover(bvid, dir, progress_cb=progress_cb, progress=progress,
                                                  cache_dirs=cache_dirs, force=force)
+                elif media_type == "danmaku":
+                    result = self.download_danmaku(bvid, dir, page=page_obj.page,
+                                                   progress_cb=progress_cb, progress=progress,
+                                                   cache_dirs=cache_dirs, force=force)
                 else:
                     result = self.download_video_with_audio(bvid, dir, page=page_obj.page, quality=quality,
                                                             progress_cb=progress_cb, progress=progress,
@@ -712,7 +916,7 @@ class VideoService:
             VideoPage(page=1, cid=info.cid or 0, part=info.title)]
         for page_obj in page_objs:
             file_idx += 1
-            display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg"}.get(media_type, "mp4")
+            display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg", "danmaku": "ass"}.get(media_type, "mp4")
             display_name = self._default_filename(info, episode.bvid, page_obj.page, display_ext)
             progress.start(file_idx, display_name)
             try:
@@ -727,6 +931,10 @@ class VideoService:
                 elif media_type == "cover":
                     result = self.download_cover(episode.bvid, save_dir, progress_cb=progress_cb, progress=progress,
                                                  cache_dirs=cache_dirs, force=force)
+                elif media_type == "danmaku":
+                    result = self.download_danmaku(episode.bvid, save_dir, page=page_obj.page,
+                                                   progress_cb=progress_cb, progress=progress,
+                                                   cache_dirs=cache_dirs, force=force)
                 else:
                     result = self.download_video_with_audio(episode.bvid, save_dir, page=page_obj.page, quality=quality,
                                                             progress_cb=progress_cb, progress=progress,

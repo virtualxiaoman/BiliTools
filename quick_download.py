@@ -36,19 +36,33 @@
 #
 # comments = service.get_dynamic_comments("https://www.bilibili.com/opus/1151100571637252104", sort="hot", max_count=20)
 # print(comments)
+# #
+# from src.services import VideoService
+# from src.services import LoginService
+#
+# login = LoginService()
+#
+# user = login.get_login_state()
+# print(user.is_login, user.mid, user.uname, user.face, user.level)
+# service = VideoService()
+#
+# result = service.fetch_ai_summary(bvid="BV1ov42117yC")
+#
+# print(result.summary_text)
+# print(result.model_result.summary)
+# print(result.model_result.outline)
+# print(result.model_result.subtitle)
+# from src import VideoService
+#
+# service = VideoService()
+#
+# result = service.download_danmaku("BV1ov42117yC")
+# print(result.path)
+# result = service.download_video_with_audio("BV1ov42117yC")
+# print(result.path)
+from src.services import DynamicService
 
-from src.services import VideoService
-from src.services import LoginService
-
-login = LoginService()
-
-user = login.get_login_state()
-print(user.is_login, user.mid, user.uname, user.face, user.level)
-service = VideoService()
-
-result = service.fetch_ai_summary(bvid="BV1ov42117yC")
-
-print(result.summary_text)
-print(result.model_result.summary)
-print(result.model_result.outline)
-print(result.model_result.subtitle)
+service = DynamicService()
+# service.download_user_dynamics(36081646)                        # 全部动态
+# service.download_user_dynamics(36081646, max_count=20)          # 最新 20 条
+service.download_user_dynamics(36081646)

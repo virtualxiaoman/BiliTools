@@ -18,6 +18,7 @@ class VideoUrls:
     PAGELIST = f"{API_BASE}/x/player/pagelist"  # 分 P 列表 / cid
     VIDEO_SHOT = f"{API_BASE}/x/player/videoshot"  # 视频快照
     AI_SUMMARY = f"{API_BASE}/x/web-interface/view/conclusion/get"  # 视频 AI 总结
+    DANMAKU = f"{API_BASE}/x/v1/dm/list.so"  # XML danmaku list (oid=cid)
 
     # 点赞/投币/收藏状态
     USER_ACTION_LIKE = f"{API_BASE}/x/web-interface/archive/has/like"  # 是否点赞
