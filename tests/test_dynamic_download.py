@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.services.dynamic import DynamicService
+from src.services.dynamic import DynamicService, _mirror_urls
 from src.urls.dynamic_urls import DynamicUrls
 from src.util.progress import BatchProgress
 
@@ -55,6 +55,31 @@ class FakeReply:
         if self.error is not None:
             raise self.error
         return self.items
+
+
+class TestCdnMirrorFallback:
+    """CDN 镜像回退顺序：原 host 优先，其次 i2、i1（不使用 i3+）。"""
+
+    def test_mirror_order(self):
+        assert _mirror_urls("https://i0.hdslb.com/bfs/x.jpg") == [
+            "https://i0.hdslb.com/bfs/x.jpg",
+            "https://i2.hdslb.com/bfs/x.jpg",
+            "https://i1.hdslb.com/bfs/x.jpg",
+        ]
+        assert _mirror_urls("https://i1.hdslb.com/bfs/x.jpg") == [
+            "https://i1.hdslb.com/bfs/x.jpg",
+            "https://i2.hdslb.com/bfs/x.jpg",
+        ]
+
+    def test_non_mirror_hosts_pass_through(self):
+        assert _mirror_urls("https://i3.hdslb.com/bfs/x.jpg") == ["https://i3.hdslb.com/bfs/x.jpg"]
+        assert _mirror_urls("https://example.com/x.jpg") == ["https://example.com/x.jpg"]
+
+    def test_query_string_preserved(self):
+        """失败标记/查询串必须随镜像保留（下载桩按子串判定失败依赖此行为）。"""
+        candidates = _mirror_urls("http://i0.hdslb.com/a.jpg?broken=1")
+        assert candidates[1] == "http://i2.hdslb.com/a.jpg?broken=1"
+        assert all(url.endswith("?broken=1") for url in candidates)
 
 
 @pytest.fixture

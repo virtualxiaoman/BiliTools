@@ -1,10 +1,34 @@
 """
-动态（opus）服务：详情解析、全文获取与目录化下载。
+动态（opus）服务：单条/批量的解析、爬取与目录化下载（下载层编排）。
 
-设计要点（详见 docs/动态下载开发计划.md）：
+[本模块的角色] 动态功能的"编排层"：负责网络请求、目录与缓存策略、进度与异常，
+把具体工作交给下层模块：
+- 解析 → ``src/services/dynamic_parse.py``（DynamicParser，纯函数）；
+- 渲染 → ``src/services/dynamic_render.py``（纯函数）；
+- 媒体编号/账本 → ``src/util/asset_allocator.py``；
+- 数据模型 → ``src/models/dynamic_model.py``。
+
+[完整工作流]
+    用户输入(opus 链接 / 动态 ID / UP 的 mid)
+      │
+      ├─ ① fetch_detail：detail 接口(必须带 features) → DynamicParser.parse_item → DynamicInfo
+      │      └ 长文 has_more → apply_full_content：opus/detail 全文段落 → 重建正文
+      │
+      ├─ ② 单条下载 download_dynamic(info)
+      │      └ _download_resolved：
+      │           媒体任务(_download_media：图片/封面经账本取号；头像/表情/装扮走 manifest 缓存)
+      │           → 转发递归(写入原作者目录) → 评论存档 → 渲染 md/json → 最后写完成标记
+      │
+      └─ ③ 批量 download_user_dynamics(mid)
+            ├ list_user_dynamics：feed/space 翻页（节流/风控退避/-352 验证码等待）
+            │     └ 列表快照 incremental 刷新（顶部补新 / 跳页补更早，见 _crawl_pages）
+            └ 逐条 _download_resolved（可 threads 并发 + account_sessions 多账号轮询分流）
+
+[设计要点]（详见 docs/动态下载开发计划.md）
 - detail 接口必须携带 features（DynamicUrls.DETAIL_FEATURES），否则正文与附加卡片丢失；
-- 长文 summary.has_more=true 时用 opus/detail 接口取全文（段落化结构）；
-- 一条动态 = 一个目录，媒体落在 UP 目录的 `_assets/` 下（编号与账本见 asset_allocator）。
+- 一条动态 = 一个目录（`{save_dir}/{mid}/{YYYY-MM}/{日期}_{当天序号}/`），
+  媒体落在 UP 目录的 `_assets/` 下（命名与账本见 asset_allocator）；
+- 完成标记 dynamic_id.txt 最后写入；媒体最终失败写 dynamic_id_failed.txt（两者互斥）。
 """
 
 import json
@@ -27,16 +51,11 @@ from src.api.session import BiliSession
 from src.config.path import DYNAMIC_OUTPUT_DIR
 from src.models.download_model import DownloadResult
 from src.models.dynamic_model import (
-    DynamicAuthor,
-    DynamicCard,
     DynamicDownloadResult,
     DynamicEmoji,
-    DynamicForward,
-    DynamicImage,
     DynamicInfo,
-    DynamicStats,
-    DynamicTopic,
 )
+from src.services.dynamic_parse import DynamicParser, _to_int
 from src.services.dynamic_render import dynamic_title, info_to_dict, render_markdown
 from src.services.reply import ReplyService
 from src.urls.dynamic_urls import DynamicUrls
@@ -58,7 +77,6 @@ _OPUS_PATH_RE = re.compile(r"^/opus/(\d+)/?$")
 # 旧分享链：https://t.bilibili.com/<id>
 _T_PATH_RE = re.compile(r"^/(\d+)/?$")
 
-_RICH_PREFIX = "RICH_TEXT_NODE_TYPE_"
 
 # 空间动态列表翻页节流：基准间隔（秒）+ 随机抖动比例，避免固定节奏触发风控
 _FEED_PAGE_INTERVAL = 1.0
@@ -76,38 +94,10 @@ _CDN_HOST_RE = re.compile(r"^i(0|1|2)\.hdslb\.com$")
 # 列表快照文件名（保存在 `{save_dir}/{mid}/` 下，供复用已爬取的列表）
 _LIST_SNAPSHOT_NAME = "dynamic_list.json"
 
-# major 联合体中除正文/图片外的卡片键（按此顺序构造 DynamicCard）
-_CARD_KEYS = (
-    "archive", "article", "music", "medialist", "ugc_season",
-    "live", "live_rcmd", "pgc", "courses", "common",
-    "subscription", "subscription_new",
-)
-
-
-def _to_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _first_str(raw: dict, keys: tuple[str, ...]) -> str:
-    for key in keys:
-        value = raw.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ""
-
-
-def _normalize_url(value: Any) -> str:
-    """协议相对链接（//www.bilibili.com/...）补全为 https。"""
-    if not isinstance(value, str):
-        return ""
-    text = value.strip()
-    if text.startswith("//"):
-        return "https:" + text
-    return text
-
+# _crawl_pages 的三种结束原因
+_SEGMENT_HIT = "hit"  # 撞到快照覆盖区间（stop_ids）
+_SEGMENT_EXHAUSTED = "exhausted"  # 翻到列表尽头
+_SEGMENT_STOPPED = "stopped"  # 达到 max_count / since 提前截断
 
 def _mirror_urls(url: str) -> list[str]:
     """为 hdslb CDN 资源生成镜像回退顺序：原 host 优先，其后 i2、i1（不使用 i3+）。
@@ -129,15 +119,6 @@ def _mirror_urls(url: str) -> list[str]:
     return candidates
 
 
-def _try_json(value: Any) -> Any:
-    if isinstance(value, str) and value.strip():
-        try:
-            return json.loads(value)
-        except ValueError:
-            return None
-    return None
-
-
 class DynamicService:
     """B 站动态服务：解析与（后续批次）下载。"""
 
@@ -146,7 +127,7 @@ class DynamicService:
         self.default_dir = Path(default_dir) if default_dir is not None else DYNAMIC_OUTPUT_DIR
         self.reply_service = ReplyService(session=self.session)
 
-    # ---- ID 解析 ----
+    # ---- 阶段 1 · ID 解析 ----
 
     @staticmethod
     def resolve_dynamic_id(value: int | str) -> int:
@@ -178,7 +159,7 @@ class DynamicService:
             raise ValueError("dynamic_id 必须是正整数")
         return dynamic_id
 
-    # ---- 获取 ----
+    # ---- 阶段 2 · 获取（detail/全文）----
 
     def fetch_raw(self, dynamic_id: int | str) -> dict:
         """请求动态详情原始 data（必须带 features，见模块 docstring）。"""
@@ -233,7 +214,7 @@ class DynamicService:
                     paragraphs = value
         if not paragraphs:
             return info
-        blocks, text, emojis = self.parse_paragraphs(paragraphs)
+        blocks, text, emojis = DynamicParser.parse_paragraphs(paragraphs)
         info.content.title = title
         info.content.blocks = blocks
         info.content.text = text
@@ -241,468 +222,34 @@ class DynamicService:
         self._merge_emojis(info, emojis)
         return info
 
-    # ---- 解析：动态 item ----
+    # ---- 阶段 2 · 解析入口（实现见 dynamic_parse）----
+    # 实现位于 src/services/dynamic_parse.py（DynamicParser：纯解析、无网络/磁盘副作用），
+    # 这里保留同名入口，服务内部与既有调用方无需改变用法。
 
-    @classmethod
-    def parse_item(cls, item: dict, depth: int = 0) -> DynamicInfo:
-        """把 detail/feed 的 ``item`` 节点解析为 :class:`DynamicInfo`。
+    @staticmethod
+    def parse_item(item: dict, depth: int = 0) -> DynamicInfo:
+        """解析单条动态 item（实现见 ``DynamicParser.parse_item``）。
 
-        ``depth`` 为转发递归层数，最大解析 3 层（更深的内容保留 id/作者后截断）。
+        输入：detail/feed 接口的 ``item`` 字典；输出：:class:`DynamicInfo`。
+        工作流：采集第 1 步——fetch_detail 与批量下载解析列表项时调用。
         """
-        if not isinstance(item, dict):
-            raise ValueError("动态 item 必须是字典")
-        info = DynamicInfo()
-        info.raw = item
-        info.id = _to_int(item.get("id_str"))
-        info.type = str(item.get("type") or "")
-        if info.id:
-            info.url = f"https://www.bilibili.com/opus/{info.id}"
+        return DynamicParser.parse_item(item, depth)
 
-        modules = item.get("modules") if isinstance(item.get("modules"), dict) else {}
-        info.author = cls._parse_author(modules.get("module_author"))
-        info.stats = cls._parse_stats(modules.get("module_stat"))
+    @staticmethod
+    def parse_paragraphs(paragraphs: list) -> tuple[list[dict], str, list[DynamicEmoji]]:
+        """解析 opus 全文段落（实现见 ``DynamicParser.parse_paragraphs``）。
 
-        basic = item.get("basic") if isinstance(item.get("basic"), dict) else {}
-        info.comment_oid = _to_int(basic.get("comment_id_str") or basic.get("comment_id"))
-        info.comment_type = _to_int(basic.get("comment_type"))
-
-        module_dynamic = modules.get("module_dynamic") if isinstance(modules.get("module_dynamic"), dict) else {}
-        info.topic = cls._parse_topic(module_dynamic.get("topic"))
-        additional = module_dynamic.get("additional")
-        info.additional = additional if isinstance(additional, dict) else {}
-        vote = info.additional.get("vote")
-        info.vote = vote if isinstance(vote, dict) else None
-        major = module_dynamic.get("major") if isinstance(module_dynamic.get("major"), dict) else {}
-
-        # 正文：新式 opus.summary 优先，老式 desc 兜底
-        opus = major.get("opus") if isinstance(major.get("opus"), dict) else None
-        if opus is not None and isinstance(opus.get("summary"), dict):
-            cls._apply_content(info, opus["summary"], str(opus.get("title") or "").strip())
-        elif isinstance(module_dynamic.get("desc"), dict):
-            cls._apply_content(info, module_dynamic["desc"], "")
-
-        # 图片：opus.pics 或老式 major.draw.items
-        pics = opus.get("pics") if opus is not None else None
-        if not isinstance(pics, list) and isinstance(major.get("draw"), dict):
-            pics = major["draw"].get("items")
-        info.images = cls._parse_images(pics)
-
-        info.cards = cls._parse_cards(major, info.additional)
-
-        # 抽奖：正文节点 rid 优先，充电抽奖卡兜底
-        for block in info.content.blocks:
-            if block.get("type") == "lottery" and block.get("rid"):
-                info.lottery_rid = str(block["rid"])
-                break
-        if not info.lottery_rid:
-            lottery = info.additional.get("upower_lottery")
-            if isinstance(lottery, dict):
-                info.lottery_rid = str(lottery.get("lottery_id") or lottery.get("id") or "")
-
-        # 类型与转发
-        if item.get("orig") is not None or info.type == "DYNAMIC_TYPE_FORWARD":
-            info.kind = "forward"
-        else:
-            info.kind = cls._detect_kind(info.type, major)
-        if isinstance(item.get("orig"), dict):
-            info.forward = cls._parse_forward(item["orig"], depth)
-        return info
-
-    @classmethod
-    def _apply_content(cls, info: DynamicInfo, container: dict, title: str) -> None:
-        """从 desc/summary 容器解析正文块；节点为空时回退到纯文本。"""
-        nodes = container.get("rich_text_nodes")
-        blocks: list[dict] = []
-        if isinstance(nodes, list) and nodes:
-            for node in nodes:
-                block = cls._node_to_block(node)
-                if block is not None:
-                    blocks.append(block)
-            text = "".join(
-                str(node.get("text") or "")
-                for node in nodes
-                if isinstance(node, dict)
-            )
-        else:
-            text = str(container.get("text") or "")
-            if text:
-                blocks.append({"type": "text", "text": text})
-        info.content.title = title or info.content.title
-        info.content.blocks = blocks
-        info.content.text = text
-        info.content.truncated = bool(container.get("has_more"))
-        cls._merge_emojis(info, cls._collect_emojis(blocks))
-
-    @classmethod
-    def _node_to_block(cls, node: Any) -> Optional[dict]:
-        """富文本节点 → blocks 契约（text/mention/emoji/topic/link/lottery/vote/goods/video/unknown）。"""
-        if not isinstance(node, dict):
-            return None
-        node_type = str(node.get("type") or "")
-        suffix = node_type[len(_RICH_PREFIX):] if node_type.startswith(_RICH_PREFIX) else node_type
-        text = str(node.get("text") or "")
-        jump = _normalize_url(node.get("jump_url"))
-        if suffix in ("", "TEXT"):
-            return {"type": "text", "text": text}
-        if suffix == "AT":
-            return {"type": "mention", "text": text, "mid": _to_int(node.get("rid")), "url": jump}
-        if suffix == "EMOJI":
-            emoji = node.get("emoji") if isinstance(node.get("emoji"), dict) else {}
-            return {
-                "type": "emoji",
-                "text": text,
-                "package_id": str(emoji.get("package_id") or ""),
-                "emoji_id": str(emoji.get("id") or ""),
-                "name": cls.emoji_short_name(str(emoji.get("text") or text)),
-                "url": cls._pick_emoji_url(emoji),
-            }
-        if suffix == "TOPIC":
-            return {"type": "topic", "text": text, "url": jump}
-        if suffix == "WEB":
-            return {"type": "link", "text": text, "url": jump}
-        if suffix == "LOTTERY":
-            return {"type": "lottery", "text": text, "rid": str(node.get("rid") or ""), "url": jump}
-        if suffix == "VOTE":
-            return {"type": "vote", "text": text, "rid": str(node.get("rid") or ""), "url": jump}
-        if suffix == "GOODS":
-            return {"type": "goods", "text": text, "url": jump, "goods": node.get("goods")}
-        if suffix in ("BV", "AV", "VIDEO"):
-            return {"type": "video", "text": text, "url": jump, "video": node.get("video")}
-        return {"type": "unknown", "text": text, "url": jump, "node_type": node_type}
+        输入：``opus/detail`` 返回的 ``paragraphs`` 列表；
+        输出：``(blocks, 纯文本, 表情列表)``。
+        """
+        return DynamicParser.parse_paragraphs(paragraphs)
 
     @staticmethod
     def emoji_short_name(text: str) -> str:
-        """从表情节点文本提取短名：``[洛天依…动态表情包_送花]`` → ``送花``；``[doge]`` → ``doge``。"""
-        name = str(text or "").strip()
-        if name.startswith("[") and name.endswith("]"):
-            name = name[1:-1]
-        name = name.rsplit("_", 1)[-1].strip()
-        return name or "emoji"
+        """表情节点文本 → 短名（如 ``[洛天依…_表情包_送花]`` → ``送花``）。"""
+        return DynamicParser.emoji_short_name(text)
 
-    @staticmethod
-    def _pick_emoji_url(emoji: dict) -> str:
-        """动态表情优先 GIF（保留动画），回退 webp / 静态图。"""
-        for key in ("gif_url", "webp_url", "icon_url"):
-            value = emoji.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return ""
-
-    @classmethod
-    def _collect_emojis(cls, blocks: list[dict]) -> list[DynamicEmoji]:
-        """从 blocks 中收集表情（同包同 id / 同 url 去重，保持出现顺序）。"""
-        emojis: list[DynamicEmoji] = []
-        seen: set = set()
-        for block in blocks:
-            if block.get("type") != "emoji":
-                continue
-            url = str(block.get("url") or "")
-            key = (block.get("package_id") or "", block.get("emoji_id") or url)
-            if not url or key in seen:
-                continue
-            seen.add(key)
-            emojis.append(DynamicEmoji(
-                text=str(block.get("text") or ""),
-                package_id=str(block.get("package_id") or ""),
-                emoji_id=str(block.get("emoji_id") or ""),
-                url=url,
-                short_name=str(block.get("name") or cls.emoji_short_name(str(block.get("text") or ""))),
-            ))
-        return emojis
-
-    @staticmethod
-    def _merge_emojis(info: DynamicInfo, emojis: list[DynamicEmoji]) -> None:
-        seen = {(emoji.package_id, emoji.emoji_id or emoji.url) for emoji in info.emojis}
-        for emoji in emojis:
-            key = (emoji.package_id, emoji.emoji_id or emoji.url)
-            if key not in seen:
-                seen.add(key)
-                info.emojis.append(emoji)
-
-    @staticmethod
-    def _parse_images(pics: Any) -> list[DynamicImage]:
-        """解析 opus.pics / major.draw.items（两者字段名不同，统一归一化）。"""
-        images: list[DynamicImage] = []
-        if not isinstance(pics, list):
-            return images
-        for pic in pics:
-            if not isinstance(pic, dict):
-                continue
-            url = _first_str(pic, ("url", "src"))
-            if not url:
-                continue
-            images.append(DynamicImage(
-                index=len(images) + 1,
-                url=url,
-                width=_to_int(pic.get("width")),
-                height=_to_int(pic.get("height")),
-                size_kb=float(pic.get("size") or 0.0),
-                live_url=str(pic.get("live_url") or ""),
-                aigc=_to_int(pic.get("aigc")),
-            ))
-        return images
-
-    @staticmethod
-    def _detect_kind(item_type: str, major: dict) -> str:
-        """归一化动态类型（用于渲染与下载策略选择）。"""
-        if isinstance(major.get("opus"), dict):
-            opus = major["opus"]
-            if item_type == "DYNAMIC_TYPE_ARTICLE":
-                return "article"
-            if opus.get("pics"):
-                return "draw"
-            if str(opus.get("title") or "").strip():
-                return "article"
-            return "word"
-        for key in ("draw", "archive", "live_rcmd", "live", "pgc", "courses", "music",
-                    "medialist", "ugc_season", "common", "article",
-                    "subscription", "subscription_new"):
-            if isinstance(major.get(key), dict):
-                return "live" if key == "live_rcmd" else key
-        fallback = {
-            "DYNAMIC_TYPE_WORD": "word",
-            "DYNAMIC_TYPE_DRAW": "draw",
-            "DYNAMIC_TYPE_AV": "archive",
-            "DYNAMIC_TYPE_ARTICLE": "article",
-            "DYNAMIC_TYPE_COMMON_SQUARE": "common",
-            "DYNAMIC_TYPE_LIVE_RCMD": "live",
-            "DYNAMIC_TYPE_PGC": "pgc",
-            "DYNAMIC_TYPE_COURSES": "courses",
-            "DYNAMIC_TYPE_MUSIC": "music",
-            "DYNAMIC_TYPE_MEDIALIST": "medialist",
-            "DYNAMIC_TYPE_UGC_SEASON": "ugc_season",
-            "DYNAMIC_TYPE_FORWARD": "forward",
-        }
-        return fallback.get(item_type, "unknown")
-
-    @classmethod
-    def _parse_forward(cls, orig: dict, depth: int) -> DynamicForward:
-        forward = DynamicForward()
-        forward.orig_id = _to_int(orig.get("id_str"))
-        modules = orig.get("modules") if isinstance(orig.get("modules"), dict) else {}
-        author = modules.get("module_author") if isinstance(modules.get("module_author"), dict) else {}
-        forward.orig_mid = _to_int(author.get("mid"))
-        orig_type = str(orig.get("type") or "")
-        if orig_type == "DYNAMIC_TYPE_DELETED" or not modules or depth >= 3:
-            forward.deleted = orig_type == "DYNAMIC_TYPE_DELETED" or not modules
-            return forward
-        try:
-            forward.orig = cls.parse_item(orig, depth + 1)
-        except ValueError:
-            forward.deleted = True
-        return forward
-
-    @staticmethod
-    def _parse_author(raw: Any) -> DynamicAuthor:
-        author = DynamicAuthor()
-        if not isinstance(raw, dict):
-            return author
-        author.mid = _to_int(raw.get("mid"))
-        author.name = str(raw.get("name") or "")
-        author.face = str(raw.get("face") or "")
-        author.pub_time = str(raw.get("pub_time") or "")
-        author.pub_ts = _to_int(raw.get("pub_ts"))
-        author.location = str(raw.get("pub_location_text") or "")
-        pendant = raw.get("pendant") if isinstance(raw.get("pendant"), dict) else {}
-        author.pendant_name = str(pendant.get("name") or "")
-        author.pendant_image = str(pendant.get("image") or "")
-        author.pendant_image_enhance = str(pendant.get("image_enhance") or "")
-        decorate = raw.get("decorate") if isinstance(raw.get("decorate"), dict) else {}
-        author.decorate_name = str(decorate.get("name") or "")
-        author.decorate_card = str(decorate.get("card_url") or "")
-        return author
-
-    @staticmethod
-    def _parse_topic(raw: Any) -> Optional[DynamicTopic]:
-        if not isinstance(raw, dict) or not raw.get("name"):
-            return None
-        return DynamicTopic(
-            id=_to_int(raw.get("id")),
-            name=str(raw.get("name") or ""),
-            jump_url=_normalize_url(raw.get("jump_url")),
-        )
-
-    @staticmethod
-    def _parse_stats(raw: Any) -> DynamicStats:
-        stats = DynamicStats()
-        if not isinstance(raw, dict):
-            return stats
-        for key in ("like", "comment", "forward"):
-            value = raw.get(key)
-            if isinstance(value, dict):
-                setattr(stats, key, _to_int(value.get("count")))
-        return stats
-
-    @classmethod
-    def _parse_cards(cls, major: dict, additional: dict) -> list[DynamicCard]:
-        """构造卡片列表：major 卡片（视频/直播/预约等）+ additional 附加卡（商品/投票等）。"""
-        cards: list[DynamicCard] = []
-        for key in _CARD_KEYS:
-            raw = major.get(key)
-            if not isinstance(raw, dict):
-                continue
-            card = DynamicCard(kind=key)
-            card.title = _first_str(raw, ("title", "name"))
-            card.desc = _first_str(raw, ("desc", "description"))
-            card.cover_url = _first_str(raw, ("cover", "pic", "cover_url"))
-            card.jump_url = _normalize_url(_first_str(raw, ("jump_url", "url")))
-            card.bvid = str(raw.get("bvid") or "")
-            card.extra = dict(raw)
-            if key == "live_rcmd":
-                cls._fill_live_rcmd(card, raw)
-            cards.append(card)
-
-        additional_type = str(additional.get("type") or "")
-        if additional_type and not additional_type.endswith("_NONE"):
-            kind = additional_type.replace("ADDITIONAL_TYPE_", "").lower()
-            for name, raw in additional.items():
-                if name == "type" or not isinstance(raw, dict):
-                    continue
-                card = DynamicCard(kind=kind if name != "common" else "common")
-                card.extra = dict(raw)
-                if name == "goods":
-                    card.title = str(raw.get("head_text") or "")
-                    items = raw.get("items") if isinstance(raw.get("items"), list) else []
-                    card.extra = {
-                        "head_text": card.title,
-                        "items": [
-                            {
-                                "name": str(item.get("name") or ""),
-                                "price": str(item.get("price") or ""),
-                                "cover": str(item.get("cover") or ""),
-                                "jump_url": _normalize_url(item.get("jump_url")),
-                                "brief": str(item.get("brief") or ""),
-                            }
-                            for item in items
-                            if isinstance(item, dict)
-                        ],
-                    }
-                else:
-                    card.title = _first_str(raw, ("title", "head_text", "name"))
-                    card.desc = _first_str(raw, ("desc", "description"))
-                    card.cover_url = _first_str(raw, ("cover", "pic", "cover_url"))
-                    card.jump_url = _normalize_url(_first_str(raw, ("jump_url", "url")))
-                cards.append(card)
-        return cards
-
-    @staticmethod
-    def _fill_live_rcmd(card: DynamicCard, raw: dict) -> None:
-        """live_rcmd 的标题/封面在嵌套的 JSON 字符串里（live_play_info）。"""
-        parsed = _try_json(raw.get("content"))
-        if not isinstance(parsed, dict):
-            return
-        play_info = parsed.get("live_play_info")
-        if isinstance(play_info, dict):
-            card.title = card.title or str(play_info.get("title") or "")
-            card.cover_url = card.cover_url or str(play_info.get("cover") or "")
-            card.jump_url = card.jump_url or _normalize_url(play_info.get("link"))
-
-    # ---- 解析：长文段落（opus/detail） ----
-
-    @classmethod
-    def parse_paragraphs(cls, paragraphs: list) -> tuple[list[dict], str, list[DynamicEmoji]]:
-        """解析 opus/detail 的段落列表。
-
-        :return: (blocks, 纯文本, 表情列表)；blocks 在通用契约基础上增加
-                 ``heading/list/code/quote/line/image`` 等段落类型。
-        """
-        blocks: list[dict] = []
-        lines: list[str] = []
-        for para in paragraphs:
-            if not isinstance(para, dict):
-                continue
-            plain = cls._paragraph_plain_text(para)
-            if para.get("line"):
-                blocks.append({"type": "line"})
-                lines.append("")
-                continue
-            if para.get("pic"):
-                pics = (para.get("pic") or {}).get("pics") if isinstance(para.get("pic"), dict) else None
-                for pic in pics or []:
-                    if not isinstance(pic, dict):
-                        continue
-                    url = _first_str(pic, ("url", "src"))
-                    if url:
-                        blocks.append({
-                            "type": "image",
-                            "url": url,
-                            "width": _to_int(pic.get("width")),
-                            "height": _to_int(pic.get("height")),
-                        })
-                lines.append("")
-                continue
-            if para.get("code"):
-                blocks.append({"type": "code", "text": plain})
-                lines.append(plain)
-                continue
-            if para.get("blockquote"):
-                blocks.append({"type": "quote", "text": plain})
-                lines.append(plain)
-                continue
-            if para.get("heading"):
-                blocks.append({"type": "heading", "text": plain})
-                lines.append(plain)
-                continue
-            if para.get("list"):
-                blocks.append({"type": "list", "text": plain})
-                lines.append(plain)
-                continue
-            if para.get("link_card"):
-                link_card = para.get("link_card") or {}
-                blocks.append({
-                    "type": "link",
-                    "text": str(link_card.get("title") or plain or "链接"),
-                    "url": str(link_card.get("jump_url") or ""),
-                })
-                lines.append(plain)
-                continue
-            # 普通文本段：逐节点转换
-            nodes = ((para.get("text") or {}).get("nodes")) if isinstance(para.get("text"), dict) else None
-            if isinstance(nodes, list) and nodes:
-                for node in nodes:
-                    block = cls._paragraph_node_to_block(node)
-                    if block is not None:
-                        blocks.append(block)
-            elif plain:
-                blocks.append({"type": "text", "text": plain})
-            lines.append(plain)
-        return blocks, "\n".join(lines), cls._collect_emojis(blocks)
-
-    @classmethod
-    def _paragraph_node_to_block(cls, node: Any) -> Optional[dict]:
-        if not isinstance(node, dict):
-            return None
-        node_type = str(node.get("type") or "")
-        if node_type == "TEXT_NODE_TYPE_WORD":
-            word = node.get("word") if isinstance(node.get("word"), dict) else {}
-            style = word.get("style") if isinstance(word.get("style"), dict) else {}
-            return {
-                "type": "text",
-                "text": str(word.get("words") or ""),
-                "bold": bool(style.get("bold")),
-                "italic": bool(style.get("italic")),
-            }
-        if node_type == "TEXT_NODE_TYPE_RICH":
-            return cls._node_to_block(node.get("rich") or {})
-        return {"type": "unknown", "text": str(node.get("text") or ""), "node_type": node_type}
-
-    @staticmethod
-    def _paragraph_plain_text(para: dict) -> str:
-        nodes = ((para.get("text") or {}).get("nodes")) if isinstance(para.get("text"), dict) else None
-        parts: list[str] = []
-        if isinstance(nodes, list):
-            for node in nodes:
-                if not isinstance(node, dict):
-                    continue
-                if node.get("type") == "TEXT_NODE_TYPE_WORD":
-                    word = node.get("word") if isinstance(node.get("word"), dict) else {}
-                    parts.append(str(word.get("words") or ""))
-                else:
-                    rich = node.get("rich") if isinstance(node.get("rich"), dict) else {}
-                    parts.append(str(rich.get("text") or node.get("text") or ""))
-        return "".join(parts)
-
-    # ---- 下载 ----
+    # ---- 阶段 3 · 单条下载 ----
 
     def download_dynamic(
         self,
@@ -750,7 +297,7 @@ class DynamicService:
             progress_cb=progress_cb,
         )
 
-    # ---- 批量：UP 主全部动态 ----
+    # ---- 阶段 4 · 批量列表（爬取/快照/验证码）----
 
     @staticmethod
     def normalize_mid(mid: int | str) -> int:
@@ -873,7 +420,7 @@ class DynamicService:
         deep_items: list = []
         known_ids: set = set()
         hit_cache = False
-        result = "exhausted"
+        result = _SEGMENT_EXHAUSTED
         try:
             if cached_items:
                 cached_ids = {
@@ -893,7 +440,7 @@ class DynamicService:
                     uid, options=options, collected=top_items, known_ids=known_ids,
                     stop_ids=cached_ids, base_count=len(cached_items),
                 )
-                hit_cache = result == "hit"
+                hit_cache = result == _SEGMENT_HIT
                 if hit_cache and not cached_meta.get("complete"):
                     oldest_id = str(cached_items[-1].get("id_str") or "")
                     if oldest_id:
@@ -919,12 +466,12 @@ class DynamicService:
 
         if cached_items and hit_cache:
             items = self._merge_items(top_items, cached_items, deep_items)
-            complete = bool(cached_meta.get("complete")) or result == "exhausted"
+            complete = bool(cached_meta.get("complete")) or result == _SEGMENT_EXHAUSTED
         else:
             if cached_items:
                 logger.warning("[DynamicService] 列表快照与当前空间列表无交集（动态可能已删除），忽略旧快照")
             items = top_items
-            complete = result == "exhausted"
+            complete = result == _SEGMENT_EXHAUSTED
         if max_count >= 0:
             items = items[:max_count]
         if options.printed:
@@ -948,8 +495,9 @@ class DynamicService:
     ) -> str:
         """单向翻页收集（从 ``start_offset`` 向旧）。
 
-        :return: ``"hit"``（撞到 ``stop_ids`` 代表的快照区间）、
-                 ``"exhausted"``（翻到尽头）、``"stopped"``（达到 max_count / since 提前截断）
+        :return: ``_SEGMENT_HIT``（撞到 ``stop_ids`` 代表的快照区间）、
+                 ``_SEGMENT_EXHAUSTED``（翻到尽头）、``_SEGMENT_STOPPED``
+                 （达到 max_count / since 提前截断）
         """
         offset = start_offset
         while True:
@@ -967,7 +515,7 @@ class DynamicService:
             options.page += 1
             page_items = data.get("items") if isinstance(data, dict) else None
             if not isinstance(page_items, list) or not page_items:
-                return "exhausted"
+                return _SEGMENT_EXHAUSTED
             added = 0
             hit = False
             oldest_ts: Optional[int] = None
@@ -1004,16 +552,16 @@ class DynamicService:
                 )
                 options.printed = True
             if hit:
-                return "hit"
+                return _SEGMENT_HIT
             if max_count >= 0 and len(collected) >= max_count:
-                return "stopped"
+                return _SEGMENT_STOPPED
             # 列表时间倒序：本页最旧的非置顶动态已早于 since，说明后续页更旧，可提前停止
             if since_ts is not None and oldest_ts is not None and oldest_ts < since_ts:
-                return "stopped"
+                return _SEGMENT_STOPPED
             next_offset = str(data.get("offset") or "")
             has_more = bool(data.get("has_more", bool(next_offset)))
             if not next_offset or next_offset == offset or not has_more or added == 0:
-                return "exhausted"
+                return _SEGMENT_EXHAUSTED
             offset = next_offset
 
     @staticmethod
@@ -1032,7 +580,7 @@ class DynamicService:
                 merged.append(item)
         return merged
 
-    # ---- 列表快照 ----
+    # ---- 阶段 4 · 列表快照读写 ----
 
     def load_dynamic_list(self, mid: int | str, *, save_dir=None) -> list[dict]:
         """读取已保存的列表快照（``{save_dir}/{mid}/dynamic_list.json``）。
@@ -1044,10 +592,17 @@ class DynamicService:
         return items
 
     def _snapshot_path(self, uid: int, save_dir) -> Path:
+        """列表快照的文件路径：``{save_dir}/{mid}/dynamic_list.json``。"""
         root = Path(save_dir) if save_dir is not None else self.default_dir
         return root / str(uid) / _LIST_SNAPSHOT_NAME
 
     def _load_list_snapshot(self, uid: int, *, save_dir) -> tuple[list, dict]:
+        """读取列表快照。
+
+        输入：UP 的 mid 与保存根目录；输出：``(items, meta)``——
+        items 为原始动态 item 列表，meta 含 ``fetched_at/complete/count``。
+        文件不存在、损坏或格式异常时返回 ``([], {})``（调用方按"无快照"处理）。
+        """
         path = self._snapshot_path(uid, save_dir)
         if not path.is_file():
             return [], {}
@@ -1067,6 +622,12 @@ class DynamicService:
         return [item for item in items if isinstance(item, dict)], meta
 
     def _save_dynamic_list(self, uid: int, items: list, *, save_dir, complete: bool, display: bool):
+        """保存列表快照（原子写入）。
+
+        输入：UP 的 mid、完整/部分 item 列表、``complete``（是否已爬到尽头）。
+        输出：快照路径（写入失败返回 None，仅记 warning 不打断下载）。
+        快照是"连续的一段历史区间"，供下次增量刷新复用（见 list_user_dynamics）。
+        """
         path = self._snapshot_path(uid, save_dir)
         payload = {
             "schema_version": 1,
@@ -1172,6 +733,8 @@ class DynamicService:
             logger.warning("[DynamicService] 当前环境无法交互输入，按放弃处理")
             return False
         return answer in ("y", "yes", "是")
+
+    # ---- 阶段 5 · 批量下载（账号分流/并发）----
 
     def download_user_dynamics(
         self,
@@ -1383,6 +946,8 @@ class DynamicService:
             except Exception:
                 logger.warning("[DynamicService] 关闭批量下载会话失败", exc_info=True)
 
+    # ---- 阶段 6 · 落盘核心（单条与批量共用）----
+
     def _download_resolved(
         self,
         info: DynamicInfo,
@@ -1400,6 +965,18 @@ class DynamicService:
         quiet_media: bool = False,
         target_dir: Optional[Path] = None,
     ) -> DynamicDownloadResult:
+        """单条动态落盘核心（单条下载与批量的公共实现）。
+
+        输入：已解析的 ``DynamicInfo`` + 输出根目录 + 下载选项
+        （force/评论/转发深度；``target_dir`` 为批量并发时的预分配目录，
+        ``quiet_media`` 供批量模式静默媒体进度）。
+        输出：:class:`DynamicDownloadResult`（目录路径、媒体结果、评论存档、
+        转发子结果、失败与警告清单；完成标记存在时 ``cached=True`` 直接返回）。
+
+        流程（顺序固定）：缓存判定 → 媒体（图片/封面/表情/头像/装扮）
+        → 转发递归（写入原作者目录）→ profile 快照 + 评论存档
+        → 渲染并写 md/raw/dynamic.json → 最后写完成标记（有失败则写失败标记）。
+        """
         date_str = self.dynamic_date(info)
         up_dir = Path(root) / str(info.author.mid)
         if target_dir is not None:
@@ -1508,10 +1085,21 @@ class DynamicService:
             _write_text(dynamic_dir / _SUCCESS_MARKER, f"{info.id}\n")
         return result
 
-    # ---- 下载：媒体 ----
+    # ---- 阶段 7 · 媒体任务（编号/缓存/镜像）----
 
     def _download_media(self, info, dynamic_dir, up_dir, *, force, progress, progress_cb, quiet: bool = False):
-        """构建并执行媒体任务；返回 (list[DownloadResult], failures)。"""
+        """构建并执行一条动态的全部媒体任务。
+
+        输入：``DynamicInfo``（已解析的媒体清单）、本条动态目录、UP 目录
+        （``_assets`` 的父目录）与下载选项。
+        输出：``(list[DownloadResult], failures)``——成功的媒体文件结果与
+        失败描述清单（失败不中断其他媒体；每个失败文件会自动重试一次）。
+
+        任务构建规则（媒体编号与缓存策略见 docs/动态下载开发计划 2.6）：
+        - 图片（含 live 视频）与卡片封面：经 AssetIdAllocator 按"日期_当日序号"取号，
+          文件名同时回填到 ``info``（渲染 md/json 用）；
+        - 表情/头像/挂件/装扮：可跨动态复用，经 ``_assets/manifest.json`` 判缓存。
+        """
         date_str = self.dynamic_date(info)
         assets_dir = up_dir / "_assets"
         tasks: list[_MediaTask] = []
@@ -1657,7 +1245,7 @@ class DynamicService:
         failures = [f"{task.label}（{task.url}）：{exc}" for task, exc in failed_pairs]
         return results, failures
 
-    # ---- 下载：目录与辅助 ----
+    # ---- 阶段 8 · 目录与元数据辅助 ----
 
     @staticmethod
     def _download_with_mirrors(url: str, path: Path, *, headers, progress_cb, force: bool) -> int:
@@ -1872,7 +1460,11 @@ def _get_asset_manifest(path: Path) -> _AssetManifest:
         return manifest
 
 
+# ==== 模块级工具（下载层共享的小函数）====
+
+
 def _ext_from_url(url: str, default: str = "jpg") -> str:
+    """从 URL 路径推断扩展名；不在白名单内时用 ``default``（图片兜底 jpg）。"""
     ext = Path(urlparse(url).path).suffix.lower().lstrip(".")
     if ext in {"png", "jpg", "jpeg", "gif", "webp", "bmp", "mp4", "m4s"}:
         return ext
@@ -1888,14 +1480,17 @@ def _relative_path(from_dir: Path, target: Path) -> str:
 
 
 def _now() -> datetime:
+    """当前时间（北京时间，带时区），用于快照/统计时间戳统一口径。"""
     return datetime.now(_BEIJING)
 
 
 def _now_iso() -> str:
+    """当前时间（北京时间）的 ISO 字符串，写入 json 元数据。"""
     return _now().isoformat(timespec="seconds")
 
 
 def _existing_file(path: Path) -> Optional[Path]:
+    """文件存在时返回原路径，否则 None（缓存判定辅助）。"""
     return path if path.is_file() else None
 
 
@@ -1925,4 +1520,5 @@ def _write_text(path: Path, text: str) -> None:
 
 
 def _write_json(path: Path, payload: Any) -> None:
+    """json 落盘（带缩进、UTF-8、末尾换行），原子写入见 :func:`_write_text`。"""
     _write_text(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")

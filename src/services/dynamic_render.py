@@ -4,6 +4,11 @@
 渲染是纯函数（不访问网络/磁盘），便于单测；路径类字段（``file`` 等）
 由下载层回填为"相对动态目录"的 POSIX 路径，渲染时优先使用本地路径、
 未回填时回退到远程 URL。
+
+[工作流位置] 下载流程的最后一步（_download_resolved 写盘前）：
+- ``render_markdown(info, fetched_at)`` → dynamic.md（人读主产物）；
+- ``info_to_dict(info)`` → dynamic.json 的 info 段（下载层再补 download 段）。
+转发引用块中的相对路径由下载层回填 ``forward.archive_dir`` 后呈现。
 """
 
 import posixpath

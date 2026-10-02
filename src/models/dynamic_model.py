@@ -1,7 +1,11 @@
 """动态（opus）相关的数据模型。
 
-解析入口见 `src/services/dynamic.py::DynamicService.parse_item`，
-下载入口见 `DynamicService.download_dynamic`。
+[工作流位置] 贯穿动态采集全流程的稳定数据对象：
+- 解析输出：``src/services/dynamic_parse.py``（DynamicParser）产出 ``DynamicInfo``
+  （正文 blocks、图片/表情、卡片、转发树、评论定位等）；
+- 下载输入/输出：``src/services/dynamic.py``（DynamicService）消费 ``DynamicInfo``，
+  产出 ``DynamicDownloadResult``；
+- 渲染输入：``src/services/dynamic_render.py`` 读取 ``DynamicInfo`` 生成 md/json。
 """
 
 from dataclasses import dataclass, field
