@@ -22,6 +22,7 @@ from src.urls.contract_urls import ContractUrls
 from src.urls.emote_urls import EmoteUrls
 from src.urls.garb_urls import GarbUrls
 from src.urls.dynamic_urls import DynamicUrls
+from src.urls.live_urls import LiveUrls
 
 __all__ = [
     "VideoUrls",
@@ -37,4 +38,5 @@ __all__ = [
     "EmoteUrls",
     "GarbUrls",
     "DynamicUrls",
+    "LiveUrls",
 ]

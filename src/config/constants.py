@@ -11,6 +11,7 @@ API_VC_BASE = "https://api.vc.bilibili.com"
 WEB_BASE = "https://www.bilibili.com"
 SPACE_BASE = "https://space.bilibili.com"
 MESSAGE_BASE = "https://message.bilibili.com"
+LIVE_BASE = "https://api.live.bilibili.com"
 
 
 # ---- 请求头 ----

@@ -22,6 +22,7 @@ from src.models.dynamic_model import (
     DynamicTopic,
 )
 from src.models.fav_model import FavInfo
+from src.models.live_model import DanmakuMessage, LiveSessionResult, RoomInfo
 from src.models.login_model import LoginUser
 from src.models.video_model import (
     VideoAISummary,
@@ -60,6 +61,9 @@ __all__ = [
     "DynamicStats",
     "DynamicTopic",
     "FavInfo",
+    "DanmakuMessage",
+    "LiveSessionResult",
+    "RoomInfo",
     "LoginUser",
     "VideoAISummary",
     "VideoAISummaryOutline",

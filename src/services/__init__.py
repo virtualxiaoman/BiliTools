@@ -14,6 +14,9 @@
 - `garb.py`     GarbService：收藏集 / 装扮素材
 - `dressup.py`  DressupService：装扮页签统一搜索与批量下载
 - `dynamic.py`  DynamicService：动态（opus）解析与下载
+- `live.py`     LiveService：直播间信息 / 最近弹幕 / 实时弹幕监听录制 / 发送弹幕
+- `tts.py`      TtsService：GPT-SoVITS 语音合成客户端（本机 HTTP）
+- `live_speech.py` LiveSpeechService：弹幕 → 过滤 → 队列 → 合成 → 播放
 """
 
 from src.services.archive import ArchiveService
@@ -23,10 +26,13 @@ from src.services.emote import EmoteService
 from src.services.fav import FavService
 from src.services.garb import GarbService
 from src.services.history import HistoryService
+from src.services.live import LiveService
+from src.services.live_speech import LiveSpeechService, SpeechFilter
 from src.services.login import LoginService
 from src.services.message import MessageService
 from src.services.rank import RankService
 from src.services.reply import ReplyService
+from src.services.tts import TtsService
 from src.services.user import ContractService, UserService
 from src.services.video import VideoService
 
@@ -38,6 +44,10 @@ __all__ = [
     "FavService",
     "GarbService",
     "HistoryService",
+    "LiveService",
+    "LiveSpeechService",
+    "SpeechFilter",
+    "TtsService",
     "LoginService",
     "MessageService",
     "RankService",
