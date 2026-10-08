@@ -42,7 +42,7 @@ class DressupPanel(QWidget):
 
         direct_link_row = QHBoxLayout()
         self.direct_link_input = QLineEdit()
-        self.direct_link_input.setPlaceholderText("粘贴收藏集/主题装扮详情链接，可自动解析 ID")
+        self.direct_link_input.setPlaceholderText("粘贴收藏集/主题装扮/表情包详情链接，可自动解析 ID")
         self.direct_link_input.setClearButtonEnabled(True)
         self.btn_parse_direct_link = QPushButton("解析链接")
         direct_link_row.addWidget(self.direct_link_input, 1)
@@ -60,14 +60,18 @@ class DressupPanel(QWidget):
         self.item_id_input = QLineEdit()
         self.item_id_input.setPlaceholderText("主题装扮 item ID")
         self.item_id_input.setValidator(validator)
+        self.package_id_input = QLineEdit()
+        self.package_id_input.setPlaceholderText("表情包 ID")
+        self.package_id_input.setValidator(validator)
         self.btn_import_by_id = QPushButton("按 ID 导入")
         direct_id_row.addWidget(self.act_id_input)
         direct_id_row.addWidget(self.lottery_id_input)
         direct_id_row.addWidget(self.item_id_input)
+        direct_id_row.addWidget(self.package_id_input)
         direct_id_row.addWidget(self.btn_import_by_id)
         lay.addLayout(direct_id_row)
 
-        self.direct_hint = QLabel("支持收藏集 act_id + lottery_id，或主题装扮 item_id")
+        self.direct_hint = QLabel("支持收藏集 act_id + lottery_id、主题装扮 item_id，或表情包 ID")
         self.direct_hint.setStyleSheet("color: #808080;")
         lay.addWidget(self.direct_hint)
 
@@ -113,7 +117,7 @@ class DressupPanel(QWidget):
     def _auto_parse_direct_link(self, value: str) -> None:
         """链接文本完整且可识别时立即填入相应 ID；输入中不输出错误日志。"""
         if not value.strip():
-            self.direct_hint.setText("支持收藏集 act_id + lottery_id，或主题装扮 item_id")
+            self.direct_hint.setText("支持收藏集 act_id + lottery_id、主题装扮 item_id，或表情包 ID")
             return
         try:
             reference = DressupService.parse_direct_url(value)
@@ -137,11 +141,19 @@ class DressupPanel(QWidget):
             self.act_id_input.setText(str(reference["act_id"]))
             self.lottery_id_input.setText(str(reference["lottery_id"]))
             self.item_id_input.clear()
+            self.package_id_input.clear()
             self.direct_hint.setText("已解析收藏集活动 ID 和卡池 ID，可点击“按 ID 导入”")
+        elif reference.get("kind") == "emoji":
+            self.package_id_input.setText(str(reference["package_id"]))
+            self.act_id_input.clear()
+            self.lottery_id_input.clear()
+            self.item_id_input.clear()
+            self.direct_hint.setText("已解析表情包 ID，可点击“按 ID 导入”")
         else:
             self.item_id_input.setText(str(reference["item_id"]))
             self.act_id_input.clear()
             self.lottery_id_input.clear()
+            self.package_id_input.clear()
             self.direct_hint.setText("已解析主题装扮 item ID，可点击“按 ID 导入”")
 
     def import_by_id(self) -> None:
@@ -149,19 +161,25 @@ class DressupPanel(QWidget):
         act_id = self.act_id_input.text().strip() or None
         lottery_id = self.lottery_id_input.text().strip() or None
         item_id = self.item_id_input.text().strip() or None
+        package_id = self.package_id_input.text().strip() or None
+        if (act_id or lottery_id or item_id) and package_id:
+            app_signals.log_message.emit(
+                LogCategory.WARN, "表情包 ID 与收藏集/主题装扮 ID 不能同时填写",
+            )
+            return
         if (act_id or lottery_id) and item_id:
             app_signals.log_message.emit(
                 LogCategory.WARN, "请填写收藏集活动/卡池 ID，或主题装扮 item ID，不能同时填写",
             )
             return
-        if not (act_id or lottery_id or item_id):
+        if not (act_id or lottery_id or item_id or package_id):
             app_signals.log_message.emit(LogCategory.WARN, "请先粘贴链接，或填写需要导入的 ID")
             return
 
         self.btn_import_by_id.setEnabled(False)
         self.direct_hint.setText("正在读取详情…")
         self._direct_worker = import_dressup_by_ids(
-            act_id=act_id, lottery_id=lottery_id, item_id=item_id,
+            act_id=act_id, lottery_id=lottery_id, item_id=item_id, package_id=package_id,
             on_result=self._on_direct_imported, on_error=self._on_direct_import_error,
         )
 
@@ -204,6 +222,8 @@ class DressupPanel(QWidget):
                 ) == (existing_properties.get("dlc_act_id"), existing_properties.get("dlc_lottery_id")):
                     return True
             elif kind == "suit" and payload.get("item_id") == existing_payload.get("item_id"):
+                return True
+            elif kind == "emoji" and payload.get("id") == existing_payload.get("id"):
                 return True
         return False
 

@@ -89,16 +89,21 @@ class DressupService:
             return {"kind": "collection", "act_id": DressupService._direct_positive_id(DressupService._single_query_value(query, "act_id"), "活动 ID"), "lottery_id": DressupService._direct_positive_id(DressupService._single_query_value(query, "lottery_id"), "卡池 ID")}
         if parsed.path == "/x/garb/v2/mall/suit/detail":
             return {"kind": "suit", "item_id": DressupService._direct_positive_id(DressupService._single_query_value(query, "item_id"), "装扮 item ID")}
-        raise ValueError("链接不是受支持的收藏集或主题装扮详情接口")
+        if parsed.path == "/x/emote/package":
+            ids_value = DressupService._single_query_value(query, "ids")
+            first_id = ids_value.split(",")[0].strip()
+            return {"kind": "emoji", "package_id": DressupService._direct_positive_id(first_id, "表情包 ID")}
+        raise ValueError("链接不是受支持的收藏集、主题装扮或表情包详情接口")
 
-    def import_by_ids(self, *, act_id=None, lottery_id=None, item_id=None) -> DressupItem:
-        """按收藏集 ID 或主题装扮 item ID 导入下载项。"""
+    def import_by_ids(self, *, act_id=None, lottery_id=None, item_id=None, package_id=None) -> DressupItem:
+        """按收藏集 ID、主题装扮 item ID 或表情包 ID 导入下载项。"""
         has_collection = act_id is not None or lottery_id is not None
         has_suit = item_id is not None
-        if has_collection and has_suit:
-            raise ValueError("请填写收藏集活动/卡池 ID，或填写主题装扮 item ID，不能同时填写")
-        if not has_collection and not has_suit:
-            raise ValueError("请填写收藏集活动 ID 与卡池 ID，或主题装扮 item ID")
+        has_emoji = package_id is not None
+        if sum(1 for value in (has_collection, has_suit, has_emoji) if value) > 1:
+            raise ValueError("请填写收藏集活动/卡池 ID、主题装扮 item ID 或表情包 ID 中的一项，不能同时填写")
+        if not (has_collection or has_suit or has_emoji):
+            raise ValueError("请填写收藏集活动 ID 与卡池 ID、主题装扮 item ID 或表情包 ID")
         garb_service = GarbService(self.session)
         if has_collection:
             act_id = self._direct_positive_id(act_id, "活动 ID")
@@ -106,10 +111,18 @@ class DressupService:
             detail = garb_service.get_collection_detail(act_id, lottery_id)
             name = self._direct_detail_name(detail, f"收藏集 {act_id}-{lottery_id}")
             return DressupItem("collection", name, {"name": name, "part_id": 0, "properties": {"dlc_act_id": act_id, "dlc_lottery_id": lottery_id}, "direct_import": True})
-        item_id = self._direct_positive_id(item_id, "装扮 item ID")
-        detail = garb_service.get_suit_detail(item_id)
-        name = self._direct_detail_name(detail, f"装扮 {item_id}")
-        return DressupItem("suit", name, {"name": name, "part_id": 1, "item_id": item_id, "direct_import": True})
+        if has_suit:
+            item_id = self._direct_positive_id(item_id, "装扮 item ID")
+            detail = garb_service.get_suit_detail(item_id)
+            name = self._direct_detail_name(detail, f"装扮 {item_id}")
+            return DressupItem("suit", name, {"name": name, "part_id": 1, "item_id": item_id, "direct_import": True})
+        package_id = self._direct_positive_id(package_id, "表情包 ID")
+        packages = EmoteService(self.session).get_packages([package_id])
+        if not packages:
+            raise ValueError(f"未找到表情包 {package_id}，请确认 ID 是否正确")
+        package = packages[0]
+        name = str(package.get("text") or "").strip() or f"表情包 {package_id}"
+        return DressupItem("emoji", name, package)
 
     @staticmethod
     def _single_query_value(query: dict, key: str) -> str:

@@ -47,16 +47,17 @@ def search_dressup(keyword: str, on_results, on_error) -> DressupSearchWorker:
 
 
 class DirectDressupImportWorker(QThread):
-    """后台校验按 ID 导入的收藏集或主题装扮。"""
+    """后台校验按 ID 导入的收藏集、主题装扮或表情包。"""
 
     result = Signal(dict)
     failed = Signal(str)
 
-    def __init__(self, *, act_id=None, lottery_id=None, item_id=None, parent=None):
+    def __init__(self, *, act_id=None, lottery_id=None, item_id=None, package_id=None, parent=None):
         super().__init__(parent)
         self.act_id = act_id
         self.lottery_id = lottery_id
         self.item_id = item_id
+        self.package_id = package_id
         self._stop = False
 
     def stop(self) -> None:
@@ -68,6 +69,7 @@ class DirectDressupImportWorker(QThread):
         try:
             item = DressupService().import_by_ids(
                 act_id=self.act_id, lottery_id=self.lottery_id, item_id=self.item_id,
+                package_id=self.package_id,
             )
             if not self._stop:
                 self.result.emit(item.as_dict())
@@ -76,9 +78,11 @@ class DirectDressupImportWorker(QThread):
                 self.failed.emit(str(exc) or exc.__class__.__name__)
 
 
-def import_dressup_by_ids(*, act_id=None, lottery_id=None, item_id=None, on_result, on_error) -> DirectDressupImportWorker:
+def import_dressup_by_ids(*, act_id=None, lottery_id=None, item_id=None, package_id=None, on_result, on_error) -> DirectDressupImportWorker:
     """启动按 ID 导入的详情校验线程。"""
-    worker = DirectDressupImportWorker(act_id=act_id, lottery_id=lottery_id, item_id=item_id)
+    worker = DirectDressupImportWorker(
+        act_id=act_id, lottery_id=lottery_id, item_id=item_id, package_id=package_id,
+    )
     worker.result.connect(on_result)
     worker.failed.connect(on_error)
     worker.finished.connect(lambda: _drop(worker))

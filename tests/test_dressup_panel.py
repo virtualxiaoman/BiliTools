@@ -58,6 +58,57 @@ def test_dressup_panel_empty_results_are_warned_not_errors():
     assert messages == [(LogCategory.WARN, "未找到相关装扮或表情包")]
 
 
+def test_dressup_panel_import_by_package_id_wires_worker(monkeypatch):
+    import frontend.pyside6.widgets.dressup_panel as dressup_panel_module
+
+    app = QApplication.instance() or QApplication([])
+    panel = DressupPanel()
+    captured = {}
+    monkeypatch.setattr(
+        dressup_panel_module, "import_dressup_by_ids",
+        lambda **kwargs: captured.update(kwargs),
+    )
+    panel.package_id_input.setText("10239")
+
+    panel.import_by_id()
+
+    assert captured.get("package_id") == "10239"
+    assert captured.get("act_id") is None
+    assert captured.get("lottery_id") is None
+    assert captured.get("item_id") is None
+
+
+def test_dressup_panel_import_rejects_emote_with_other_ids():
+    app = QApplication.instance() or QApplication([])
+    panel = DressupPanel()
+    messages = []
+    slot = lambda category, text: messages.append((category, text))
+    app_signals.log_message.connect(slot)
+    try:
+        panel.item_id_input.setText("35789")
+        panel.package_id_input.setText("10239")
+        panel.import_by_id()
+    finally:
+        app_signals.log_message.disconnect(slot)
+
+    assert messages == [(LogCategory.WARN, "表情包 ID 与收藏集/主题装扮 ID 不能同时填写")]
+
+
+def test_dressup_panel_direct_import_dedupes_emoji():
+    app = QApplication.instance() or QApplication([])
+    panel = DressupPanel()
+    panel._on_results(_items())
+    assert panel.result_list.count() == 3
+
+    panel._on_direct_imported({
+        "kind": "emoji", "name": "表情包A", "display_name": "表情包-表情包A",
+        "payload": {"id": 1},
+    })
+
+    assert panel.result_list.count() == 3
+    assert panel.direct_hint.text() == "该项目已在列表中"
+
+
 def test_download_panel_source_inputs_are_fixed_single_line_tabs():
     app = QApplication.instance() or QApplication([])
     panel = DownloadPanel(None, {"save_dir": ""})
