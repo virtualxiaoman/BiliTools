@@ -33,7 +33,7 @@ DEFAULT_TEMPLATE = "{uname}说：{text}"
 class SpeechFilter:
     """播报过滤规则（默认全部关闭 = 不过滤；空文本/纯表情弹幕始终跳过）。
 
-    判断顺序：忽略主播 → 仅舰长/房管 → 长度 → 指令前缀 → 关键词黑名单 → 重复去重 → 同人限频。
+    判断顺序：仅主播自己/忽略主播 → 仅舰长/房管 → 长度 → 指令前缀 → 关键词黑名单 → 重复去重 → 同人限频。
     实例带状态（去重/限频计数），一场直播复用一个实例。
     """
 
@@ -46,7 +46,8 @@ class SpeechFilter:
     per_user_window: float = 60.0
     guard_only: bool = False  # 仅念 舰长/提督/总督 或 房管
     ignore_self: bool = False  # 忽略主播自己发的弹幕
-    anchor_uid: int = 0  # 主播 mid（ignore_self 判断依据）
+    only_self: bool = False  # 仅念主播自己的弹幕（优先于 ignore_self；uid 见 anchor_uid）
+    anchor_uid: int = 0  # 主播 mid（only_self/ignore_self 判断依据；0 时由 run() 自动获取）
 
     def __post_init__(self):
         self._recent_text = {}  # uid -> (text, ts)
@@ -55,7 +56,10 @@ class SpeechFilter:
 
     @classmethod
     def preset_standard(cls, anchor_uid: int = 0) -> "SpeechFilter":
-        """推荐套件（热闹房间用）：2~40 字、跳过指令前缀、同人 1 分钟 3 条、去重、忽略主播自己。"""
+        """推荐套件（热闹房间用）：2~40 字、跳过指令前缀、同人 1 分钟 3 条、去重、忽略主播自己。
+
+        anchor_uid 留 0 时由 LiveSpeechService.run() 自动从房间信息获取。
+        """
         return cls(
             min_chars=2, max_chars=40, skip_prefixes=("点歌", "!", "！", "#", "。"),
             dedupe_window=30.0, per_user_limit=3, per_user_window=60.0,
@@ -71,7 +75,10 @@ class SpeechFilter:
         uid = int(record.get("uid") or 0)
 
         with self._lock:
-            if self.ignore_self and self.anchor_uid and uid == self.anchor_uid:
+            if self.only_self:
+                if not self.anchor_uid or uid != self.anchor_uid:
+                    return False
+            elif self.ignore_self and self.anchor_uid and uid == self.anchor_uid:
                 return False
             if self.guard_only and not (int(record.get("guard_level") or 0) > 0
                                         or bool(record.get("is_admin"))):
@@ -155,7 +162,8 @@ class LiveSpeechService:
 
         :param role: GPT-SoVITS 角色名（一场直播请固定一个角色，换角色会重载权重）
         :param template: 播报文本模板，可用 {uname} 与 {text}（默认「昵称说：内容」）
-        :param speech_filter: 过滤规则；None=不过滤（空文本/纯表情仍跳过）
+        :param speech_filter: 过滤规则；None=不过滤（空文本/纯表情仍跳过）。
+            only_self/ignore_self 需要主播 uid，anchor_uid=0 时自动从房间信息获取
         :param queue_size: 播报队列上限（默认 3）
         :param save: 是否同时把弹幕落盘（复用 LiveService 的场次目录）
         """
@@ -170,6 +178,8 @@ class LiveSpeechService:
 
         player = self._player if self._player is not None else WinsoundPlayer()
         rules = speech_filter if speech_filter is not None else SpeechFilter()
+        if (rules.only_self or rules.ignore_self) and not rules.anchor_uid:
+            rules.anchor_uid = self.live.get_room_info(room_id).uid  # 显式传入优先
         pending: "queue.Queue" = queue.Queue(maxsize=max(1, int(queue_size)))
         stop_event = threading.Event()
         lock = threading.Lock()

@@ -6,6 +6,7 @@
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -61,11 +62,17 @@ class FakePlayer:
 class FakeLive:
     """假弹幕服务：喂完预置弹幕后等待 done 条件（保证 worker 已处理），再返回监听结果。"""
 
-    def __init__(self, records, done=None):
+    def __init__(self, records, done=None, room_uid=506925078):
         self.records = records
         self.done = done
         self.kwargs = None
         self.called = False
+        self.room_uid = room_uid
+        self.room_info_calls = 0
+
+    def get_room_info(self, room_id):
+        self.room_info_calls += 1
+        return SimpleNamespace(uid=self.room_uid)
 
     def _wait_done(self):
         if self.done is None:
@@ -177,6 +184,33 @@ def test_queue_overflow_drops_oldest():
     assert tts.calls == ["丰辰说：记录1", "丰辰说：记录5", "丰辰说：记录6", "丰辰说：记录7"]
 
 
+def test_run_only_self_autofills_anchor_uid():
+    tts = FakeTts()
+    rules = SpeechFilter(only_self=True)
+    records = [_danmaku("观众弹幕", uid=7), _danmaku("自己发的话", uid=506925078)]
+    service, fake_live = _service(records, tts=tts, done=lambda: len(tts.calls) == 1)
+
+    result = service.run(350353, "r", template="{text}", speech_filter=rules)
+
+    assert rules.anchor_uid == 506925078  # 自动从房间信息填充
+    assert fake_live.room_info_calls == 1
+    assert tts.calls == ["自己发的话"]
+    assert (result.spoken, result.skipped) == (1, 1)
+
+
+def test_run_keeps_explicit_anchor_uid():
+    tts = FakeTts()
+    rules = SpeechFilter(only_self=True, anchor_uid=7)
+    records = [_danmaku("观众七", uid=7), _danmaku("房间主播", uid=506925078)]
+    service, fake_live = _service(records, tts=tts, done=lambda: len(tts.calls) == 1)
+
+    result = service.run(350353, "r", template="{text}", speech_filter=rules)
+
+    assert rules.anchor_uid == 7 and fake_live.room_info_calls == 0  # 显式传入优先，不再请求
+    assert tts.calls == ["观众七"]
+    assert (result.spoken, result.skipped) == (1, 1)
+
+
 # ---- 过滤规则 ----
 
 def test_filter_empty_text_and_defaults_pass_everything():
@@ -203,6 +237,23 @@ def test_filter_guard_only_and_ignore_self():
     assert rules.should_speak(_danmaku("房管的话", is_admin=1)) is True
     assert rules.should_speak(_danmaku("普通观众")) is False
     assert rules.should_speak(_danmaku("主播自己", uid=506925078, guard_level=3)) is False
+
+
+def test_filter_only_self():
+    rules = SpeechFilter(only_self=True, anchor_uid=506925078)
+    assert rules.should_speak(_danmaku("主播自己", uid=506925078)) is True
+    assert rules.should_speak(_danmaku("普通观众", uid=7)) is False
+
+
+def test_filter_only_self_without_anchor_uid_speaks_nothing():
+    rules = SpeechFilter(only_self=True)  # 未提供 uid → 不播报任何人（run() 会先自动填充）
+    assert rules.should_speak(_danmaku("任何人", uid=506925078)) is False
+
+
+def test_filter_only_self_wins_over_ignore_self():
+    rules = SpeechFilter(only_self=True, ignore_self=True, anchor_uid=506925078)
+    assert rules.should_speak(_danmaku("主播自己", uid=506925078)) is True
+    assert rules.should_speak(_danmaku("观众", uid=7)) is False
 
 
 def test_filter_dedupe_window():

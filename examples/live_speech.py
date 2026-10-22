@@ -17,7 +17,7 @@ from src.services.live_speech import SpeechFilter
 from src.services.tts import TtsService
 
 ROOM = 25774901  # 你的直播间（开播后开这个脚本才有弹幕）
-ROLE = "阿罗娜（中配）"  # GPT-SoVITS 角色名（一场直播固定一个，换角色会重载权重数秒）
+ROLE = "洛天依"  # GPT-SoVITS 角色名（一场直播固定一个，换角色会重载权重数秒）
 
 
 def show_tts() -> None:
@@ -31,18 +31,20 @@ def show_tts() -> None:
             print(f"  - {role['name']}{note}")
 
 
-def speak(duration: float = 300) -> None:
+def speak(duration: float = 300, **kwargs) -> None:
     """监听直播弹幕并逐条播报（Ctrl+C 停止；duration 秒到点自动停）。
 
-    常用参数（详见 LiveSpeechService.run 的 docstring）：
+    其余参数经 **kwargs 原样透传给 LiveSpeechService.run（常用参数详见其 docstring）：
     - template: 播报模板，默认 "{uname}说：{text}"（带昵称）；只念内容可传 "{text}"
-    - speech_filter: 过滤规则；默认不过滤。SpeechFilter.preset_standard(anchor_uid) 为推荐套件
-      （长度 2~40、跳过指令前缀、同人 1 分钟 3 条、去重、忽略主播自己）
+    - speech_filter: 过滤规则；默认不过滤。SpeechFilter(only_self=True) 只播报主播
+      （你）自己的弹幕，配合 template="{text}" 即「自己发什么读什么」（测试 TTS 很方便）；
+      SpeechFilter.preset_standard() 为推荐套件（长度 2~40、跳过指令前缀、同人 1 分钟
+      3 条、去重、忽略主播自己）——需要主播 uid 的规则会自动从房间信息获取
     - queue_size: 积压上限（默认 3，满则丢最旧保最新）
     - stop_on_room_end=True 下播自动停；save=False 不落盘弹幕存档
     """
     service = LiveSpeechService()
-    result = service.run(ROOM, ROLE, duration=duration)
+    result = service.run(ROOM, ROLE, duration=duration, **kwargs)
     print(f"\n结束（{result.stop_reason}）：播报 {result.spoken} 条 / 跳过 {result.skipped} / "
           f"丢弃 {result.dropped} / 失败 {result.failures}")
     if result.listen.session_dir is not None:
@@ -53,4 +55,6 @@ if __name__ == "__main__":
     # 默认只查看 TTS 状态与角色，避免直接开声。
     # show_tts()
     # print("\n如需播报，调用 speak(duration=300)（会真实播放声音）。")
-    speak(duration=36000)
+    # 播报自己发的弹幕：only_self 只挑谁的弹幕，template 决定念什么——去掉昵称前缀需传 "{text}"
+    sf = SpeechFilter(only_self=True)
+    speak(duration=36000, template="{text}", speech_filter=sf)
