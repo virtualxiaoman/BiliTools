@@ -29,6 +29,7 @@ python -m examples.quick_start
 | `dynamic.py` | 动态（opus）解析与下载 | 只解析，不下载 |
 | `live.py` | 直播弹幕（房间信息/快照/监听录制/发送） | 只查房间信息，不发送 |
 | `live_speech.py` | 直播弹幕语音播报（GPT-SoVITS） | 只查 TTS 状态，不开声 |
+| `message.py` | 私信导出（JSON + Markdown，支持增量/force） | 不自动导出，只打印用法 |
 | `interactions.py` | 评论、私信、老粉签约 | 不自动执行写操作 |
 
 批量下载、评论、私信和签约等行为请先检查示例中的参数，再手动调用对应函数。

@@ -6,7 +6,7 @@
 - `history.py`  HistoryService：历史记录
 - `user.py`     UserService / ContractService
 - `reply.py`    ReplyService：评论
-- `message.py`  MessageService：私信
+- `message.py`  MessageService：私信发送 / 历史私信读取与导出
 - `rank.py`     RankService：排行榜
 - `fav.py`      FavService：收藏夹
 - `archive.py`  ArchiveService：合集

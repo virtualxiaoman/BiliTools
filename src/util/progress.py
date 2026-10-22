@@ -274,7 +274,6 @@ class ParallelBatchProgress:
 
 class _ThreadFile:
     """单个线程的「当前文件」进度状态（ParallelBatchProgress 内部使用）。"""
-
     __slots__ = ("name", "seq", "done", "totals", "quality")
 
     def __init__(self, name: str, seq: int):
@@ -287,3 +286,49 @@ class _ThreadFile:
     def grand_total(self) -> int:
         totals = [t for t in self.totals if t]
         return sum(totals) if totals else 0
+
+
+class MessageExportProgress:
+    """私信导出进度：每处理一个会话刷新一行。
+
+    行格式：``已导出 20 个会话 / 共 100 个会话 / 3200 条消息``；
+    有失败会话时追加 ``（失败 n）``。``display=False`` 时不输出，
+    便于 GUI 通过鸭子类型的 update/finish 转发到自己的进度组件。
+    """
+
+    def __init__(self, total: int = 0, display: bool = True):
+        self.total = max(int(total), 0)
+        self.display = display
+        self.exported = 0
+        self.message_count = 0
+        self.failed = 0
+        self._last_len = 0
+
+    def update(self, exported: int, message_count: int, failed: int = 0) -> None:
+        self.exported = max(0, int(exported))
+        self.message_count = max(0, int(message_count))
+        self.failed = max(0, int(failed))
+        self._render()
+
+    def finish(self) -> None:
+        self._render(final=True)
+
+    def _line(self) -> str:
+        line = (
+            f"已导出 {self.exported} 个会话 / 共 {self.total} 个会话 / "
+            f"{self.message_count} 条消息"
+        )
+        if self.failed:
+            line += f"（失败 {self.failed}）"
+        return line
+
+    def _render(self, final: bool = False) -> None:
+        if not self.display:
+            return
+        line = self._line()
+        padding = " " * max(0, self._last_len - len(line))
+        self._last_len = len(line)
+        if final:
+            print(f"\r{line}{padding}", flush=True)
+        else:
+            print(f"\r{line}{padding}", end="", flush=True)
