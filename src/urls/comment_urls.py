@@ -11,4 +11,5 @@ class CommentUrls:
 
     ADD = f"{API_BASE}/x/v2/reply/add"  # 发表评论
     LIST = f"{API_BASE}/x/v2/reply"  # 评论列表（视频 type=1，动态 type=11/17）
+    SUB_REPLY = f"{API_BASE}/x/v2/reply/reply"  # 根评论下的楼中楼回复
     DYNAMIC_DETAIL = f"{API_BASE}/x/polymer/web-dynamic/v1/detail"  # opus 动态详情

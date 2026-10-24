@@ -7,6 +7,7 @@
 - `download_model.py` VideoQuality / DownloadResult / DASH 流数据
 """
 
+from src.models.comment_model import CommentExportResult
 from src.models.download_model import AudioStream, DashStreams, DownloadResult, VideoQuality, VideoStream
 from src.models.download_request import DownloadRequest, DownloadSource, MediaType
 from src.models.dynamic_model import (
@@ -43,6 +44,7 @@ from src.models.video_model import (
 from src.models.user_model import UserInfo
 
 __all__ = [
+    "CommentExportResult",
     "AudioStream",
     "DashStreams",
     "DownloadResult",

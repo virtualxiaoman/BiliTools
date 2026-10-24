@@ -37,6 +37,7 @@ VIDEO_OUTPUT_DIR = OUTPUT_DIR / "video"  # 视频/音频下载
 HISTORY_OUTPUT_DIR = OUTPUT_DIR / "history"  # 历史记录等表格/数据文件
 COLLECTION_OUTPUT_DIR = OUTPUT_DIR / "收藏集"  # 收藏表情包、收藏集与装扮素材下载
 DYNAMIC_OUTPUT_DIR = OUTPUT_DIR / "dynamic"  # 动态（opus）下载
+COMMENT_OUTPUT_DIR = OUTPUT_DIR / "comments"  # 视频评论导出
 LIVE_OUTPUT_DIR = OUTPUT_DIR / "live"  # 直播弹幕录制
 MESSAGE_OUTPUT_DIR = OUTPUT_DIR / "message"  # 私信导出
 
@@ -106,7 +107,7 @@ def ensure_dirs() -> None:
     """创建所有需要存在的目录（幂等）。"""
     for directory in (
             ASSETS_DIR, COOKIE_DIR, OUTPUT_DIR, VIDEO_OUTPUT_DIR, HISTORY_OUTPUT_DIR,
-            COLLECTION_OUTPUT_DIR, DYNAMIC_OUTPUT_DIR, LIVE_OUTPUT_DIR, MESSAGE_OUTPUT_DIR,
-            COOKIE_ROOT,
+            COLLECTION_OUTPUT_DIR, DYNAMIC_OUTPUT_DIR, COMMENT_OUTPUT_DIR, LIVE_OUTPUT_DIR,
+            MESSAGE_OUTPUT_DIR, COOKIE_ROOT,
     ):
         directory.mkdir(parents=True, exist_ok=True)
