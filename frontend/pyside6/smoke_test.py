@@ -110,7 +110,7 @@ try:
 
     # ---- ProgressAdapter（不联网） ----
     class FakeWorker(QObject):
-        progress = Signal(int, int)
+        progress = Signal("qint64", "qint64")
         def __init__(self):
             super().__init__()
             self.milestones = []

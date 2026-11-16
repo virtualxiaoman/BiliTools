@@ -108,8 +108,8 @@ class BatchProgress:
             return
         print(f"\r{self._header()}: {message}", flush=True)
 
-    def finish(self) -> None:
-        """当前视频完成，输出完成行。"""
+    def finish(self, success: bool = True) -> None:
+        """当前视频完成，输出完成行。``success`` 仅用于调用方统一接口。"""
         self._render(final=True)
 
     # ---- 渲染 ----
@@ -218,7 +218,7 @@ class ParallelBatchProgress:
         if self.display:
             print(f"\r{self._header()}: {message}", flush=True)
 
-    def finish(self) -> None:
+    def finish(self, success: bool = True) -> None:
         with self._lock:
             st = self._states.pop(threading.get_ident(), None)
             if st is None:

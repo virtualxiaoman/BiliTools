@@ -233,6 +233,68 @@ def download_stream(
 
 
 
+def _run_ffmpeg(ffmpeg: str, args: list[str], save_path: Path, *,
+                progress_cb: Optional[ProgressCallback] = None,
+                cancel_event: Optional[threading.Event] = None,
+                action: str = "音视频合成") -> None:
+    """执行 ffmpeg 命令，输出先写临时文件，成功后原子替换目标文件。"""
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    # ffmpeg 依据输出文件扩展名选择封装格式。不能使用 ``video.mp4.part``：
+    # 它会把 ``.part`` 当作未知格式并以 EINVAL（Windows 上显示为 4294967274）失败。
+    # 将临时标记置于扩展名前，既保留原子替换语义，又让 ffmpeg 正确识别 mp4。
+    temp_output = save_path.with_name(f"{save_path.stem}.part{save_path.suffix}")
+    temp_output.unlink(missing_ok=True)
+    cmd = [ffmpeg, *args, str(temp_output)]
+    logger.debug("[%s] 合成命令：%s", action, " ".join(cmd))
+    if progress_cb:
+        progress_cb(0, None)
+
+    process = None
+    try:
+        # stdout/stderr 重定向到 DEVNULL，避免 ffmpeg 大量日志填满 PIPE 导致死锁。
+        popen_kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        if os.name == "nt":
+            # 打包版没有控制台；不隐藏的话 Windows 会为 ffmpeg 闪出一个黑窗口。
+            popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        process = subprocess.Popen(cmd, **popen_kwargs)
+        deadline = time.monotonic() + 600
+        while True:
+            returncode = process.poll()
+            if returncode is not None:
+                break
+            if cancel_event is not None and cancel_event.is_set():
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise DownloadError(f"{action}已取消")
+            if time.monotonic() >= deadline:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise DownloadError(f"{action}超时（>600s）")
+            time.sleep(0.1)
+
+        if returncode != 0:
+            raise DownloadError(f"{action}失败，返回码 {returncode}")
+        if not temp_output.is_file() or temp_output.stat().st_size <= 0:
+            raise DownloadError(f"ffmpeg 未生成有效输出文件（{action}）")
+        os.replace(temp_output, save_path)
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait()
+        temp_output.unlink(missing_ok=True)
+    if progress_cb:
+        progress_cb(1, 1)
+
+
 def merge_video_audio(
     video_path: Path,
     audio_path: Path,
@@ -251,58 +313,36 @@ def merge_video_audio(
 
     video_path = Path(video_path)
     audio_path = Path(audio_path)
-    save_path = Path(save_path)
     if not video_path.is_file():
         raise DownloadError(f"视频流文件不存在：{video_path}")
     if not audio_path.is_file():
         raise DownloadError(f"音频流文件不存在：{audio_path}")
-    save_path.parent.mkdir(parents=True, exist_ok=True)
-    # ffmpeg 依据输出文件扩展名选择封装格式。不能使用 ``video.mp4.part``：
-    # 它会把 ``.part`` 当作未知格式并以 EINVAL（Windows 上显示为 4294967274）失败。
-    # 将临时标记置于扩展名前，既保留原子替换语义，又让 ffmpeg 正确识别 mp4。
-    temp_output = save_path.with_name(f"{save_path.stem}.part{save_path.suffix}")
-    temp_output.unlink(missing_ok=True)
-    cmd = [ffmpeg, "-y", "-i", str(video_path), "-i", str(audio_path), "-c", "copy", str(temp_output)]
-    logger.debug("[merge_video_audio] 合成命令：%s", " ".join(cmd))
-    if progress_cb:
-        progress_cb(0, None)
+    _run_ffmpeg(
+        ffmpeg,
+        ["-y", "-i", str(video_path), "-i", str(audio_path), "-c", "copy"],
+        save_path, progress_cb=progress_cb, cancel_event=cancel_event,
+    )
 
-    process = None
-    try:
-        # stdout/stderr 重定向到 DEVNULL，避免 ffmpeg 大量日志填满 PIPE 导致死锁。
-        process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        deadline = time.monotonic() + 600
-        while True:
-            returncode = process.poll()
-            if returncode is not None:
-                break
-            if cancel_event is not None and cancel_event.is_set():
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-                raise DownloadError("音视频合成已取消")
-            if time.monotonic() >= deadline:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-                raise DownloadError("音视频合成超时（>600s）")
-            time.sleep(0.1)
 
-        if returncode != 0:
-            raise DownloadError(f"音视频合成失败，返回码 {returncode}")
-        if not temp_output.is_file() or temp_output.stat().st_size <= 0:
-            raise DownloadError("ffmpeg 未生成有效输出文件")
-        os.replace(temp_output, save_path)
-    finally:
-        if process is not None and process.poll() is None:
-            process.kill()
-            process.wait()
-        temp_output.unlink(missing_ok=True)
-    if progress_cb:
-        progress_cb(1, 1)
+def extract_audio(
+    source_path: Path,
+    save_path: Path,
+    *,
+    progress_cb: Optional[ProgressCallback] = None,
+    cancel_event: Optional[threading.Event] = None,
+) -> None:
+    """从音视频合一的直出流中提取音轨（AAC 直接复制，不二次转码）。"""
+    ffmpeg = _resolve_ffmpeg()
+    if ffmpeg is None:
+        raise FFmpegNotFoundError(
+            "未检测到 ffmpeg，且未安装 imageio-ffmpeg 库，无法从直出流中提取音频。"
+            "请安装 ffmpeg 并加入系统 PATH，或执行 `pip install imageio-ffmpeg` 使用内置 ffmpeg。"
+        )
+    source_path = Path(source_path)
+    if not source_path.is_file():
+        raise DownloadError(f"直出流文件不存在：{source_path}")
+    _run_ffmpeg(
+        ffmpeg,
+        ["-y", "-i", str(source_path), "-vn", "-c:a", "copy"],
+        save_path, progress_cb=progress_cb, cancel_event=cancel_event, action="音频提取",
+    )

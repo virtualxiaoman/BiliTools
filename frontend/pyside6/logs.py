@@ -121,13 +121,15 @@ def install_exception_hooks(signals: AppSignals) -> None:
     def excepthook(exc_type, exc, tb):
         text = "".join(traceback.format_exception(exc_type, exc, tb))
         logging.getLogger("frontend").error("未捕获异常:\n%s", text)
-        signals.log_message.emit(LogCategory.ERROR, f"[未捕获异常] {exc}")
+        signals.log_message.emit(LogCategory.ERROR, f"[未捕获异常] {exc or type(exc).__name__}")
 
     def unraisable(unraisable_args):
         try:
             err = unraisable_args.exc_value
             logging.getLogger("frontend").error("Unraisable 异常: %r", err)
-            signals.log_message.emit(LogCategory.ERROR, f"[未处理异常] {err}")
+            signals.log_message.emit(
+                LogCategory.ERROR, f"[未处理异常] {err or type(err).__name__}"
+            )
         except Exception:
             pass
 

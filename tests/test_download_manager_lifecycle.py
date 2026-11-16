@@ -11,7 +11,7 @@ import frontend.pyside6.workers.download_manager as manager_module
 
 
 class _FakeWorker(QThread):
-    progress = Signal(int, int)
+    progress = Signal("qint64", "qint64")
     phase = Signal(str)
     done = Signal(bool, str, int)
 
@@ -56,3 +56,30 @@ def test_worker_is_retained_until_qthread_finished(monkeypatch):
 
     assert observed_task_counts == [1]
     assert not manager.has_running()
+
+
+def test_progress_signals_accept_over_2gb_bytes():
+    """并发下载总字节数会超过 2GB，进度信号必须按 64 位传递。"""
+    from frontend.pyside6.workers.download_worker import DownloadWorker
+
+    app = QApplication.instance() or QApplication([])
+    big = 2**31 + 12345
+
+    worker = DownloadWorker({
+        "source": "bv", "input": "BV1ov42117yC", "scope": "all", "page": 1,
+        "save_dir": ".", "desc": "溢出测试",
+    })
+    worker_progress = []
+    worker.progress.connect(lambda done, total: worker_progress.append((done, total)))
+    worker.progress.emit(big, big + 100)
+
+    manager = manager_module.DownloadManager()
+    manager_progress = []
+    manager.task_progress.connect(
+        lambda tid, done, total: manager_progress.append((tid, done, total))
+    )
+    manager.task_progress.emit(1, big, big + 100)
+    app.processEvents()
+
+    assert worker_progress == [(big, big + 100)]
+    assert manager_progress == [(1, big, big + 100)]

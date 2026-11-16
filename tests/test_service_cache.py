@@ -79,7 +79,7 @@ def test_force_download_overwrites_exact_target_but_keeps_different_name(tmp_pat
     svc.session = SimpleNamespace(session=SimpleNamespace(headers={}))
     info = VideoInfo(bvid="BVforce123", title="新标题", cid=1, pages=[])
     stream = VideoStream(url="http://stream", codecs="avc1", quality=80)
-    svc._fetch_streams = lambda bvid, page: (info, DashStreams(video=[stream], audio=[]))
+    svc._fetch_streams = lambda bvid, page, **kwargs: (info, DashStreams(video=[stream], audio=[]), svc)
 
     old = tmp_path / "archive" / "旧标题(BVforce123).mp4"
     old.parent.mkdir()

@@ -81,9 +81,14 @@ def log_font() -> QFont:
     """下载日志内容字体：系统字体，基准 9pt（随全局缩放）。
 
     日志内容必须用代码 setFont 设置（QSS 字体不会进入 QPlainTextEdit 的文档默认字体）。
+
+    禁用字体合并：日志会原样显示任意视频标题，Qt 6.11 在 Windows 上会为生僻字符
+    回退到 Fixedsys 位图字体，而 DirectWrite 加载该字体失败后会在 HarfBuzz 整形时
+    空指针崩溃（0xc0000005 in Qt6Gui）。关闭合并后缺字显示为方框，但不会闪退。
     """
     f = QFont(_SYSTEM_FAMILY)
     f.setPointSizeF(9 * _zoom)
+    f.setStyleStrategy(QFont.StyleStrategy.NoFontMerging)
     return f
 
 

@@ -132,15 +132,47 @@ class AudioStream:
 
 
 @dataclass
-class DashStreams:
-    """一次 playurl 请求返回的完整 DASH 流信息。
+class ProgressiveStream:
+    """旧式直出流（durl）：音视频封装在同一个文件里，没有 DASH 拆分。
 
+    部分老视频没有 DASH 转码，playurl 只返回 durl；`urls` 多于一项时表示
+    服务端把视频切成了多段，按顺序拼接即为完整视频。
+    """
+
+    urls: list = field(default_factory=list)  # 直链列表（按顺序拼接）
+    quality: int = 0  # qn 值
+    format: str = ""  # 接口返回的 format（mp4 / flv720 等）
+    size: int = 0  # 总字节数
+    duration_ms: int = 0  # 总时长（毫秒）
+
+    @property
+    def url(self) -> str:
+        return self.urls[0] if self.urls else ""
+
+    @property
+    def ext(self) -> str:
+        """直出流的文件扩展名（由接口 format 或 URL 后缀推断）。"""
+        fmt = (self.format or "").lower()
+        if fmt.startswith("flv"):
+            return "flv"
+        if fmt.startswith("mp4"):
+            return "mp4"
+        path_suffix = Path(urlparse(self.url).path).suffix.lower().lstrip(".")
+        return path_suffix if path_suffix in ("mp4", "flv") else "mp4"
+
+
+@dataclass
+class DashStreams:
+    """一次 playurl 请求返回的完整流信息。
+
+    DASH 可用时填充 video/audio；老视频只有直出流时填充 progressive。
     构造后自动排序：video 按 quality 降序，audio 按 bandwidth 降序，
     因此 `best_video()` / `best_audio()` 始终返回最高可用流。
     """
 
     video: list = field(default_factory=list)  # VideoStream 列表
     audio: list = field(default_factory=list)  # AudioStream 列表
+    progressive: Optional["ProgressiveStream"] = None  # 直出流（无 DASH 时）
 
     def __post_init__(self) -> None:
         self.video.sort(key=lambda s: s.quality, reverse=True)

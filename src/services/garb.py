@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 import re
+import threading
 from typing import Iterable, Optional
 from urllib.parse import urlparse
 
@@ -16,7 +17,8 @@ from src.services.emote import EmoteService
 from src.urls.garb_urls import GarbUrls
 from src.util.downloader import ProgressCallback, download_stream
 from src.util.filename import sanitize_filename
-from src.util.progress import BatchProgress
+from src.util.parallel import parallel_run
+from src.util.progress import BatchProgress, ParallelBatchProgress
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +47,8 @@ class _OffsetProgress:
     def start(self, index: int, name: str) -> None:
         self._progress.start(self._offset + index, name)
 
-    def finish(self) -> None:
-        self._progress.finish()
+    def finish(self, success: bool = True) -> None:
+        self._progress.finish(success=success)
 
     def make_stream_callback(self):
         return self._progress.make_stream_callback()
@@ -177,20 +179,27 @@ class GarbService:
     def download_by_keyword(
             self, keyword: str, directory=None, *, resource_types: Optional[Iterable[str]] = None,
             progress=None, progress_cb: Optional[ProgressCallback] = None,
+            threads: int = 1, account_sessions: Optional[list] = None,
     ) -> list[DownloadResult]:
         """按关键词下载商城排序第一项（若同名则优先同名项）的全部素材。"""
         item, detail, _ = self.prepare_download(keyword, resource_types=resource_types)
         return self.download_item(
             item, directory, resource_types=resource_types, detail=detail,
             progress=progress, progress_cb=progress_cb,
+            threads=threads, account_sessions=account_sessions,
         )
 
     def download_item(
             self, item: dict, directory=None, *, resource_types: Optional[Iterable[str]] = None,
             detail: Optional[dict] = None, progress=None,
             progress_cb: Optional[ProgressCallback] = None,
+            threads: int = 1, account_sessions: Optional[list] = None,
     ) -> list[DownloadResult]:
-        """下载已选择搜索项的素材；可传 ``detail`` 复用先前请求的详情。"""
+        """下载已选择搜索项的素材；可传 ``detail`` 复用先前请求的详情。
+
+        ``threads > 1`` 时按素材文件并发，``account_sessions`` 非空时把并发文件
+        轮询分摊到各账号的请求头上。
+        """
         if not isinstance(item, dict):
             raise ValueError("搜索项必须是字典")
         detail = self.get_detail(item) if detail is None else detail
@@ -203,33 +212,58 @@ class GarbService:
         if not resources and not emote_count:
             raise ValueError("该收藏集或装扮没有可下载的素材")
 
+        threads = max(1, int(threads))
         root = Path(directory) if directory is not None else self.default_dir
         title = sanitize_filename(str(item.get("name") or self._detail_title(detail) or "未命名收藏集"))
         item_root = root / title
         total_count = len(resources) + emote_count
         if progress is None:
-            progress = BatchProgress(n=total_count, label=title, display=True)
-        headers = dict(self.session.session.headers)
-        allocated: set[Path] = set()
-        results: list[DownloadResult] = []
+            progress_cls = ParallelBatchProgress if threads > 1 and total_count > 1 else BatchProgress
+            progress = progress_cls(n=total_count, label=title, display=threads <= 1)
 
+        # 文件名去重必须在串行阶段完成，避免多线程同时分配同一路径
+        allocated: set[Path] = set()
+        jobs = []
         for index, resource in enumerate(resources, 1):
-            folder = item_root / resource.category if self._is_collection(item) and resource.category else (
-                item_root / resource.category
-            )
+            folder = item_root / resource.category
             path = self._make_unique_path(folder, resource.filename_stem, resource.url, allocated)
+            jobs.append((index, resource, path))
+
+        services = (
+            [GarbService(session=session, default_dir=self.default_dir) for session in account_sessions]
+            if account_sessions else [self]
+        )
+        headers = [dict(service.session.session.headers) for service in services]
+        callback_lock = threading.Lock()
+
+        def run(job, worker_index):
+            index, resource, path = job
             progress.start(index, path.name)
-            if path.exists() and path.stat().st_size > 0:
-                result = DownloadResult(path, media_type=resource.media_type, size=path.stat().st_size, cached=True)
-            else:
-                size = download_stream(
-                    resource.url, path, headers=headers, progress_cb=progress.make_stream_callback(),
-                )
-                result = DownloadResult(path, media_type=resource.media_type, size=size)
+            try:
+                if path.exists() and path.stat().st_size > 0:
+                    result = DownloadResult(
+                        path, media_type=resource.media_type, size=path.stat().st_size, cached=True,
+                    )
+                else:
+                    size = download_stream(
+                        resource.url, path,
+                        headers=headers[worker_index % len(headers)],
+                        progress_cb=progress.make_stream_callback(),
+                    )
+                    result = DownloadResult(path, media_type=resource.media_type, size=size)
+                if progress_cb is not None:
+                    with callback_lock:
+                        progress_cb(index, total_count)
+            except Exception:
+                progress.finish(success=False)
+                raise
             progress.finish()
-            if progress_cb is not None:
-                progress_cb(index, total_count)
-            results.append(result)
+            return result
+
+        if threads > 1 and len(jobs) > 1:
+            results = parallel_run(jobs, run, threads)
+        else:
+            results = [run(job, i) for i, job in enumerate(jobs)]
 
         if emote_count:
             package_ids = self._collection_emote_package_ids(detail)
@@ -244,6 +278,8 @@ class GarbService:
                     progress=emote_progress,
                     progress_cb=emote_progress_cb,
                     packages=emote_packages,
+                    threads=threads,
+                    account_sessions=account_sessions,
                 )
             )
         return results

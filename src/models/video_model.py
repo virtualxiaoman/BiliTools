@@ -174,6 +174,10 @@ class VideoInfo:
     pages: list = field(default_factory=list)  # 全部分P（VideoPage 列表，多P视频有多个）
     season: Optional[VideoSeason] = None  # 所属合集（ugc_season），不属于合集时为 None
 
+    is_upower_exclusive: bool = False  # 充电专属
+    is_upower_play: bool = False  # 当前账号是否已获得充电播放权限
+    is_upower_preview: bool = False  # 是否仅提供试看/预览
+
     dash: Optional[DashStreams] = None  # DASH 下载流信息（请求 playurl 后填充）
 
     @property
@@ -206,6 +210,9 @@ class VideoInfo:
             owner=VideoOwner.from_view_dict(owner_data),
             pages=[VideoPage.from_dict(p) for p in pages],
             season=VideoSeason.from_dict(season_data) if season_data else None,
+            is_upower_exclusive=bool(data.get("is_upower_exclusive")),
+            is_upower_play=bool(data.get("is_upower_play")),
+            is_upower_preview=bool(data.get("is_upower_preview")),
         )
 
 

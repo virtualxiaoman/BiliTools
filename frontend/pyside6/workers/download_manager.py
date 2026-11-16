@@ -32,7 +32,7 @@ class TaskRecord:
 
 class DownloadManager(QObject):
     task_started = Signal(int, str)         # id, desc
-    task_progress = Signal(int, int, int)   # id, done, total（字节）
+    task_progress = Signal(int, "qint64", "qint64")  # id, done, total（字节；64 位避免超过 2GB 溢出）
     task_phase = Signal(int, str)           # id, phase
     task_finished = Signal(int, bool, str)  # id, success, summary
     count_changed = Signal(int)             # 运行中任务数
@@ -121,7 +121,7 @@ class DownloadManager(QObject):
     def _sender_task_id(sender) -> Optional[int]:
         return getattr(sender, "_download_task_id", None) if sender is not None else None
 
-    @Slot(int, int)
+    @Slot("qint64", "qint64")
     def _on_worker_progress(self, done, total):
         tid = self._sender_task_id(self.sender())
         if tid is not None:

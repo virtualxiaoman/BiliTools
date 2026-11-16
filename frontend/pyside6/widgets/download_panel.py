@@ -1,11 +1,11 @@
 """左侧下载输入面板：多个来源页签 + 共用选项 + 下载按钮 + 任务进度区。"""
 from pathlib import Path
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QTimer, QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QRadioButton, QSizePolicy, QTabWidget, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
+    QMessageBox, QPushButton, QRadioButton, QSizePolicy, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from src.config.path import COLLECTION_OUTPUT_DIR
@@ -88,6 +88,13 @@ class DownloadPanel(QWidget):
         self.dir_edit.setFixedHeight(38)
         self._normal_save_dir = self.dir_edit.text()
         self._collection_asset_active = False
+        self._save_dir_timer = QTimer(self)
+        self._save_dir_timer.setSingleShot(True)
+        self._save_dir_timer.setInterval(350)
+        self._save_dir_timer.timeout.connect(self._persist_save_dir)
+        self.dir_edit.textChanged.connect(self._on_save_dir_changed)
+        self.dir_edit.editingFinished.connect(self._on_save_dir_finished)
+        app_signals.save_dir_changed.connect(self._apply_save_dir)
         self.btn_browse = QPushButton("浏览…")
         dir_row.addWidget(self.dir_label)
         dir_row.addWidget(self.dir_edit, 1)
@@ -171,32 +178,14 @@ class DownloadPanel(QWidget):
         q_row.addWidget(self.quality_combo, 1)
         outer.addWidget(self.quality_row)
 
-        # ---- 并发线程数（多视频同时下载，1~5）+ 多账号分流 ----
-        self.threads_row = QWidget()
-        th_row = QHBoxLayout(self.threads_row)
-        th_row.setContentsMargins(0, 0, 0, 0)
-        self.threads_edit = NumberEdit(1, 5, "1~5")
-        self.threads_edit.setValue(int(self.settings.get("download_threads", 2)))
-        self.threads_edit.setToolTip(
-            "同时下载多个视频的线程数（1~5）；触发风控时所有线程会在下次获取信息前暂停")
-        self.threads_edit.editingFinished.connect(
-            lambda: self.settings.set("download_threads", self.threads_edit.value()))
-        self.distribute_check = QCheckBox("多账号分流")
-        self.distribute_check.setChecked(bool(self.settings.get("distribute_accounts", False)))
-        self.distribute_check.setToolTip(
-            "有多个账号时，把并发线程均匀分摊到各账号上（各自用自己账号的 cookie），"
-            "降低单个账号的风控风险")
-        self.distribute_check.toggled.connect(lambda on: self.settings.set("distribute_accounts", on))
+        # ---- 下载选项 ----
         self.force_check = QCheckBox("忽略缓存")
         self.force_check.setToolTip("忽略所有缓存；目标文件名完全一致时覆盖，否则保留旧文件并下载新文件")
-        th_row.addWidget(QLabel("并发线程："))
-        th_row.addWidget(self.threads_edit)
-        th_row.addSpacing(8)
-        th_row.addWidget(self.distribute_check)
-        th_row.addSpacing(8)
-        th_row.addWidget(self.force_check)
-        th_row.addStretch(1)
-        outer.addWidget(self.threads_row)
+        options_row = QHBoxLayout()
+        options_row.setContentsMargins(0, 0, 0, 0)
+        options_row.addWidget(self.force_check)
+        options_row.addStretch(1)
+        outer.addLayout(options_row)
 
         # ---- 下载按钮 ----
         self.btn_download = QPushButton("下载")
@@ -275,7 +264,6 @@ class DownloadPanel(QWidget):
         self.range_row.setVisible(idx == 0)  # 范围选项仅视频页签可用
         self.type_row.setVisible(not is_dressup)
         self.quality_row.setVisible(not is_dressup)
-        self.threads_row.setVisible(idx == 0 or is_dressup)
         self.btn_download.setText("下载选中" if is_dressup else "下载")
         if is_dressup:
             # 在固定目录页签间切换时，不要把 ``output/收藏集`` 误记为普通保存目录。
@@ -294,11 +282,50 @@ class DownloadPanel(QWidget):
             self.dir_edit.setText(self._normal_save_dir or self.settings.get("save_dir"))
         self.hint.setText(_HINTS[idx])
 
+    # ---- 保存目录持久化 ----
+
+    def _on_save_dir_changed(self, _text):
+        if not self._collection_asset_active:
+            self._save_dir_timer.start()
+
+    def _on_save_dir_finished(self):
+        self._save_dir_timer.stop()
+        self._persist_save_dir(normalize=True)
+
+    def _persist_save_dir(self, normalize=False):
+        """把“保存到”写入设置，下次启动继续使用；装扮页固定目录不参与。"""
+        if self._collection_asset_active:
+            return
+        text = self.dir_edit.text().strip()
+        if not text:
+            return
+        if normalize:
+            try:
+                normalized = str(Path(text).expanduser().resolve())
+            except OSError:
+                normalized = text
+            if normalized != self.dir_edit.text():
+                self.dir_edit.setText(normalized)
+            text = normalized
+        self._normal_save_dir = text
+        if self.settings.get("save_dir") != text:
+            self.settings.set("save_dir", text)
+            app_signals.save_dir_changed.emit(text)
+
+    def _apply_save_dir(self, text):
+        """设置页修改保存目录后同步到下载页；装扮页固定目录时不覆盖输入框。"""
+        if not text:
+            return
+        self._save_dir_timer.stop()
+        self._normal_save_dir = text
+        if not self._collection_asset_active and self.dir_edit.text() != text:
+            self.dir_edit.setText(text)
+
     def _on_browse(self):
         folder = QFileDialog.getExistingDirectory(self, "选择保存目录", self.dir_edit.text())
         if folder:
             self.dir_edit.setText(folder)
-            self._normal_save_dir = folder
+            self._persist_save_dir()
 
     def _on_open_output_dir(self):
         folder = Path(self.dir_edit.text().strip() or self.settings.get("save_dir"))
@@ -320,8 +347,15 @@ class DownloadPanel(QWidget):
     def _current_input(self):
         return self._inputs[self.tabs.currentIndex()]
 
+    def _parallel_options(self):
+        """读取设置页维护的全局并发线程数与多账号分流开关。"""
+        threads = max(1, min(5, int(self.settings.get("download_threads", 2))))
+        distribute = bool(self.settings.get("distribute_accounts", True))
+        return threads, distribute
+
     def _build_spec(self):
         tab = self.tabs.currentIndex()
+        threads, distribute = self._parallel_options()
         if tab == 4:
             items = self.dressup_panel.selected_items()
             if not items:
@@ -337,8 +371,8 @@ class DownloadPanel(QWidget):
                 "media_type": "dressup",
                 "quality": self.quality_combo.currentData() or VideoQuality.HD4K,
                 "save_dir": str(COLLECTION_OUTPUT_DIR),
-                "threads": self.threads_edit.value(),
-                "distribute_accounts": self.distribute_check.isChecked(),
+                "threads": threads,
+                "distribute_accounts": distribute,
                 "desc": f"装扮 {names}{suffix}",
             }
         raw = self._current_input().text().strip()
@@ -358,32 +392,32 @@ class DownloadPanel(QWidget):
                 desc = f"视频 {bvid}" + (f"（P{page}）" if scope == "single" else "（全部分P）")
                 return {"source": "bv", "input": bvid, "scope": scope, "page": page,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(),
+                        "save_dir": save_dir, "threads": threads,
+                        "distribute_accounts": distribute,
                          "cache_dirs": self.settings.get("cache_dirs", []),
                          "force": self.force_check.isChecked(), "desc": desc}
             if tab == 1:
                 fid = normalize_fav(raw)
                 return {"source": "fav", "input": fid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(),
+                        "save_dir": save_dir, "threads": threads,
+                        "distribute_accounts": distribute,
                          "cache_dirs": self.settings.get("cache_dirs", []),
                          "force": self.force_check.isChecked(), "desc": f"收藏夹 {fid}"}
             if tab == 2:
                 kind, val, mid = normalize_season(raw)
                 return {"source": "season", "input": (kind, val, mid), "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(),
+                        "save_dir": save_dir, "threads": threads,
+                        "distribute_accounts": distribute,
                          "cache_dirs": self.settings.get("cache_dirs", []),
                          "force": self.force_check.isChecked(), "desc": f"合集 {val}"}
             if tab == 3:
                 mid = normalize_mid(raw)
                 return {"source": "up", "input": mid, "scope": "all", "page": 1,
                         "media_type": media_type, "quality": quality,
-                        "save_dir": save_dir, "threads": self.threads_edit.value(),
-                        "distribute_accounts": self.distribute_check.isChecked(),
+                        "save_dir": save_dir, "threads": threads,
+                        "distribute_accounts": distribute,
                          "cache_dirs": self.settings.get("cache_dirs", []),
                          "force": self.force_check.isChecked(), "desc": f"UP主 {mid}"}
         except NeedsUrlResolution:
@@ -401,6 +435,7 @@ class DownloadPanel(QWidget):
         labels = ["视频", "收藏夹", "合集", "UP主"]
         scope = "single" if self.rb_single.isChecked() else "all"
         page = self.spin_page.value()
+        threads, distribute = self._parallel_options()
         return {
             "source": sources[tab],
             "input": raw,
@@ -410,8 +445,8 @@ class DownloadPanel(QWidget):
             "media_type": media_type,
             "quality": quality,
             "save_dir": save_dir,
-            "threads": self.threads_edit.value(),
-            "distribute_accounts": self.distribute_check.isChecked(),
+            "threads": threads,
+            "distribute_accounts": distribute,
             "cache_dirs": self.settings.get("cache_dirs", []),
             "force": self.force_check.isChecked(),
             "desc": f"{labels[tab]}（解析链接中…）",
@@ -419,5 +454,95 @@ class DownloadPanel(QWidget):
 
     def _on_download(self):
         spec = self._build_spec()
-        if spec is not None:
-            self.manager.submit(spec)
+        if spec is None:
+            return
+        if not self._confirm_account_quality(spec):
+            return
+        self.manager.submit(spec)
+
+    @staticmethod
+    def _needs_account_quality_prompt(spec) -> bool:
+        """只有会走多账号分流、且目标清晰度高于 1080P 时才需要提示大会员差异。"""
+        if spec.get("source") not in ("bv", "fav", "season", "up"):
+            return False
+        if spec.get("source") == "bv" and spec.get("scope") == "single":
+            return False
+        if not spec.get("distribute_accounts") or int(spec.get("threads", 1)) <= 1:
+            return False
+        return int(spec.get("quality") or 0) > int(VideoQuality.P1080)
+
+    def _confirm_account_quality(self, spec) -> bool:
+        """检测各账号大会员状态并确认本次下载的清晰度策略；返回 False 表示取消下载。"""
+        if not self._needs_account_quality_prompt(spec):
+            return True
+        from PySide6.QtWidgets import QProgressDialog
+
+        # 探测会请求 nav：放到子线程，界面线程只负责转圈，避免卡住主窗口。
+        dialog = QProgressDialog("正在检查账号大会员状态…", None, 0, 0, self)
+        dialog.setWindowTitle("多账号清晰度")
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        dialog.setCancelButton(None)
+        dialog.setMinimumDuration(0)
+        dialog.show()
+        try:
+            caps = self._probe_capabilities()
+        except Exception:
+            app_signals.log_message.emit(LogCategory.WARN, "账号大会员状态检测失败，本次不限制多账号清晰度")
+            return True
+        finally:
+            dialog.close()
+        if len(caps) < 2:
+            return True
+        non_vip = [cap for cap in caps if cap.is_vip is False]
+        vip_names = [cap.uname for cap in caps if cap.is_vip]
+        if not non_vip or not vip_names:
+            return True
+        names = "".join(f"「{cap.uname}」" for cap in non_vip)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("多账号清晰度提示")
+        box.setText(
+            f"当前开启了多账号分流，但账号{names}没有大会员，请选择是否忽略这些账号？\n"
+            f"忽略：只采用有大会员的账号下载；\n"
+            f"不忽略：非大会员账号最高只下载 1080P 视频。"
+        )
+        ignore_btn = box.addButton("忽略这些账号", QMessageBox.ButtonRole.AcceptRole)
+        keep_btn = box.addButton("不忽略（最高 1080P）", QMessageBox.ButtonRole.ActionRole)
+        cancel_btn = box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(keep_btn)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is cancel_btn:
+            return False
+        if clicked is ignore_btn:
+            spec["account_quality_policy"] = "vip_only"
+            app_signals.log_message.emit(
+                LogCategory.NORMAL, "本次下载仅使用大会员账号：" + "、".join(vip_names))
+        elif clicked is keep_btn:
+            spec["account_quality_policy"] = "cap_1080p"
+            app_signals.log_message.emit(LogCategory.NORMAL, "本次下载非大会员账号最高 1080P")
+        return True
+
+    @staticmethod
+    def _probe_capabilities():
+        """在子线程探测账号能力，界面线程循环刷新进度对话框。"""
+        import threading
+
+        from src.services.account_capability import list_account_capabilities
+
+        outcome = {}
+
+        def run():
+            try:
+                outcome["caps"] = list_account_capabilities()
+            except Exception as exc:
+                outcome["error"] = exc
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        while thread.is_alive():
+            QApplication.processEvents()
+            thread.join(0.05)
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome.get("caps") or []

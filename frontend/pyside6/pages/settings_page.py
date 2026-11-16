@@ -1,7 +1,7 @@
 """设置页：左侧窄按钮栏分类 + 右侧设置区域（QStackedWidget）。"""
 from pathlib import Path
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QTimer, QUrl, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFormLayout,
@@ -77,6 +77,13 @@ class SettingsPage(QWidget):
 
         # 默认保存目录
         self.dir_edit = QLineEdit(self.settings.get("save_dir"))
+        self._save_dir_timer = QTimer(self)
+        self._save_dir_timer.setSingleShot(True)
+        self._save_dir_timer.setInterval(350)
+        self._save_dir_timer.timeout.connect(self._on_save_dir_edited)
+        self.dir_edit.textChanged.connect(lambda _t: self._save_dir_timer.start())
+        self.dir_edit.editingFinished.connect(self._on_save_dir_edited)
+        app_signals.save_dir_changed.connect(self._apply_save_dir)
         btn_dir = QPushButton("浏览…")
         btn_dir.clicked.connect(self._on_choose_dir)
         dir_row = QHBoxLayout()
@@ -91,13 +98,18 @@ class SettingsPage(QWidget):
         self.cache_dirs_edit = QLineEdit(";".join(str(p) for p in cache_values))
         self.cache_dirs_edit.setPlaceholderText("多个目录用分号 ; 分隔")
         self.cache_dirs_edit.setToolTip("查验缓存时会同时搜索这些目录；当前任务的保存目录始终自动加入")
+        self._cache_timer = QTimer(self)
+        self._cache_timer.setSingleShot(True)
+        self._cache_timer.setInterval(350)
+        self._cache_timer.timeout.connect(self._on_cache_dirs_edited)
+        self.cache_dirs_edit.textChanged.connect(lambda _t: self._cache_timer.start())
+        self.cache_dirs_edit.editingFinished.connect(self._on_cache_dirs_edited)
         btn_cache = QPushButton("添加目录…")
         btn_cache.clicked.connect(self._on_add_cache_dir)
         cache_row = QHBoxLayout()
         cache_row.addWidget(self.cache_dirs_edit, 1)
         cache_row.addWidget(btn_cache)
         form.addRow("额外缓存目录", cache_row)
-        self.cache_dirs_edit.editingFinished.connect(self._on_cache_dirs_edited)
 
         # 默认清晰度
         self.quality_combo = QComboBox()
@@ -126,6 +138,30 @@ class SettingsPage(QWidget):
         type_row.addWidget(self.rb_audio)
         type_row.addStretch(1)
         form.addRow("默认类型", type_row)
+
+        # 并发线程数 & 多账号分流（全局，作用于所有多文件任务）
+        self.threads_spin = QSpinBox()
+        self.threads_spin.setRange(1, 5)
+        self.threads_spin.setMaximumWidth(90)
+        self.threads_spin.setValue(max(1, min(5, int(self.settings.get("download_threads", 2)))))
+        self.threads_spin.setToolTip(
+            "多P视频、收藏夹、合集、UP主、表情包、收藏集/装扮素材和装扮页的并发下载数")
+        self.threads_spin.valueChanged.connect(
+            lambda value: self.settings.set("download_threads", value))
+        form.addRow("并发线程", self.threads_spin)
+
+        self.distribute_check = QCheckBox("多账号分流")
+        self.distribute_check.setChecked(bool(self.settings.get("distribute_accounts", True)))
+        self.distribute_check.setToolTip(
+            "并发线程 > 1 时，把任务轮询分摊到已登录账号，降低单账号风控风险")
+        self.distribute_check.toggled.connect(
+            lambda enabled: self.settings.set("distribute_accounts", enabled))
+        form.addRow("多账号", self.distribute_check)
+
+        concurrent_hint = QLabel("并发与分流作用于所有多文件任务；单个视频或单个文件不受影响。")
+        concurrent_hint.setObjectName("Dim")
+        concurrent_hint.setWordWrap(True)
+        form.addRow("", concurrent_hint)
 
         # ffmpeg 检测
         self.ffmpeg_status = QLabel("")
@@ -287,7 +323,28 @@ class SettingsPage(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "选择默认保存目录", self.dir_edit.text())
         if folder:
             self.dir_edit.setText(folder)
-            self.settings.set("save_dir", folder)
+            self._on_save_dir_edited()
+
+    def _on_save_dir_edited(self):
+        self._save_dir_timer.stop()
+        text = self.dir_edit.text().strip()
+        if not text:
+            return
+        try:
+            text = str(Path(text).expanduser().resolve())
+        except OSError:
+            pass
+        if text != self.dir_edit.text():
+            self.dir_edit.setText(text)
+        if self.settings.get("save_dir") != text:
+            self.settings.set("save_dir", text)
+            app_signals.save_dir_changed.emit(text)
+
+    def _apply_save_dir(self, text):
+        """下载页修改保存目录后同步到设置页。"""
+        if text and self.dir_edit.text() != text:
+            self._save_dir_timer.stop()
+            self.dir_edit.setText(text)
 
     def _cache_dir_values(self):
         values = []
@@ -298,9 +355,13 @@ class SettingsPage(QWidget):
         return values
 
     def _on_cache_dirs_edited(self):
+        self._cache_timer.stop()
         values = self._cache_dir_values()
-        self.cache_dirs_edit.setText(";".join(values))
-        self.settings.set("cache_dirs", values)
+        joined = ";".join(values)
+        if self.cache_dirs_edit.text() != joined:
+            self.cache_dirs_edit.setText(joined)
+        if self.settings.get("cache_dirs") != values:
+            self.settings.set("cache_dirs", values)
 
     def _on_add_cache_dir(self):
         folder = QFileDialog.getExistingDirectory(self, "添加缓存查验目录")

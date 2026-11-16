@@ -6,7 +6,7 @@
 import threading
 
 from frontend.pyside6.signals import LogCategory
-from frontend.pyside6.workers.progress_adapter import ParallelProgressAdapter
+from frontend.pyside6.workers.progress_adapter import ParallelProgressAdapter, ProgressAdapter
 
 
 class _FakeSignal:
@@ -72,3 +72,17 @@ def test_per_thread_file_state_isolated():
     for t in threads:
         t.join()
     assert names == {"a": ("a.mp4", 1), "b": ("b.mp4", 1)}
+
+
+def test_failed_finish_is_not_reported_as_cached():
+    worker = _FakeWorker()
+    adapter = ProgressAdapter(1, "测试", worker)
+    adapter.start(1, "充电视频.mp4")
+    adapter.finish(success=False)
+    assert not [text for _, text in worker.milestones if "已存在" in text]
+
+    worker = _FakeWorker()
+    parallel = ParallelProgressAdapter(1, "测试", worker)
+    parallel.start(1, "充电视频.mp4")
+    parallel.finish(success=False)
+    assert not [text for _, text in worker.milestones if "已存在" in text]

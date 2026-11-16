@@ -47,6 +47,9 @@ class DownloadRequest:
     pending_resolve: bool = False
     description: str = ""
     emote_full_name: bool = False
+    # 多账号清晰度策略（仅本次任务有效）：
+    # "" 不限制；"vip_only" 只用大会员账号分流；"cap_1080p" 非会员账号最高 1080P
+    account_quality_policy: str = ""
 
     @classmethod
     def from_legacy_dict(cls, spec: Mapping[str, Any]) -> "DownloadRequest":
@@ -75,6 +78,7 @@ class DownloadRequest:
             pending_resolve=bool(spec.get("pending_resolve", False)),
             description=str(spec.get("desc", "")),
             emote_full_name=bool(spec.get("emote_full_name", False)),
+            account_quality_policy=str(spec.get("account_quality_policy", "") or ""),
         )
 
     def with_resolved_input(self, input_value: object, description: str) -> "DownloadRequest":
@@ -94,6 +98,7 @@ class DownloadRequest:
             pending_resolve=False,
             description=description,
             emote_full_name=self.emote_full_name,
+            account_quality_policy=self.account_quality_policy,
         )
 
     def deduplication_key(self) -> tuple:
@@ -106,6 +111,7 @@ class DownloadRequest:
             self.media_type,
             int(self.quality),
             str(self.save_dir),
+            self.account_quality_policy,
         )
 
     def to_legacy_dict(self) -> dict[str, Any]:
@@ -125,4 +131,5 @@ class DownloadRequest:
             "pending_resolve": self.pending_resolve,
             "desc": self.description,
             "emote_full_name": self.emote_full_name,
+            "account_quality_policy": self.account_quality_policy,
         }

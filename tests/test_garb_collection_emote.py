@@ -66,7 +66,8 @@ def test_collection_downloads_emotes_from_collect_chain_and_reuses_prepared_pack
             calls["count"].append(list(package_ids))
             return packages, 3
 
-        def download_packages(self, package_ids, directory, *, progress, progress_cb, packages):
+        def download_packages(self, package_ids, directory, *, progress, progress_cb, packages,
+                              threads=1, account_sessions=None):
             calls["download"].append((list(package_ids), directory, packages))
             results = []
             for index, name in enumerate(("静态.png", "动态1.gif", "动态2.gif"), 1):

@@ -27,3 +27,32 @@ class TestResolveMid:
         s = VideoService()
         with pytest.raises(ValueError):
             s._resolve_mid(None)
+
+
+class TestListUpVideos:
+    def test_keeps_other_owners_but_logs_annotation(self, monkeypatch, caplog):
+        """他人联合投稿仍返回（与空间页面一致），但要在日志里标注。"""
+        import logging
+
+        class FakeSession:
+            def get(self, url, params=None):
+                return {
+                    "list": {"vlist": [
+                        {"bvid": "BVown", "mid": 100, "author": "本UP"},
+                        {"bvid": "BVguest", "mid": 200, "author": "别家"},
+                    ]},
+                    "page": {"count": 2},
+                }
+
+        import src.api.auth as auth_module
+        monkeypatch.setattr(auth_module, "get_wbi", lambda params: None)
+
+        service = VideoService(session=FakeSession())
+        with caplog.at_level(logging.INFO):
+            bvids = service.list_up_videos(100)
+
+        assert bvids == ["BVown", "BVguest"]
+        assert "2 条视频" in caplog.text
+        assert "1 条为他人稿件" in caplog.text
+        assert "BVguest" in caplog.text
+        assert "BVown" not in caplog.text

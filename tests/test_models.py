@@ -45,6 +45,17 @@ class TestVideoInfo:
         assert info.is_multi_page is False
         assert info.season is None
 
+    def test_from_view_json_upower_flags(self):
+        info = VideoInfo.from_view_json({
+            "bvid": "BV1xx411c7mD",
+            "is_upower_exclusive": True,
+            "is_upower_play": False,
+            "is_upower_preview": True,
+        })
+        assert info.is_upower_exclusive is True
+        assert info.is_upower_play is False
+        assert info.is_upower_preview is True
+
 
 class TestMultiPageAndSeason:
     def test_from_view_json_multi_page(self):

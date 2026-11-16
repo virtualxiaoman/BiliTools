@@ -60,9 +60,16 @@
 # print(result.path)
 # result = service.download_video_with_audio("BV1ov42117yC")
 # print(result.path)
-from src.services import DynamicService
+# from src.services import DynamicService
+#
+# service = DynamicService()
+# # service.download_user_dynamics(36081646)                        # 全部动态
+# # service.download_user_dynamics(36081646, max_count=20)          # 最新 20 条
+# service.download_user_dynamics(36081646)
 
-service = DynamicService()
-# service.download_user_dynamics(36081646)                        # 全部动态
-# service.download_user_dynamics(36081646, max_count=20)          # 最新 20 条
-service.download_user_dynamics(36081646)
+# 下载36081646的全部视频
+from src.services import VideoService
+
+service = VideoService()
+results = service.download_up(36081646)
+print(f"已下载：{results}")

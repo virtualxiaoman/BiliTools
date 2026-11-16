@@ -22,6 +22,7 @@ class AppSignals(QObject):
     goto_page = Signal(str)              # 'download' | 'login' | 'settings'
     theme_changed = Signal(str)          # 'light' | 'dark'
     zoom_changed = Signal(float)         # 全局界面缩放系数
+    save_dir_changed = Signal(str)       # 下载/设置页共享的保存目录
 
 
 # 全局唯一实例

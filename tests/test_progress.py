@@ -191,7 +191,7 @@ class TestAutoProgress:
         dir_mode = stat_mod.S_IFDIR | 0o755
         fake_stat = os.stat_result((dir_mode, 0, 0, 0, 0, 0, 123, 0, 0, 0))
 
-        with patch.object(s, "_fetch_streams", return_value=(info, dash)), \
+        with patch.object(s, "_fetch_streams", return_value=(info, dash, s)), \
              patch("src.services.video.download_stream", return_value=1), \
              patch("src.services.video.merge_video_audio"), \
              patch.object(Path, "stat", return_value=fake_stat):

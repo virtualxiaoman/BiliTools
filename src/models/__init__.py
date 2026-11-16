@@ -8,7 +8,14 @@
 """
 
 from src.models.comment_model import CommentExportResult
-from src.models.download_model import AudioStream, DashStreams, DownloadResult, VideoQuality, VideoStream
+from src.models.download_model import (
+    AudioStream,
+    DashStreams,
+    DownloadResult,
+    ProgressiveStream,
+    VideoQuality,
+    VideoStream,
+)
 from src.models.download_request import DownloadRequest, DownloadSource, MediaType
 from src.models.dynamic_model import (
     DynamicAuthor,
@@ -48,6 +55,7 @@ __all__ = [
     "AudioStream",
     "DashStreams",
     "DownloadResult",
+    "ProgressiveStream",
     "VideoQuality",
     "VideoStream",
     "DownloadRequest",

@@ -1,5 +1,7 @@
 """下载工具（download_stream / merge_video_audio）的单元测试。"""
 
+import os
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -68,6 +70,35 @@ def test_merge_uses_imageio_binary(tmp_path):
         cmd = mock_popen.call_args[0][0]
         assert cmd[0] == r"C:\imageio\ffmpeg.exe"
         assert "-c" in cmd and "copy" in cmd
+
+
+def test_merge_hides_console_window_on_windows(tmp_path):
+    """Windows 下启动 ffmpeg 不能弹出控制台窗口。"""
+    video = tmp_path / "v.mp4"
+    audio = tmp_path / "a.m4a"
+    video.write_bytes(b"v")
+    audio.write_bytes(b"a")
+
+    class FakeProcess:
+        def __init__(self, cmd, **kwargs):
+            self.returncode = 0
+            Path(cmd[-1]).write_bytes(b"merged")
+
+        def poll(self): return self.returncode
+
+        def wait(self, timeout=None): return self.returncode
+
+        def terminate(self): self.returncode = 0
+
+        def kill(self): self.returncode = 0
+
+    with patch("shutil.which", return_value="ffmpeg"), patch(
+        "subprocess.Popen", side_effect=FakeProcess
+    ) as mock_popen:
+        dl.merge_video_audio(video, audio, tmp_path / "out.mp4")
+        kwargs = mock_popen.call_args.kwargs
+        if os.name == "nt":
+            assert kwargs["creationflags"] == subprocess.CREATE_NO_WINDOW
 
 
 def test_merge_missing_input(tmp_path):

@@ -39,6 +39,14 @@ class VideoNotFoundError(BiliAPIError):
     """视频不存在或已失效（典型错误码 -404）。"""
 
 
+class VideoChargingError(BiliError):
+    """充电专属视频，当前账号未充电/未购买，无完整播放权限。"""
+
+
+class VideoPreviewOnlyError(BiliError):
+    """播放接口只返回试看/预览流，无法下载完整视频。"""
+
+
 class DownloadError(BiliError):
     """下载失败（网络中断、文件写入失败、ffmpeg 合并失败等）。"""
 

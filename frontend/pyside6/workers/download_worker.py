@@ -12,7 +12,14 @@ from src.services.fav import FavService
 from src.services.garb import GarbService
 from src.services.video import VideoService
 from src.api.errors import BiliAuthError, BiliRiskError
+from src.models.download_model import VideoQuality
 from src.models.download_request import DownloadRequest, DownloadSource, MediaType
+from src.services.account_capability import (
+    capability_for,
+    list_account_capabilities,
+    probe_session_capability,
+    same_account,
+)
 
 from frontend.pyside6.signals import LogCategory, app_signals
 from frontend.pyside6.utils import resolve_input
@@ -28,7 +35,7 @@ ERROR_OTHER = 3
 
 
 class DownloadWorker(QThread):
-    progress = Signal(int, int)       # done, total（字节）
+    progress = Signal("qint64", "qint64")  # done, total（字节；64 位避免超过 2GB 溢出）
     phase = Signal(str)               # 阶段文本（如 ffmpeg 合成中）
     done = Signal(bool, str, int)     # (success, summary, error_kind)
 
@@ -88,6 +95,7 @@ class DownloadWorker(QThread):
             started_at = time.perf_counter()
             service = VideoService(cancel_event=self._cancel_event)
             self._service = service
+            self._apply_account_policy(service)
             self._resolve_pending()
             self.milestone(LogCategory.NORMAL, f"开始任务：{self.request.description}")
             results = self._execute(service)
@@ -157,11 +165,13 @@ class DownloadWorker(QThread):
             return result
         info = service.fetch_info(bvid)
         page_count = len(info.pages) if info.pages else 1
-        adapter = ProgressAdapter(page_count, f"视频 {bvid}", self)
+        adapter = self._make_adapter(request.threads if page_count > 1 else 1, page_count, f"视频 {bvid}")
         return service.download_all_pages(
             bvid, request.save_dir, quality=request.quality,
             media_type=self._video_media_type(request), progress=adapter,
             cache_dirs=list(request.cache_dirs), force=request.force,
+            threads=request.threads,
+            account_sessions=self._account_sessions(request) if page_count > 1 else None,
         )
 
     def _execute_favorite(self, service):
@@ -206,10 +216,14 @@ class DownloadWorker(QThread):
         package_ids = request.input_value
         emote_service = EmoteService(service.session)
         packages, count = emote_service.count_emotes(package_ids)
-        adapter = ProgressAdapter(count, f"表情包 {','.join(map(str, package_ids))}", self)
+        adapter = self._make_adapter(
+            request.threads if count > 1 else 1, count, f"表情包 {','.join(map(str, package_ids))}"
+        )
         return emote_service.download_packages(
             package_ids, request.save_dir, progress=adapter, packages=packages,
             use_full_name=request.emote_full_name,
+            threads=request.threads,
+            account_sessions=self._account_sessions(request) if count > 1 else None,
         )
 
     def _execute_dressup(self, service):
@@ -229,11 +243,14 @@ class DownloadWorker(QThread):
         request = self.request
         garb_service = GarbService(service.session)
         item, detail, count = garb_service.prepare_download(request.input_value)
-        adapter = ProgressAdapter(
-            count, f"收藏集/装扮 {item.get('name') or request.input_value}", self
+        adapter = self._make_adapter(
+            request.threads if count > 1 else 1, count,
+            f"收藏集/装扮 {item.get('name') or request.input_value}",
         )
         return garb_service.download_item(
             item, request.save_dir, detail=detail, progress=adapter,
+            threads=request.threads,
+            account_sessions=self._account_sessions(request) if count > 1 else None,
         )
 
     def _execute_uploader(self, service):
@@ -256,6 +273,22 @@ class DownloadWorker(QThread):
     def _download_mode(request: DownloadRequest) -> str:
         return "audio" if request.media_type == MediaType.AUDIO else "video"
 
+    def _apply_account_policy(self, service: VideoService) -> None:
+        """把各账号的大会员能力与“本次下载”的清晰度策略挂到服务上。"""
+        try:
+            caps = list_account_capabilities()
+        except Exception:
+            logger.warning("[DownloadWorker] 账号能力探测失败，跳过多账号权限优化", exc_info=True)
+            return
+        if getattr(service.session, "cookie_path", "") and capability_for(service.session, caps) is None:
+            caps.append(probe_session_capability(service.session))
+        service.permission_accounts = caps
+        if self.request.account_quality_policy == "cap_1080p":
+            service.cap_non_vip_quality = VideoQuality.P1080
+            own = capability_for(service.session, caps)
+            if own is not None and own.is_vip is False:
+                service.quality_cap = VideoQuality.P1080
+
     def _account_sessions(self, request: DownloadRequest):
         """多账号分流：并发且开启分流时，为每个登录有效的账号建一个独立 BiliSession。
 
@@ -273,10 +306,25 @@ class DownloadWorker(QThread):
         for acc in AccountManager().list_accounts():
             try:
                 cookies = BiliCookies.from_file(acc.cookie_path)
-            except FileNotFoundError:
+            except OSError:
                 continue
             if cookies.has_valid_session:
                 sessions.append(BiliSession(cookie_path=str(acc.cookie_path)))
+        if request.account_quality_policy == "vip_only" and sessions:
+            # 用户在本次任务里选择忽略非会员账号：分流池只保留会员账号。
+            try:
+                vip_caps = [cap for cap in list_account_capabilities() if cap.is_vip]
+            except Exception:
+                vip_caps = []
+            keep = [s for s in sessions
+                    if any(same_account(s.cookie_path, cap.cookie_path) for cap in vip_caps)]
+            if keep:
+                for session in sessions:
+                    if session not in keep:
+                        session.close()
+                sessions = keep
+            elif vip_caps:
+                logger.warning("[DownloadWorker] 没有可用的大会员账号，回退为全部账号分流")
         if sessions:
             self._owned_account_sessions.extend(sessions)
         return sessions or None

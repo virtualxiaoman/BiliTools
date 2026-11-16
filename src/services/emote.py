@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 import re
+import threading
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -12,7 +13,8 @@ from src.models.download_model import DownloadResult
 from src.urls.emote_urls import EmoteUrls
 from src.util.downloader import ProgressCallback, download_stream
 from src.util.filename import sanitize_filename
-from src.util.progress import BatchProgress
+from src.util.parallel import parallel_run
+from src.util.progress import BatchProgress, ParallelBatchProgress
 
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,8 @@ class EmoteService:
             progress_cb: Optional[ProgressCallback] = None,
             packages: Optional[list[dict]] = None,
             use_full_name: bool = False,
+            threads: int = 1,
+            account_sessions: Optional[list] = None,
     ) -> list[DownloadResult]:
         """下载一个或多个表情包内的全部表情。
 
@@ -102,6 +106,9 @@ class EmoteService:
         ``use_full_name=True`` 时，文件名使用 API 的完整 ``text``，否则优先使用
         ``meta.alias``（缺失时回退到 ``text`` 中最后一个下划线后的内容）。
         已存在的同名非空文件不会重复下载，并在结果中标记为缓存命中。
+
+        ``threads > 1`` 时按表情文件并发，``account_sessions`` 非空时把并发文件
+        轮询分摊到各账号的请求头上。
         """
         ids = self.normalize_package_ids(package_ids)
         if packages is None:
@@ -119,13 +126,15 @@ class EmoteService:
         if not tasks:
             raise ValueError("未获取到可下载的表情，请确认表情包 id 是否正确")
 
+        threads = max(1, int(threads))
         root = Path(directory) if directory is not None else self.default_dir
         if progress is None:
-            progress = BatchProgress(n=len(tasks), label="表情包", display=True)
+            progress_cls = ParallelBatchProgress if threads > 1 and len(tasks) > 1 else BatchProgress
+            progress = progress_cls(n=len(tasks), label="表情包", display=threads <= 1)
 
+        # 目录/文件名与同名计数必须串行计算，避免并发时 positions 互相覆盖
+        jobs = []
         positions: dict[int, int] = {}
-        results: list[DownloadResult] = []
-        headers = dict(self.session.session.headers)
         for index, (package, emote) in enumerate(tasks, 1):
             package_id = self._as_int(package.get("id"), fallback=0)
             positions[package_id] = positions.get(package_id, 0) + 1
@@ -137,19 +146,42 @@ class EmoteService:
             emote_id = self._as_int(emote.get("id"), fallback=position)
             emote_name = self._emote_name(emote, emote_id, use_full_name=use_full_name)
             filename = f"{emote_name}.{extension}"
-            save_path = package_dir / filename
+            jobs.append((index, url, filename, package_dir / filename))
 
+        services = (
+            [EmoteService(session=session, default_dir=self.default_dir) for session in account_sessions]
+            if account_sessions else [self]
+        )
+        headers = [dict(service.session.session.headers) for service in services]
+        callback_lock = threading.Lock()
+
+        def run(job, worker_index):
+            index, url, filename, save_path = job
             progress.start(index, filename)
-            if save_path.exists() and save_path.stat().st_size > 0:
-                result = DownloadResult(save_path, media_type="emote", size=save_path.stat().st_size, cached=True)
-            else:
-                size = download_stream(url, save_path, headers=headers, progress_cb=progress.make_stream_callback())
-                result = DownloadResult(save_path, media_type="emote", size=size)
+            try:
+                if save_path.exists() and save_path.stat().st_size > 0:
+                    result = DownloadResult(
+                        save_path, media_type="emote", size=save_path.stat().st_size, cached=True,
+                    )
+                else:
+                    size = download_stream(
+                        url, save_path,
+                        headers=headers[worker_index % len(headers)],
+                        progress_cb=progress.make_stream_callback(),
+                    )
+                    result = DownloadResult(save_path, media_type="emote", size=size)
+                if progress_cb is not None:
+                    with callback_lock:
+                        progress_cb(index, len(jobs))
+            except Exception:
+                progress.finish(success=False)
+                raise
             progress.finish()
-            if progress_cb is not None:
-                progress_cb(index, len(tasks))
-            results.append(result)
-        return results
+            return result
+
+        if threads > 1 and len(jobs) > 1:
+            return parallel_run(jobs, run, threads)
+        return [run(job, i) for i, job in enumerate(jobs)]
 
     @staticmethod
     def _as_int(value, fallback: int) -> int:

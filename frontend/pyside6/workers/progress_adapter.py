@@ -62,9 +62,11 @@ class ProgressAdapter:
         # 阶段提示只更新进度条文案，不写入日志（避免并发下阶段行交错、日志杂乱）
         self.worker.phase.emit(message)  # phase 是 Qt 信号，必须用 .emit
 
-    def finish(self):
+    def finish(self, success=True):
         # 兜底输出"正在下载"行（如缓存命中：无字节也无清晰度）
         self._flush_pending_line()
+        if not success:
+            return
         q = f"[{self.current_quality.display_name}] " if self.current_quality else ""
         # 单文件完成。current_done == 0 且没收到任何字节 → 大概率命中本地缓存直接跳过
         if self.current_done == 0:
@@ -179,7 +181,7 @@ class ParallelProgressAdapter:
         # 阶段提示只更新进度条文案，不写入日志（避免并发下阶段行交错）
         self.worker.phase.emit(message)
 
-    def finish(self):
+    def finish(self, success=True):
         with self._lock:
             st = self._states.pop(threading.get_ident(), None)
             if st is None:
@@ -190,6 +192,8 @@ class ParallelProgressAdapter:
             name, quality = st.name, st.quality
         if pending:
             self._flush_pending_line(st)
+        if not success:
+            return
         q = f"[{quality.display_name}] " if quality else ""
         if st.done == 0:
             self.worker.milestone(LogCategory.SUCCESS, f"已存在，跳过：{name}")
