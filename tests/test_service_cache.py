@@ -104,3 +104,23 @@ def test_force_download_overwrites_exact_target_but_keeps_different_name(tmp_pat
     assert target.read_bytes() == b"after"
     assert old.read_bytes() == b"old"
     assert calls[0]["overwrite"] is True
+
+
+def test_multi_page_cache_requires_matching_page(tmp_path):
+    """多P视频的缓存查重必须按分P匹配，不能把别的分P当成已下载。"""
+    svc = _service(tmp_path)
+    (tmp_path / "标题-P01-开场(BVmulti).mp4").write_bytes(b"x")
+    (tmp_path / "标题-P02-结尾(BVmulti).mp4").write_bytes(b"x")
+
+    assert svc._find_downloaded_file("BVmulti", {"mp4"}, page=1).name == "标题-P01-开场(BVmulti).mp4"
+    assert svc._find_downloaded_file("BVmulti", {"mp4"}, page=2).name == "标题-P02-结尾(BVmulti).mp4"
+    assert svc._find_downloaded_file("BVmulti", {"mp4"}, page=3) is None
+
+
+def test_single_page_file_only_matches_page_one(tmp_path):
+    """无分P标签的文件只能算第 1 分P，不能当作其它分P已下载。"""
+    svc = _service(tmp_path)
+    (tmp_path / "标题(BVsingle).mp4").write_bytes(b"x")
+
+    assert svc._find_downloaded_file("BVsingle", {"mp4"}, page=1) is not None
+    assert svc._find_downloaded_file("BVsingle", {"mp4"}, page=2) is None

@@ -11,6 +11,7 @@ import logging
 import re
 import sys
 import traceback
+from enum import StrEnum
 from logging.handlers import RotatingFileHandler
 
 from PySide6.QtCore import qInstallMessageHandler
@@ -25,6 +26,48 @@ LOG_FILE = LOG_DIR / "bilitools.log"
 # SDK 内部"视频级批量进度"（如「已下载 3/24 个视频」）→ 深蓝色
 _VIDEO_PROGRESS_RE = re.compile(r"已下载\s*\d+/\d+\s*个视频")
 
+# SDK 直出（BatchProgress display=True）的原始进度行：
+# `[1/1] [标题.mp4] [1080P]: 12.3/100.0MB (12.3%)`、`[1/1] [标题]: 准备下载`。
+# 这类行按下载块高频刷新，只适合终端；GUI 由任务进度区展示，不能写进日志面板。
+_RAW_PROGRESS_RE = re.compile(r"^\[\d+/\d+\]\s*\[")
+
+
+class LogKind(StrEnum):
+    """下载日志的内容分类（用于界面过滤，不影响日志落盘）。"""
+
+    DOWNLOAD_START = "download_start"  # 逐文件开始（正在下载）
+    CACHED_SKIP = "cached_skip"        # 缓存命中（已存在，跳过）
+    UP_OTHERS = "up_others"            # UP 主空间里的他人联合投稿逐条明细
+    COMPLETED = "completed"            # 文件下载完成
+    TASK = "task"                      # 任务/汇总/视频级进度
+    ACCOUNT = "account"                # 账号、权限、换号
+    WARN = "warn"
+    ERROR = "error"
+    OTHER = "other"
+
+
+LOG_KIND_LABELS = {
+    LogKind.DOWNLOAD_START: "下载开始（正在下载）",
+    LogKind.CACHED_SKIP: "缓存跳过（已存在）",
+    LogKind.UP_OTHERS: "联合投稿明细",
+    LogKind.COMPLETED: "下载完成",
+    LogKind.TASK: "任务与汇总",
+    LogKind.ACCOUNT: "账号与权限",
+    LogKind.WARN: "警告",
+    LogKind.ERROR: "错误",
+    LogKind.OTHER: "其他",
+}
+
+# 默认隐藏逐文件开始、缓存跳过与联合投稿逐条明细：
+# 进度看任务进度区，明细看日志文件，界面只留完成/失败等有效信息。
+DEFAULT_HIDDEN_KINDS = (LogKind.DOWNLOAD_START, LogKind.CACHED_SKIP, LogKind.UP_OTHERS)
+
+_ACCOUNT_RE = re.compile(r"(改用账号|无播放权限|无大会员|大会员账号|非大会员|联合投稿|充电)")
+_TASK_RE = re.compile(
+    r"^(已下载\s*\d+/\d+\s*个视频|任务完成|跳过不可见|BV[0-9A-Za-z]+：|"
+    r"合集「|收藏夹「|UP主)")
+
+
 
 def classify(text: str, level: int) -> int:
     """按级别 + 稳定正则对文本分类。"""
@@ -35,6 +78,28 @@ def classify(text: str, level: int) -> int:
     if level == logging.WARNING:
         return LogCategory.WARN
     return LogCategory.NORMAL
+
+
+def classify_kind(text: str, category: int = LogCategory.NORMAL) -> LogKind:
+    """判断一条日志的内容分类（用于界面过滤，不改变日志落盘）。"""
+    raw = str(text or "").lstrip()
+    if category == LogCategory.ERROR:
+        return LogKind.ERROR
+    if category == LogCategory.WARN:
+        return LogKind.WARN
+    if raw.startswith("正在下载"):
+        return LogKind.DOWNLOAD_START
+    if raw.startswith("已存在，跳过"):
+        return LogKind.CACHED_SKIP
+    if raw.startswith("他人稿件："):
+        return LogKind.UP_OTHERS
+    if raw.startswith("下载完成"):
+        return LogKind.COMPLETED
+    if _ACCOUNT_RE.search(raw):
+        return LogKind.ACCOUNT
+    if _TASK_RE.match(raw):
+        return LogKind.TASK
+    return LogKind.OTHER
 
 
 class SignalLogHandler(logging.Handler):
@@ -69,6 +134,9 @@ class StdoutRedirect:
                 text = text.split("\r")[-1]
             text = text.rstrip("\n")
             if not text:
+                return len(text)
+            if _RAW_PROGRESS_RE.match(text.strip()):
+                # 原始字节进度不进界面；任务进度区已经展示同一条信息。
                 return len(text)
             level = logging.ERROR if self.is_error else logging.INFO
             self.signals.log_message.emit(classify(text, level), text)

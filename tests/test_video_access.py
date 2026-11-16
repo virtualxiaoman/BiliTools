@@ -1,12 +1,19 @@
 """视频访问权限回归测试：充电专属视频不请求播放流，直接给出明确原因。"""
+import threading
 from pathlib import Path
 
 import pytest
 
-from src.api.errors import VideoChargingError, VideoPreviewOnlyError
+from src.api.errors import (
+    DownloadCancelled,
+    DownloadError,
+    FFmpegNotFoundError,
+    VideoChargingError,
+    VideoPreviewOnlyError,
+)
 from src.models.download_model import DashStreams, ProgressiveStream
 from src.models.video_model import VideoInfo, VideoPage
-from src.services.video import VideoService
+from src.services.video import _RETRY_OUTCOME, VideoService
 
 
 def test_upower_exclusive_without_access_is_rejected(monkeypatch):
@@ -104,3 +111,88 @@ def test_progressive_download_does_not_require_ffmpeg(tmp_path, monkeypatch):
 
     assert result.path.name == "老视频(BV1test).mp4"
     assert result.path.read_bytes() == b"data"
+
+
+# ---- 批量任务的单文件失败处理 ----
+
+def _raising_action(exc: Exception):
+    def action():
+        raise exc
+    return action
+
+
+def test_batch_skips_single_file_download_error():
+    """CDN 超时等单文件下载失败只标记为待重试，不中断整个批量任务。"""
+    service = VideoService(session=object())
+    outcome = service._execute_batch_download(
+        "BV1test", _raising_action(DownloadError("Read timed out")), label="UP主")
+    assert outcome is _RETRY_OUTCOME
+
+
+def test_batch_still_fails_when_ffmpeg_missing():
+    service = VideoService(session=object())
+    with pytest.raises(FFmpegNotFoundError):
+        service._execute_batch_download(
+            "BV1test", _raising_action(FFmpegNotFoundError("no ffmpeg")), label="UP主")
+
+
+def test_batch_does_not_swallow_cancel():
+    service = VideoService(session=object())
+    service.cancel_event = threading.Event()
+    service.cancel_event.set()
+    with pytest.raises(DownloadCancelled):
+        service._execute_batch_download(
+            "BV1test", _raising_action(DownloadCancelled("下载已取消")), label="UP主")
+
+
+# ---- 分P级重试队列与终止 ----
+
+def test_batch_retry_queues_only_failed_pages(tmp_path, monkeypatch):
+    """批量队列以分P为单位：只把失败的分P排到队尾重试。"""
+    from src.models.download_model import VideoQuality
+    from src.util.progress import BatchProgress
+
+    service = VideoService(session=object())
+    service.default_dir = tmp_path
+    calls = []
+
+    def fake_report(bvid, dir=None, **kwargs):
+        calls.append(kwargs.get("only_pages"))
+        if kwargs.get("only_pages") is None:
+            return [], [2]
+        return ["ok"], []
+
+    monkeypatch.setattr(service, "_download_all_pages_report", fake_report)
+    monkeypatch.setattr(service, "_report_bvid_download", lambda *a, **k: 0)
+
+    results = service._download_bvid_collection(
+        ["BV1"], tmp_path, quality=VideoQuality.P1080, media_type="video_with_audio",
+        progress=BatchProgress(n=1), progress_cb=None, threads=1, account_sessions=None,
+        cache_dirs=None, force=False, item_label=lambda bvid: "UP主",
+    )
+
+    assert calls == [None, [2]]
+    assert results == ["ok"]
+
+
+def test_collection_stops_when_cancelled(tmp_path, monkeypatch):
+    """终止后不再开始新的视频。"""
+    from src.models.download_model import VideoQuality
+    from src.util.progress import BatchProgress
+
+    service = VideoService(session=object())
+    service.default_dir = tmp_path
+    service.cancel_event = threading.Event()
+    service.cancel_event.set()
+    called = []
+    monkeypatch.setattr(service, "_download_all_pages_report",
+                        lambda *a, **k: called.append(1) or ([], []))
+
+    with pytest.raises(DownloadCancelled):
+        service._download_bvid_collection(
+            ["BV1", "BV2"], tmp_path, quality=VideoQuality.P1080,
+            media_type="video_with_audio", progress=BatchProgress(n=2),
+            progress_cb=None, threads=1, account_sessions=None,
+            cache_dirs=None, force=False, item_label=lambda bvid: "UP主",
+        )
+    assert called == []

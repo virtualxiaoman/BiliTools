@@ -215,7 +215,21 @@ class DownloadPanel(QWidget):
     # ---- 供 DownloadPage 连接 manager 信号 ----
 
     def on_task_started(self, tid, desc):
-        self.task_panel.add_task(tid, desc)
+        self.task_panel.add_task(tid, desc, on_cancel=self._on_cancel_task)
+
+    def _on_cancel_task(self, tid):
+        """终止任务前确认：删除未完成临时文件，已完成文件保留。"""
+        answer = QMessageBox.question(
+            self, "终止下载",
+            "确定终止该任务吗？\n\n"
+            "正在下载的临时文件会被删除；已经下载完成的文件会保留。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        if self.manager.cancel(tid):
+            self.task_panel.set_cancelling(tid)
 
     def on_task_progress(self, tid, done, total):
         self.task_panel.update_progress(tid, done, total)

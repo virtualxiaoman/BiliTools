@@ -5,10 +5,18 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import (
     QColor, QFont, QFontInfo, QTextCharFormat, QTextCursor, QTextFormat,
 )
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout, QLabel, QMenu, QPlainTextEdit, QPushButton, QToolButton, QVBoxLayout, QWidget,
+)
 
 from frontend.pyside6 import theme
 from frontend.pyside6.fonts import log_font
+from frontend.pyside6.logs import (
+    DEFAULT_HIDDEN_KINDS,
+    LOG_KIND_LABELS,
+    LogKind,
+    classify_kind,
+)
 from frontend.pyside6.signals import app_signals
 
 
@@ -20,7 +28,9 @@ class LogWidget(QWidget):
         self.settings = settings
         self.setObjectName("Panel")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._messages = []  # [(category, ts_text, text)]
+        # 记录全部日志（含被过滤的类别）；界面只展示未隐藏的分类。
+        self._messages = []  # [(category, ts_text, text, LogKind)]
+        self._hidden_kinds = self._load_hidden_kinds()
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(6, 6, 6, 6)
@@ -29,10 +39,12 @@ class LogWidget(QWidget):
         head = QHBoxLayout()
         title = QLabel("下载日志")
         title.setObjectName("SectionTitle")  # 字体由 theme QSS 控制（粗体、随缩放）
+        self.btn_filter = self._make_filter_button()
         self.btn_copy = QPushButton("复制全部")
         self.btn_clear = QPushButton("清空")
         head.addWidget(title)
         head.addStretch(1)
+        head.addWidget(self.btn_filter)
         head.addWidget(self.btn_copy)
         head.addWidget(self.btn_clear)
         outer.addLayout(head)
@@ -58,18 +70,54 @@ class LogWidget(QWidget):
         self.text.setFont(log_font())
         self._rebuild()
 
+    def _load_hidden_kinds(self) -> set:
+        raw = self.settings.get("log_hidden_kinds", list(DEFAULT_HIDDEN_KINDS)) or ()
+        hidden = set()
+        for value in raw:
+            try:
+                hidden.add(LogKind(value))
+            except ValueError:
+                continue
+        return hidden
+
+    def _make_filter_button(self) -> QToolButton:
+        btn = QToolButton()
+        btn.setText("过滤")
+        btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        btn.setToolTip("勾选要显示的日志类别；被隐藏的日志仍会写入日志文件")
+        menu = QMenu(btn)
+        self._filter_actions = {}
+        for kind in LogKind:
+            action = menu.addAction(LOG_KIND_LABELS[kind])
+            action.setCheckable(True)
+            action.setChecked(kind not in self._hidden_kinds)
+            action.toggled.connect(lambda checked, k=kind: self._on_filter_toggled(k, checked))
+            self._filter_actions[kind] = action
+        btn.setMenu(menu)
+        return btn
+
+    def _on_filter_toggled(self, kind: LogKind, checked: bool) -> None:
+        if checked:
+            self._hidden_kinds.discard(kind)
+        else:
+            self._hidden_kinds.add(kind)
+        self.settings.set("log_hidden_kinds", [item.value for item in self._hidden_kinds])
+        self._rebuild()
+
     # ---- 日志写入 ----
 
     def append(self, category, text):
         category = int(category)
+        kind = classify_kind(text, category)
         ts = ""
         if self.settings.get("log_timestamp", True):
             ts = time.strftime("[%H:%M:%S] ")
-        self._messages.append((category, ts, text))
+        self._messages.append((category, ts, text, kind))
         max_lines = max(50, self.settings.get("log_max_lines", 1000))
         if len(self._messages) > max_lines:
             self._messages = self._messages[-max_lines:]
-        self._insert_line(category, ts + text)
+        if kind not in self._hidden_kinds:
+            self._insert_line(category, ts + text)
 
     def _insert_line(self, category, line):
         color, bold = theme.log_colors(category)
@@ -90,8 +138,9 @@ class LogWidget(QWidget):
 
     def _rebuild(self):
         self.text.clear()
-        for category, ts, text in self._messages:
-            self._insert_line(category, ts + text)
+        for category, ts, text, kind in self._messages:
+            if kind not in self._hidden_kinds:
+                self._insert_line(category, ts + text)
 
     # ---- 操作 ----
 

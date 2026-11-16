@@ -15,6 +15,7 @@ DEFAULTS = {
     "zoom": 1.0,                       # 界面缩放系数（0.8~1.5，100 = 100%）
     "log_max_lines": 1000,
     "log_timestamp": True,
+    "log_hidden_kinds": ["download_start", "cached_skip", "up_others"],  # 下载日志面板默认隐藏的类别
     "cookie_dir": str(COOKIE_ROOT),    # 全局 cookie 目录（默认 %APPDATA%/xiaoman/BiliTools/cookie）
     "download_threads": 2,             # 并发下载线程数（1~5）
     "distribute_accounts": True,      # 多账号分流：把并发线程均匀分摊到各账号（降风控）

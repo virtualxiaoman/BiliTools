@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-from src.api.errors import DownloadError, FFmpegNotFoundError
+from src.api.errors import DownloadCancelled, DownloadError, FFmpegNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,8 @@ def download_stream(
         last_error: Optional[Exception] = None
         while attempt <= max_retries:
             if cancel_event is not None and cancel_event.is_set():
-                raise DownloadError(f"下载已取消：{url}")
+                part_path.unlink(missing_ok=True)
+                raise DownloadCancelled(f"下载已取消：{url}")
             downloaded = part_path.stat().st_size if part_path.exists() else 0
             req_headers = dict(headers or {})
             if downloaded:
@@ -196,7 +197,7 @@ def download_stream(
                     with part_path.open("ab" if downloaded else "wb") as output:
                         for chunk in response.iter_content(chunk_size=chunk_size):
                             if cancel_event is not None and cancel_event.is_set():
-                                raise DownloadError(f"下载已取消：{url}")
+                                raise DownloadCancelled(f"下载已取消：{url}")
                             if not chunk:
                                 continue
                             output.write(chunk)
@@ -207,6 +208,10 @@ def download_stream(
                         raise IOError(f"下载不完整：{downloaded}/{expected_total} bytes")
                     if downloaded <= 0:
                         raise IOError("下载响应为空")
+            except DownloadCancelled:
+                # 用户终止：删除未完成的临时文件；已完成文件不受影响。
+                part_path.unlink(missing_ok=True)
+                raise
             except DownloadError:
                 raise
             except (requests.RequestException, OSError, ValueError, TypeError) as exc:
@@ -270,7 +275,7 @@ def _run_ffmpeg(ffmpeg: str, args: list[str], save_path: Path, *,
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
-                raise DownloadError(f"{action}已取消")
+                raise DownloadCancelled(f"{action}已取消")
             if time.monotonic() >= deadline:
                 process.terminate()
                 try:

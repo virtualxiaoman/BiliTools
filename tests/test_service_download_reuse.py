@@ -52,7 +52,7 @@ class _FavInfo:
 def test_download_fav_reuses_external_bvids(tmp_path, monkeypatch):
     """传入 bvids 时，内部不应再调用 get_fav_bv。"""
     svc = _svc(tmp_path)
-    svc.download_all_pages = lambda *a, **k: []  # 不触发网络
+    svc._download_all_pages_report = lambda *a, **k: ([], [])  # 不触发网络
 
     calls = {"get_fav_bv": 0}
 
@@ -77,7 +77,7 @@ def test_download_fav_reuses_external_bvids(tmp_path, monkeypatch):
 def test_download_fav_fetches_when_no_bvids(tmp_path, monkeypatch):
     """未传 bvids 时保持原有行为：内部自动获取列表。"""
     svc = _svc(tmp_path)
-    svc.download_all_pages = lambda *a, **k: []
+    svc._download_all_pages_report = lambda *a, **k: ([], [])
 
     calls = {"get_fav_bv": 0}
 
@@ -101,7 +101,7 @@ def test_download_fav_fetches_when_no_bvids(tmp_path, monkeypatch):
 def test_download_up_reuses_external_bvids(tmp_path, monkeypatch):
     """传入 bvids 时，内部不应再调用 list_up_videos（避免整页遍历两遍）。"""
     svc = _svc(tmp_path)
-    svc.download_all_pages = lambda *a, **k: []
+    svc._download_all_pages_report = lambda *a, **k: ([], [])
     svc._resolve_mid = lambda mid: 1
 
     calls = {"list_up_videos": 0}
@@ -131,7 +131,7 @@ def test_download_up_reuses_external_bvids(tmp_path, monkeypatch):
 def test_download_season_reuses_external_season(tmp_path):
     """传入 season 时，内部不应再调用 fetch_season 反查合集。"""
     svc = _svc(tmp_path)
-    svc._download_episode = lambda ep, save_dir, **k: ([], 1)  # 不触发网络
+    svc._download_episode = lambda ep, save_dir, **k: ([], 1, [])  # 不触发网络
 
     calls = {"fetch_season": 0}
 
@@ -186,7 +186,7 @@ def test_download_dirs_sanitize_blank_titles(tmp_path, monkeypatch):
 
     def fake_download_episode(ep, save_dir, **kwargs):
         season_dirs.append(save_dir)
-        return ([], 1)
+        return ([], 1, [])
 
     svc._download_bvid_collection = fake_download_collection
     svc.download_fav(1, tmp_path, mode="video")
@@ -246,7 +246,7 @@ def test_download_season_parallel_uses_multiple_threads(tmp_path):
         with lock:
             threads_seen.add(threading.get_ident())
         time.sleep(0.05)  # 制造并发窗口
-        return ([ep.bvid], 1)
+        return ([ep.bvid], 1, [])
 
     svc._download_episode = fake_episode
 
@@ -261,7 +261,7 @@ def test_download_fav_parallel_threads(tmp_path):
     import time
 
     svc = _svc(tmp_path)
-    svc.download_all_pages = lambda *a, **k: ["OK"]
+    svc._download_all_pages_report = lambda *a, **k: (["OK"], [])
     svc._report_bvid_download = lambda bvid, new_results, dc, i, total: dc
 
     threads_seen = set()
@@ -271,10 +271,10 @@ def test_download_fav_parallel_threads(tmp_path):
         with lock:
             threads_seen.add(threading.get_ident())
         time.sleep(0.05)
-        return ["OK"]
+        return (["OK"], [])
 
-    # 直接替换 download_all_pages，观察并发
-    svc.download_all_pages = fake_episode
+    # 直接替换分P报告方法，观察并发
+    svc._download_all_pages_report = fake_episode
 
     class FakeFav:
         def __init__(self, session):
@@ -319,9 +319,9 @@ def test_download_fav_distributes_across_accounts(tmp_path, monkeypatch):
 
     def fake_download_all_pages(self, *a, **k):
         got.setdefault(id(self.session), []).append(a[0])
-        return []
+        return ([], [])
 
-    monkeypatch.setattr(VideoService, "download_all_pages", fake_download_all_pages)
+    monkeypatch.setattr(VideoService, "_download_all_pages_report", fake_download_all_pages)
 
     s1, s2 = object(), object()
     svc.download_fav(1, tmp_path, mode="video", threads=2, account_sessions=[s1, s2])
@@ -354,9 +354,9 @@ def test_download_fav_no_accounts_uses_current(tmp_path, monkeypatch):
 
     def fake_download_all_pages(self, *a, **k):
         used.append(self is svc)  # 应使用原 service 自身
-        return []
+        return ([], [])
 
-    monkeypatch.setattr(VideoService, "download_all_pages", fake_download_all_pages)
+    monkeypatch.setattr(VideoService, "_download_all_pages_report", fake_download_all_pages)
 
     svc.download_fav(1, tmp_path, mode="video", threads=2)
     assert used == [True, True]  # 两个任务都在原 service 上执行

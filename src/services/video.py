@@ -18,9 +18,11 @@
 import time
 import random
 import logging
+import re
 import threading
 import zlib
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
 
@@ -30,6 +32,8 @@ from src.api.errors import (
     BiliAuthError,
     BiliForbiddenError,
     BiliRiskError,
+    DownloadCancelled,
+    DownloadError,
     FFmpegNotFoundError,
     VideoChargingError,
     VideoPreviewOnlyError,
@@ -57,6 +61,7 @@ from src.services.account_capability import (
     AccountPermissionCache,
     capability_for,
     capability_matches_session,
+    same_account,
 )
 from src.services.archive import ArchiveService
 from src.urls.video_urls import VideoUrls
@@ -80,6 +85,21 @@ from src.util.risk_gate import RiskGate
 logger = logging.getLogger(__name__)
 
 _ALLOWED_MEDIA_TYPES = {"video", "audio", "video_with_audio", "cover", "danmaku"}
+
+# 批量下载里“可重试的失败”标记：既不是成功结果，也不是永久跳过（None）。
+_RETRY_OUTCOME = object()
+
+# 多P文件名里的分P标签：`[标题]-P07-[分P标题](BV号).mp4`
+_PAGE_TAG_RE = re.compile(r"-p\d{2,3}-")
+
+
+@dataclass
+class _RetryPages:
+    """批量队列里的“待重试分P”：下载队列和缓存都以分P为最小单位。"""
+
+    bvid: str
+    pages: list = field(default_factory=list)
+    results: list = field(default_factory=list)
 
 
 class _FileCounter:
@@ -359,13 +379,19 @@ class VideoService:
 
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
+        part_path = save_path.with_name(save_path.name + ".part")
         with tempfile.TemporaryDirectory(prefix="bilitools_", dir=save_path.parent) as tmp:
             parts = []
-            for index, url in enumerate(stream.urls):
-                part = Path(tmp) / f"seg{index:03d}"
-                download_stream(url, part, headers, cancel_event=cancel_event)
-                parts.append(part)
-            part_path = save_path.with_name(save_path.name + ".part")
+            try:
+                for index, url in enumerate(stream.urls):
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise DownloadCancelled("下载已取消")
+                    part = Path(tmp) / f"seg{index:03d}"
+                    download_stream(url, part, headers, cancel_event=cancel_event)
+                    parts.append(part)
+            except DownloadCancelled:
+                part_path.unlink(missing_ok=True)
+                raise
             try:
                 with part_path.open("wb") as output:
                     for part in parts:
@@ -586,6 +612,12 @@ class VideoService:
         """是否触发风控（-412 触发风控 / -403 被拒绝访问），这类错误稍作等待后重试通常可恢复。"""
         return isinstance(exc, (BiliRiskError, BiliForbiddenError))
 
+    def _raise_if_cancelled(self) -> None:
+        """用户终止后，批量循环在进入下一个文件前立即停止。"""
+        event = getattr(self, "cancel_event", None)
+        if event is not None and event.is_set():
+            raise DownloadCancelled("下载已取消")
+
     def _execute_batch_download(
             self,
             bvid: str,
@@ -600,6 +632,8 @@ class VideoService:
         - 视频不可见（-404 不存在 / 62002 稿件不可见）：记录日志并返回 None（跳过）；
         - 触发风控（-412 / -403）：有 risk_gate 时标记风控事件（由 gate 让**所有线程**
           在下一次获取信息前各自随机暂停），无 gate 时保持原有本地退避重试；
+        - 单个文件下载失败（CDN 超时等）：返回 ``_RETRY_OUTCOME``，由批量入口排到
+          队列最后统一重试；
         - 其余异常：原样抛出。
 
         :param bvid: 视频BV号（仅用于日志）
@@ -607,15 +641,18 @@ class VideoService:
         :param label: 批量任务描述（收藏夹/合集/UP主名称），仅用于日志
         :param retries: 触发风控后的最大重试次数
         :param risk_gate: 并发下载时的风控协调器；None 表示顺序下载（本地退避）
-        :return: action 的返回值；视频不可见被跳过时返回 None
+        :return: action 的返回值；不可见/无权限时为 None；可重试的下载失败为 _RETRY_OUTCOME
         """
         last_error: Optional[Exception] = None
         for attempt in range(retries + 1):
+            self._raise_if_cancelled()
             if risk_gate is not None:
                 # 风控后所有线程在下一次获取信息前暂停（每个线程暂停时长单独计算）
                 risk_gate.pause_before_fetch()
             try:
                 return action()
+            except DownloadCancelled:
+                raise
             except Exception as e:
                 if isinstance(e, (VideoChargingError, VideoPreviewOnlyError)):
                     logger.warning("视频 %s 无法下载完整内容，跳过（%s）：%s", bvid, label, e)
@@ -623,6 +660,16 @@ class VideoService:
                 if self._is_video_unavailable_error(e):
                     logger.warning("视频 %s 不可见，跳过（%s）。", bvid, label)
                     return None
+                if isinstance(e, FFmpegNotFoundError):
+                    raise
+                if isinstance(e, DownloadError):
+                    cancel_event = getattr(self, "cancel_event", None)
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise DownloadCancelled("下载已取消") from e
+                    # 批量任务里单个文件下载失败（CDN 超时等）不中断任务，
+                    # 交给调用方排到队尾最后重试。
+                    logger.error("视频 %s 下载失败，稍后重试（%s）：%s", bvid, label, e)
+                    return _RETRY_OUTCOME
                 if self._is_risk_control_error(e):
                     last_error = e
                     if risk_gate is not None:
@@ -682,7 +729,7 @@ class VideoService:
                               roots: Optional[Iterable[Path]] = None) -> Optional[Path]:
         search_roots = list(roots) if roots is not None else [root or self.default_dir]
         extensions = {ext.lower().lstrip(".") for ext in extensions}
-        page_tag = f"-p{page:02d}" if page is not None and page > 1 else None
+        page_tag = f"-p{page:02d}" if page is not None else None
         for value in search_roots:
             if value is None:
                 continue
@@ -693,12 +740,17 @@ class VideoService:
                 if (not path.is_file() or path.name.endswith((".part", ".tmp"))
                         or path.stat().st_size <= 0):
                     continue
-                if bvid.casefold() not in path.stem.casefold():
+                stem = path.stem.casefold()
+                if bvid.casefold() not in stem:
                     continue
                 if path.suffix.casefold().lstrip(".") not in extensions:
                     continue
-                if page_tag is not None and page_tag not in path.stem.casefold():
-                    continue
+                if page_tag is not None:
+                    if page_tag not in stem:
+                        # 第 1 分P可命中“无分P标签”的单P文件；
+                        # 其它分P必须精确匹配 -Pxx-，避免把别的分P当成已下载。
+                        if page != 1 or _PAGE_TAG_RE.search(stem):
+                            continue
                 return path
         return None
 
@@ -708,6 +760,7 @@ class VideoService:
             progress: Optional[BatchProgress] = None, filename: Optional[str] = None,
             cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
     ) -> DownloadResult:
+        self._raise_if_cancelled()
         quality = self._effective_quality(quality)
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
@@ -753,6 +806,7 @@ class VideoService:
             filename: Optional[str] = None, cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
             force: bool = False,
     ) -> DownloadResult:
+        self._raise_if_cancelled()
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
             bvid, {"m4a", "mp3", "flac", "aac"}, page=page, roots=self._cache_roots(save_dir, cache_dirs))
@@ -808,6 +862,7 @@ class VideoService:
             force: bool = False,
     ) -> DownloadResult:
         import tempfile
+        self._raise_if_cancelled()
         quality = self._effective_quality(quality)
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
@@ -1131,6 +1186,26 @@ class VideoService:
             cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
             threads: int = 1, account_sessions: Optional[list] = None,
     ) -> list:
+        """下载某视频的全部分P；仍失败的分P会抛 DownloadError（单视频任务据此提示失败）。"""
+        results, failed = self._download_all_pages_report(
+            bvid, dir, quality=quality, media_type=media_type,
+            progress_cb=progress_cb, progress=progress,
+            cache_dirs=cache_dirs, force=force,
+            threads=threads, account_sessions=account_sessions,
+        )
+        if failed:
+            raise DownloadError(f"视频 {bvid} 有 {len(failed)} 个分P下载失败：{failed}")
+        return results
+
+    def _download_all_pages_report(
+            self, bvid: str, dir: Optional[Path] = None, *,
+            quality: VideoQuality = VideoQuality.HD4K, media_type: str = "video_with_audio",
+            progress_cb: Optional[ProgressCallback] = None, progress: Optional[BatchProgress] = None,
+            cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
+            threads: int = 1, account_sessions: Optional[list] = None,
+            only_pages: Optional[Iterable[int]] = None,
+    ) -> tuple[list, list]:
+        """下载分P并返回 ``(成功结果, 仍失败的分P序号)``；失败项由批量入口排到队尾重试。"""
         if media_type not in _ALLOWED_MEDIA_TYPES:
             raise ValueError(f"不支持的媒体类型：{media_type!r}，允许值：{sorted(_ALLOWED_MEDIA_TYPES)}")
         info = self.fetch_info(bvid)
@@ -1138,12 +1213,18 @@ class VideoService:
             raise ValueError(f"视频 {bvid} 没有分P信息，无法批量下载。")
         # 封面属于稿件级资源，没有 page-specific URL；多P只下载一次，避免重复覆盖同一个文件。
         pages = info.pages if media_type != "cover" else info.pages[:1]
+        if only_pages is not None:
+            wanted = {int(value) for value in only_pages}
+            pages = [page_obj for page_obj in pages if page_obj.page in wanted]
+            if not pages:
+                return [], []
         threads = max(1, int(threads))
         if progress is None:
             progress_cls = ParallelBatchProgress if threads > 1 and len(pages) > 1 else BatchProgress
             progress = progress_cls(n=len(pages), label=f"视频 {bvid}")
 
         def run_page(service, page_obj, index):
+            service._raise_if_cancelled()
             display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg", "danmaku": "ass"}.get(media_type, "mp4")
             display_name = self._default_filename(info, bvid, page_obj.page, display_ext)
             progress.start(index, display_name)
@@ -1174,17 +1255,48 @@ class VideoService:
             progress.finish()
             return result
 
+        def safe_run(service, page_obj, index):
+            """分P失败不立即中断：先继续其余分P，最后统一重试失败的。"""
+            try:
+                return run_page(service, page_obj, index), None
+            except DownloadCancelled:
+                raise
+            except DownloadError as exc:
+                service._raise_if_cancelled()
+                logger.error("视频 %s 第 %d 分P 下载失败，稍后重试：%s",
+                             bvid, page_obj.page, exc)
+                return None, (page_obj, index)
+
         if threads > 1 and len(pages) > 1:
             services = self._account_services(account_sessions, threads)
             try:
                 def work(page_obj, idx):
                     service = services[idx % len(services)]
-                    return run_page(service, page_obj, idx + 1)
+                    return safe_run(service, page_obj, idx + 1)
 
-                return parallel_run(pages, work, threads)
+                pairs = parallel_run(pages, work, threads)
             finally:
                 self._close_owned_services(services)
-        return [run_page(self, page_obj, i) for i, page_obj in enumerate(pages, 1)]
+        else:
+            pairs = [safe_run(self, page_obj, i) for i, page_obj in enumerate(pages, 1)]
+
+        results = [result for result, failed in pairs if result is not None]
+        retry_pages = [failed for _result, failed in pairs if failed is not None]
+        failed_pages = []
+        if retry_pages:
+            self._raise_if_cancelled()
+            logger.info("视频 %s 有 %d 个分P失败，最后重试。", bvid, len(retry_pages))
+            for page_obj, index in retry_pages:
+                self._raise_if_cancelled()
+                try:
+                    results.append(run_page(self, page_obj, index))
+                except DownloadCancelled:
+                    raise
+                except DownloadError as exc:
+                    logger.error("视频 %s 第 %d 分P重试仍失败：%s",
+                                 bvid, page_obj.page, exc)
+                    failed_pages.append(page_obj.page)
+        return results, failed_pages
 
     def fetch_season(self, bvid: Optional[str] = None, season_id: Optional[int] = None,
                      mid: int = 0) -> Optional[VideoSeason]:
@@ -1233,18 +1345,22 @@ class VideoService:
             quality: VideoQuality, file_idx: int, progress: Optional[BatchProgress] = None,
             progress_cb: Optional[ProgressCallback] = None,
             cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
-    ) -> tuple[list, int]:
+    ) -> tuple[list, int, list]:
+        """下载一个稿件；失败分P不中断，返回 ``(结果, 新序号, 失败分P序号)``。"""
         if media_type not in _ALLOWED_MEDIA_TYPES:
             raise ValueError(f"不支持的媒体类型：{media_type!r}")
         info = self.fetch_info(episode.bvid)
         new_results = []
+        failed_pages = []
         page_objs = episode.pages if episode.is_multi_page and media_type != "cover" else [
             VideoPage(page=1, cid=info.cid or 0, part=info.title)]
         for page_obj in page_objs:
+            self._raise_if_cancelled()
             file_idx += 1
             display_ext = {"video": "mp4", "audio": "m4a", "cover": "jpg", "danmaku": "ass"}.get(media_type, "mp4")
             display_name = self._default_filename(info, episode.bvid, page_obj.page, display_ext)
             progress.start(file_idx, display_name)
+            success = False
             try:
                 if media_type == "video":
                     result = self.download_video(episode.bvid, save_dir, page=page_obj.page, quality=quality,
@@ -1266,9 +1382,17 @@ class VideoService:
                                                             progress_cb=progress_cb, progress=progress,
                                                             cache_dirs=cache_dirs, force=force)
                 new_results.append(result)
+                success = True
+            except DownloadCancelled:
+                raise
+            except DownloadError as exc:
+                self._raise_if_cancelled()
+                logger.error("视频 %s 第 %d 分P 下载失败，稍后重试：%s",
+                             episode.bvid, page_obj.page, exc)
+                failed_pages.append(page_obj.page)
             finally:
-                progress.finish()
-        return new_results, file_idx
+                progress.finish(success=success)
+        return new_results, file_idx, failed_pages
 
     def _child_service(self, session) -> "VideoService":
         """创建并发子服务，继承权限换号候选、缓存与清晰度上限。"""
@@ -1407,25 +1531,62 @@ class VideoService:
         results = []
         download_count = 0
         file_idx = 0
+        retry_queue = []  # [(episode, failed_pages)]；failed_pages 为空表示整稿重试
         for i, episode in enumerate(season.episodes, 1):
+            self._raise_if_cancelled()
             logger.info("合集「%s」下载：%s", season.title, episode.title)
             # 起始文件序号在闭包里固定：风控重试会重新执行整个动作，不能捕获到已更新的 file_idx
+            start_idx = file_idx
             outcome = self._execute_batch_download(
                 episode.bvid,
-                lambda ep=episode, start_idx=file_idx: self._download_episode(
+                lambda ep=episode, sidx=start_idx: self._download_episode(
                     ep, save_dir, media_type=media_type, quality=quality,
-                    file_idx=start_idx, progress=progress, progress_cb=progress_cb,
+                    file_idx=sidx, progress=progress, progress_cb=progress_cb,
                     cache_dirs=cache_dirs, force=force,
                 ),
                 label=label,
             )
+            page_count = len(episode.pages) if episode.is_multi_page else 1
+            if outcome is _RETRY_OUTCOME:
+                logger.info("视频 %s 下载失败，排到队尾重试（%s）。", episode.bvid, label)
+                retry_queue.append((episode, []))
+                file_idx += page_count
+                continue
             if outcome is None:
+                file_idx += page_count
                 continue  # 视频不可见：_execute_batch_download 已记录日志
-            new_results, file_idx = outcome
+            new_results, file_idx, failed_pages = outcome
             results.extend(new_results)
+            if failed_pages:
+                logger.info("视频 %s 有 %d 个分P失败，排到队尾重试（%s）。",
+                            episode.bvid, len(failed_pages), label)
+                retry_queue.append((episode, failed_pages))
             download_count = self._report_bvid_download(
                 episode.bvid, new_results, download_count, i, total,
             )
+        if retry_queue:
+            self._raise_if_cancelled()
+            logger.info("合集「%s」有 %d 个稿件存在失败分P，开始最后重试。",
+                        season.title, len(retry_queue))
+            for episode, failed_pages in retry_queue:
+                self._raise_if_cancelled()
+                outcome = self._execute_batch_download(
+                    episode.bvid,
+                    lambda ep=episode, pages=failed_pages: self._download_all_pages_report(
+                        ep.bvid, save_dir, quality=quality, media_type=media_type,
+                        progress=progress, progress_cb=progress_cb,
+                        cache_dirs=cache_dirs, force=force, only_pages=pages or None,
+                    ),
+                    label=label,
+                )
+                if outcome is _RETRY_OUTCOME or outcome is None:
+                    logger.error("视频 %s 重试仍失败，跳过（%s）。", episode.bvid, label)
+                    continue
+                page_results, failed = outcome
+                results.extend(page_results)
+                if failed:
+                    logger.error("视频 %s 的分P %s 重试仍失败，跳过（%s）。",
+                                 episode.bvid, failed, label)
         return results
 
     def _download_season_parallel(self, season, save_dir, *, quality, media_type,
@@ -1457,21 +1618,57 @@ class VideoService:
             """任务完成时立即输出视频级汇总日志。"""
             nonlocal completed_count, download_count
             completed_count += 1
+            if outcome is _RETRY_OUTCOME:
+                logger.info("视频 %s 下载失败，排到队尾重试（%s）。",
+                            season.episodes[index].bvid, label)
+                return
             if outcome is None:
                 return
             episode = season.episodes[index]
-            new_results, _ = outcome
+            new_results, _idx, failed_pages = outcome
             download_count = self._report_bvid_download(
                 episode.bvid, new_results, download_count, completed_count, total,
             )
+            if failed_pages:
+                logger.info("视频 %s 有 %d 个分P失败，排到队尾重试（%s）。",
+                            episode.bvid, len(failed_pages), label)
 
         outcomes = parallel_run(season.episodes, _work, threads, on_complete=_on_complete)
         # 下载结果仍按输入顺序返回；汇总日志已在每个任务完成时即时输出。
         results = []
-        for outcome in outcomes:
-            if outcome is not None:
-                new_results, _ = outcome
+        retry_queue = []  # [(episode, failed_pages)]
+        for episode, outcome in zip(season.episodes, outcomes):
+            if outcome is _RETRY_OUTCOME:
+                retry_queue.append((episode, []))
+            elif outcome is not None:
+                new_results, _idx, failed_pages = outcome
                 results.extend(new_results)
+                if failed_pages:
+                    retry_queue.append((episode, failed_pages))
+        if retry_queue:
+            self._raise_if_cancelled()
+            logger.info("合集「%s」有 %d 个稿件存在失败分P，开始最后重试。",
+                        season.title, len(retry_queue))
+            for index, (episode, failed_pages) in enumerate(retry_queue):
+                self._raise_if_cancelled()
+                svc = services[index % len(services)]
+                outcome = svc._execute_batch_download(
+                    episode.bvid,
+                    lambda ep=episode, pages=failed_pages: svc._download_all_pages_report(
+                        ep.bvid, save_dir, quality=quality, media_type=media_type,
+                        progress=progress, progress_cb=progress_cb,
+                        cache_dirs=cache_dirs, force=force, only_pages=pages or None,
+                    ),
+                    label=label, risk_gate=gate,
+                )
+                if outcome is _RETRY_OUTCOME or outcome is None:
+                    logger.error("视频 %s 重试仍失败，跳过（%s）。", episode.bvid, label)
+                    continue
+                page_results, failed = outcome
+                results.extend(page_results)
+                if failed:
+                    logger.error("视频 %s 的分P %s 重试仍失败，跳过（%s）。",
+                                 episode.bvid, failed, label)
         return results
 
     # ---- 统一下载接口 ----
@@ -1520,23 +1717,72 @@ class VideoService:
             item_label: Callable[[str], str],
             on_skip: Optional[Callable[[str, int, int], None]] = None,
     ) -> list:
-        """统一执行收藏夹、UP 主等 BV 列表批量下载。"""
+        """统一执行收藏夹、UP 主等 BV 列表批量下载。
+
+        单个视频下载失败（CDN 超时等）不会中断任务：先继续其余视频，全部结束后
+        把失败项排到队尾统一重试一轮；仍失败则记录日志并跳过。
+        """
         total = len(bvids)
+
+        def run_item(service, bvid, risk_gate=None):
+            def action():
+                page_results, failed = service._download_all_pages_report(
+                    bvid, save_dir, quality=quality, media_type=media_type,
+                    progress=progress, progress_cb=progress_cb,
+                    cache_dirs=cache_dirs, force=force,
+                )
+                if failed:
+                    logger.error("视频 %s 有 %d 个分P下载失败，排到队尾重试（%s）。",
+                                 bvid, len(failed), item_label(bvid))
+                    return _RetryPages(bvid, failed, page_results)
+                return page_results
+
+            return service._execute_batch_download(
+                bvid, action, label=item_label(bvid), risk_gate=risk_gate)
+
+        def retry_item(service, item, risk_gate=None):
+            """只重试失败的分P；pages 为空表示整个视频重试。"""
+            def action():
+                return service._download_all_pages_report(
+                    item.bvid, save_dir, quality=quality, media_type=media_type,
+                    progress=progress, progress_cb=progress_cb,
+                    cache_dirs=cache_dirs, force=force,
+                    only_pages=item.pages or None,
+                )
+
+            outcome = service._execute_batch_download(
+                item.bvid, action, label=item_label(item.bvid), risk_gate=risk_gate)
+            if outcome is None or outcome is _RETRY_OUTCOME:
+                logger.error("视频 %s 重试仍失败，跳过（%s）。", item.bvid, item_label(item.bvid))
+                return []
+            page_results, failed = outcome
+            if failed:
+                logger.error("视频 %s 的分P %s 重试仍失败，跳过（%s）。",
+                             item.bvid, failed, item_label(item.bvid))
+            return page_results
+
+        def handle_retry(service, item, results, download_count):
+            page_results = retry_item(service, item)
+            if not page_results:
+                return download_count
+            results.extend(page_results)
+            return self._report_bvid_download(
+                item.bvid, page_results, download_count, total, total)
+
+        def collect_retry_item(bvid, outcome):
+            if isinstance(outcome, _RetryPages):
+                return outcome
+            if outcome is _RETRY_OUTCOME:
+                return _RetryPages(bvid)  # 整个视频重试（如取流阶段网络失败）
+            return None
+
         if threads > 1:
             gate = RiskGate()
             services = self._account_services(account_sessions, threads)
 
             def work(bvid, index):
                 service = services[index % len(services)]
-                return service._execute_batch_download(
-                    bvid,
-                    lambda current_bvid=bvid: service.download_all_pages(
-                        current_bvid, save_dir, quality=quality, media_type=media_type,
-                        progress=progress, progress_cb=progress_cb,
-                        cache_dirs=cache_dirs, force=force,
-                    ),
-                    label=item_label(bvid), risk_gate=gate,
-                )
+                return run_item(service, bvid, risk_gate=gate)
 
             completed_count = 0
             download_count = 0
@@ -1545,6 +1791,8 @@ class VideoService:
                 nonlocal completed_count, download_count
                 bvid = bvids[index]
                 completed_count += 1
+                if isinstance(outcome, _RetryPages) or outcome is _RETRY_OUTCOME:
+                    return
                 if outcome is None:
                     if on_skip is not None:
                         on_skip(bvid, completed_count, total)
@@ -1558,34 +1806,54 @@ class VideoService:
                     bvids, work, threads, on_complete=report_completion,
                 )
                 results = []
-                for outcome in outcomes:
-                    if outcome is not None:
+                retry_items = []
+                for bvid, outcome in zip(bvids, outcomes):
+                    item = collect_retry_item(bvid, outcome)
+                    if item is not None:
+                        results.extend(item.results)
+                        retry_items.append(item)
+                    elif outcome is not None:
                         results.extend(outcome)
+                if retry_items:
+                    self._raise_if_cancelled()
+                    logger.info("有 %d 个视频有失败分P，开始最后重试（%s）。",
+                                len(retry_items), item_label(retry_items[0].bvid))
+                    for i, item in enumerate(retry_items):
+                        self._raise_if_cancelled()
+                        service = services[i % len(services)]
+                        download_count = handle_retry(
+                            service, item, results, download_count)
                 return results
             finally:
                 self._close_owned_services(services)
 
         results = []
         download_count = 0
+        retry_items = []
         for index, bvid in enumerate(bvids, 1):
+            self._raise_if_cancelled()
             logger.info("%s：%s", item_label(bvid), bvid)
-            new_results = self._execute_batch_download(
-                bvid,
-                lambda current_bvid=bvid: self.download_all_pages(
-                    current_bvid, save_dir, quality=quality, media_type=media_type,
-                    progress=progress, progress_cb=progress_cb,
-                    cache_dirs=cache_dirs, force=force,
-                ),
-                label=item_label(bvid),
-            )
-            if new_results is None:
+            outcome = run_item(self, bvid)
+            item = collect_retry_item(bvid, outcome)
+            if item is not None:
+                results.extend(item.results)
+                retry_items.append(item)
+                continue
+            if outcome is None:
                 if on_skip is not None:
                     on_skip(bvid, index, total)
                 continue
-            results.extend(new_results)
+            results.extend(outcome)
             download_count = self._report_bvid_download(
-                bvid, new_results, download_count, index, total,
+                bvid, outcome, download_count, index, total,
             )
+        if retry_items:
+            self._raise_if_cancelled()
+            logger.info("有 %d 个视频有失败分P，开始最后重试（%s）。",
+                        len(retry_items), item_label(retry_items[0].bvid))
+            for item in retry_items:
+                self._raise_if_cancelled()
+                download_count = handle_retry(self, item, results, download_count)
         return results
 
     def download_fav(
@@ -1659,7 +1927,7 @@ class VideoService:
             account_sessions=account_sessions, cache_dirs=cache_dirs, force=force,
             item_label=lambda bvid: label,
             on_skip=lambda bvid, index, count: print(
-                f"跳过不可见或无权限视频 {bvid}，进度 {index}/{count}"
+                f"跳过视频 {bvid}，进度 {index}/{count}"
             ),
         )
 
@@ -1719,7 +1987,7 @@ class VideoService:
             time.sleep(0.3)  # 避免风控
         if others:
             logger.info(
-                "UP主 %s 空间共 %d 条视频，其中 %d 条为他人稿件（该UP主仅为联合投稿嘉宾，将一并下载）：",
+                "UP主 %s 空间共 %d 条视频，其中 %d 条为他人稿件（该UP主仅为联合投稿嘉宾，将一并下载）。",
                 mid, len(bvids), len(others))
             for bvid, author in others:
                 logger.info("  他人稿件：%s（UP主：%s）", bvid, author)

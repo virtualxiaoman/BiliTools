@@ -4,7 +4,7 @@
 """
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from frontend.pyside6 import fonts
@@ -27,11 +27,15 @@ class TaskRow(QWidget):
         self.pct.setFixedWidth(38)
         self.status = QLabel("")
         self.status.setObjectName("Dim")
+        self.btn_cancel = QPushButton("终止")
+        self.btn_cancel.setFixedWidth(48)
+        self.btn_cancel.setToolTip("终止任务：删除未完成的临时文件，已完成文件保留")
 
         lay.addWidget(self.desc, 1)
         lay.addWidget(self.bar)
         lay.addWidget(self.pct)
         lay.addWidget(self.status)
+        lay.addWidget(self.btn_cancel)
 
     def set_progress(self, done, total):
         if total:
@@ -58,8 +62,15 @@ class TaskRow(QWidget):
         self.pct.setText("✓" if success else "✗")
         self.status.setText(summary[:60])
         self.status.setToolTip(summary)
+        self.btn_cancel.setEnabled(False)
+        self.btn_cancel.hide()
         color = "#2e7d32" if success else "#c62828"
         self.status.setStyleSheet(f"{fonts.bold_family_css()}color:{color}; font-weight:600;")
+
+    def set_cancelling(self):
+        self.btn_cancel.setEnabled(False)
+        self.status.setText("正在终止…")
+        self.status.setToolTip("正在停止下载并删除未完成的临时文件")
 
 
 class TaskProgressPanel(QWidget):
@@ -80,12 +91,21 @@ class TaskProgressPanel(QWidget):
 
         self._rows = {}
 
-    def add_task(self, tid, desc):
+    def add_task(self, tid, desc, on_cancel=None):
         if tid in self._rows:
             return
         row = TaskRow(desc)
+        if on_cancel is not None:
+            row.btn_cancel.clicked.connect(lambda _=False, t=tid: on_cancel(t))
+        else:
+            row.btn_cancel.hide()
         self.rows_layout.insertWidget(self.rows_layout.count() - 1, row)
         self._rows[tid] = row
+
+    def set_cancelling(self, tid):
+        row = self._rows.get(tid)
+        if row:
+            row.set_cancelling()
 
     def update_progress(self, tid, done, total):
         row = self._rows.get(tid)

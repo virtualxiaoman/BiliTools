@@ -117,6 +117,20 @@ class DownloadManager(QObject):
         worker.start()
         return tid
 
+    def cancel(self, tid: int) -> bool:
+        """请求终止任务；未完成的临时文件由下载层删除，已完成文件保留。"""
+        record = self._tasks.get(tid)
+        if record is None:
+            return False
+        app_signals.log_message.emit(
+            LogCategory.WARN, f"正在终止任务：{self._worker_description(record.worker)}")
+        try:
+            record.worker.cancel()
+        except Exception:
+            logger.exception("请求下载任务取消失败")
+            return False
+        return True
+
     @staticmethod
     def _sender_task_id(sender) -> Optional[int]:
         return getattr(sender, "_download_task_id", None) if sender is not None else None

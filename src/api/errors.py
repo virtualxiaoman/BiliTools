@@ -51,6 +51,10 @@ class DownloadError(BiliError):
     """下载失败（网络中断、文件写入失败、ffmpeg 合并失败等）。"""
 
 
+class DownloadCancelled(DownloadError):
+    """用户终止下载；进行中的临时文件会被删除，已完成的文件保留。"""
+
+
 class FFmpegNotFoundError(DownloadError):
     """系统未安装 ffmpeg，无法进行音视频合成。"""
 

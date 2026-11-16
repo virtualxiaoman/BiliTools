@@ -87,6 +87,17 @@ def test_permission_cache_roundtrip():
     assert cache.max_quality("BV1", 123) == 80
 
 
+def test_ordered_permission_accounts_prefers_cached_account():
+    """命中“该 UP 可用账号”缓存时也要能正常排序（曾因漏导入 same_account 报错）。"""
+    service = VideoService(session=_SessionDouble())
+    first = AccountCapability(cookie_path="a.txt", uname="A")
+    second = AccountCapability(cookie_path="b.txt", uname="B")
+    service.permission_accounts = [first, second]
+    service.permission_cache.remember_upower_account(999, "b.txt")
+
+    assert service._ordered_permission_accounts(999) == [second, first]
+
+
 def test_capability_matches_by_mid_when_paths_differ():
     """当前账号 cookie 可能落在共享路径，能力匹配要能按 mid 命中。"""
     class Session:

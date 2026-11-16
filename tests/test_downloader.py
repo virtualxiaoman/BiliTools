@@ -340,3 +340,29 @@ def test_download_stream_overwrite_starts_from_empty_file(tmp_path):
     assert size == 3
     assert target.read_bytes() == b"new"
     assert "Range" not in mock_get.call_args.kwargs["headers"]
+
+
+def test_download_stream_cancel_deletes_part(tmp_path):
+    """用户终止时应删除未完成的 .part，已完成文件不受影响。"""
+    import threading
+
+    from src.api.errors import DownloadCancelled
+
+    cancel = threading.Event()
+
+    class FakeResp:
+        status_code = 200
+        headers = {"Content-Length": "10"}
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size):
+            yield b"12345"
+            cancel.set()
+            yield b"67890"
+
+    target = tmp_path / "f.bin"
+    with patch("requests.get", return_value=FakeResp()):
+        with pytest.raises(DownloadCancelled):
+            dl.download_stream("http://x", target, cancel_event=cancel)
+
+    assert not target.exists()
+    assert not (tmp_path / "f.bin.part").exists()

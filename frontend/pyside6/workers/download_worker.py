@@ -11,7 +11,7 @@ from src.services.emote import EmoteService
 from src.services.fav import FavService
 from src.services.garb import GarbService
 from src.services.video import VideoService
-from src.api.errors import BiliAuthError, BiliRiskError
+from src.api.errors import BiliAuthError, BiliRiskError, DownloadCancelled
 from src.models.download_model import VideoQuality
 from src.models.download_request import DownloadRequest, DownloadSource, MediaType
 from src.services.account_capability import (
@@ -59,6 +59,8 @@ class DownloadWorker(QThread):
         return self._cancel_event.is_set() or self.isInterruptionRequested()
 
     def milestone(self, category: int, text: str) -> None:
+        # 界面可以按类别过滤，日志文件始终保留（DEBUG 只进文件，不进界面）。
+        logger.debug("[UI] %s", text)
         app_signals.log_message.emit(category, text)
 
     def _resolve_pending(self):
@@ -105,12 +107,21 @@ class DownloadWorker(QThread):
             if isinstance(results, list):
                 self.milestone(LogCategory.SUCCESS, summary)
             result_payload = (True, summary, ERROR_NONE)
+        except DownloadCancelled:
+            logger.info("[DownloadWorker] 任务已终止：%s", self.request.description)
+            self.milestone(LogCategory.WARN, "任务已终止：未完成的临时文件已删除，已完成的文件保留")
+            result_payload = (False, "任务已终止", ERROR_OTHER)
         except Exception as e:
-            kind = self._error_kind(e)
-            text = self._error_text(e)
-            logger.exception("[DownloadWorker] 任务失败：%s", self.request.description)
-            self.milestone(LogCategory.ERROR, f"下载失败：{text}")
-            result_payload = (False, text, kind)
+            if self.is_cancelled():
+                logger.info("[DownloadWorker] 任务已终止：%s", self.request.description)
+                self.milestone(LogCategory.WARN, "任务已终止：未完成的临时文件已删除，已完成的文件保留")
+                result_payload = (False, "任务已终止", ERROR_OTHER)
+            else:
+                kind = self._error_kind(e)
+                text = self._error_text(e)
+                logger.exception("[DownloadWorker] 任务失败：%s", self.request.description)
+                self.milestone(LogCategory.ERROR, f"下载失败：{text}")
+                result_payload = (False, text, kind)
         finally:
             for session in self._owned_account_sessions:
                 try:
