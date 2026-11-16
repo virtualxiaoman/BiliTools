@@ -41,6 +41,53 @@ def _target_lock(path: Path) -> threading.Lock:
         return _TARGET_LOCKS.setdefault(key, threading.Lock())
 
 
+# 每个任务（cancel_event）当前正在写的 .part；终止时统一兜底删除。
+_ACTIVE_PARTS: dict[threading.Event, set[Path]] = {}
+_ACTIVE_PARTS_LOCK = threading.Lock()
+
+
+def _register_active_part(cancel_event: threading.Event, path: Path) -> None:
+    with _ACTIVE_PARTS_LOCK:
+        _ACTIVE_PARTS.setdefault(cancel_event, set()).add(Path(path))
+
+
+def _unregister_active_part(cancel_event: threading.Event, path: Path) -> None:
+    with _ACTIVE_PARTS_LOCK:
+        paths = _ACTIVE_PARTS.get(cancel_event)
+        if paths is None:
+            return
+        paths.discard(Path(path))
+        if not paths:
+            _ACTIVE_PARTS.pop(cancel_event, None)
+
+
+def cleanup_active_parts(cancel_event: Optional[threading.Event]) -> int:
+    """终止任务时删除该任务登记过的所有未完成 .part（兜底）。"""
+    if cancel_event is None:
+        return 0
+    with _ACTIVE_PARTS_LOCK:
+        paths = _ACTIVE_PARTS.pop(cancel_event, set())
+    removed = 0
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+            removed += 1
+        except OSError:
+            logger.warning("[download_stream] 删除临时文件失败：%s", path, exc_info=True)
+    return removed
+
+
+def _watch_cancel(response, cancel_event: threading.Event, done: threading.Event) -> None:
+    """取消时主动关闭响应，让阻塞中的 socket 读取立即失败。"""
+    while not done.is_set():
+        if cancel_event.wait(0.2):
+            try:
+                _close_response(response)
+            except Exception:
+                pass
+            return
+
+
 def _parse_content_range(value: str | None) -> tuple[int, int, Optional[int]] | None:
     """解析 ``Content-Range``，允许总长度为 ``*``。"""
     if not isinstance(value, str) or not value.startswith("bytes "):
@@ -144,6 +191,9 @@ def download_stream(
             expected_total: Optional[int] = None
             restart_without_counting = False
             response = None
+            monitor_done = threading.Event()
+            if cancel_event is not None:
+                _register_active_part(cancel_event, part_path)
             try:
                 logger.debug("[download_stream] 访问 URL：%s", url)
                 response = requests.get(
@@ -153,6 +203,12 @@ def download_stream(
                     timeout=(10, 60),
                 )
                 response.raise_for_status()
+                if cancel_event is not None:
+                    threading.Thread(
+                        target=_watch_cancel,
+                        args=(response, cancel_event, monitor_done),
+                        daemon=True,
+                    ).start()
                 status_code = getattr(response, "status_code", 200)
                 content_range = _parse_content_range(
                     getattr(response, "headers", {}).get("Content-Range")
@@ -215,6 +271,9 @@ def download_stream(
             except DownloadError:
                 raise
             except (requests.RequestException, OSError, ValueError, TypeError) as exc:
+                if cancel_event is not None and cancel_event.is_set():
+                    part_path.unlink(missing_ok=True)
+                    raise DownloadCancelled(f"下载已取消：{url}") from exc
                 last_error = exc
                 logger.warning(
                     "[download_stream] 第%d次下载%s失败（.part 已下载%d字节）：%s",
@@ -223,9 +282,18 @@ def download_stream(
                 attempt += 1
                 if attempt > max_retries:
                     break
-                time.sleep(min(0.25 * (2 ** (attempt - 1)), 2.0))
+                wait = min(0.25 * (2 ** (attempt - 1)), 2.0)
+                if cancel_event is not None:
+                    if cancel_event.wait(wait):
+                        part_path.unlink(missing_ok=True)
+                        raise DownloadCancelled(f"下载已取消：{url}") from exc
+                else:
+                    time.sleep(wait)
                 continue
             finally:
+                monitor_done.set()
+                if cancel_event is not None:
+                    _unregister_active_part(cancel_event, part_path)
                 if response is not None:
                     _close_response(response)
 

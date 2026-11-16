@@ -124,3 +124,21 @@ def test_single_page_file_only_matches_page_one(tmp_path):
 
     assert svc._find_downloaded_file("BVsingle", {"mp4"}, page=1) is not None
     assert svc._find_downloaded_file("BVsingle", {"mp4"}, page=2) is None
+
+
+def test_page_tag_with_empty_part_title(tmp_path):
+    """分P标题为空时文件名是 `-P01(BV)`，同样应能命中缓存。"""
+    svc = _service(tmp_path)
+    (tmp_path / "标题-P01(BVempty).mp4").write_bytes(b"x")
+
+    assert svc._find_downloaded_file("BVempty", {"mp4"}, page=1) is not None
+    assert svc._find_downloaded_file("BVempty", {"mp4"}, page=2) is None
+
+
+def test_page_tags_do_not_prefix_match(tmp_path):
+    """P10 不能误命中 P100 的文件。"""
+    svc = _service(tmp_path)
+    (tmp_path / "标题-P100-末页(BVlong).mp4").write_bytes(b"x")
+
+    assert svc._find_downloaded_file("BVlong", {"mp4"}, page=10) is None
+    assert svc._find_downloaded_file("BVlong", {"mp4"}, page=100) is not None

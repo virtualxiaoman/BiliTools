@@ -88,7 +88,7 @@ def test_collection_reward_uses_watermarked_animation_only_as_fallback():
 def test_collection_reward_filter_downloads_to_reward_directory(tmp_path, monkeypatch):
     calls = []
 
-    def fake_download(url, path, headers=None, progress_cb=None):
+    def fake_download(url, path, headers=None, progress_cb=None, cancel_event=None, **kwargs):
         calls.append((url, path))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"asset")

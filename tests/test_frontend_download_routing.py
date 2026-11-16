@@ -69,7 +69,7 @@ class _FakeService:
 
 
 class _FakeFavService:
-    def __init__(self, session):
+    def __init__(self, session, cancel_event=None):
         pass
 
     def get_fav_bv(self, fid):
@@ -78,7 +78,7 @@ class _FakeFavService:
 
 
 class _FakeEmoteService:
-    def __init__(self, session):
+    def __init__(self, session, cancel_event=None):
         self.session = session
 
     def count_emotes(self, package_ids):
@@ -91,7 +91,7 @@ class _FakeEmoteService:
 
 
 class _FakeGarbService:
-    def __init__(self, session):
+    def __init__(self, session, cancel_event=None):
         self.session = session
 
     def prepare_download(self, keyword):
@@ -104,7 +104,7 @@ class _FakeGarbService:
 
 
 class _FakeDressupService:
-    def __init__(self, session):
+    def __init__(self, session, cancel_event=None):
         self.session = session
 
     def download_items(self, items, directory, **kw):

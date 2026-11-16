@@ -22,7 +22,7 @@ class _FakeSession:
 
 
 def _fake_download(calls):
-    def download(url, path, headers=None, progress_cb=None):
+    def download(url, path, headers=None, progress_cb=None, cancel_event=None, **kwargs):
         calls.append((url, path, headers))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"cover")
@@ -59,7 +59,7 @@ def test_collection_downloads_emotes_from_collect_chain_and_reuses_prepared_pack
     fake_session = _FakeSession(item, detail)
 
     class FakeEmoteService:
-        def __init__(self, session):
+        def __init__(self, session, cancel_event=None):
             assert session is fake_session
 
         def count_emotes(self, package_ids):
@@ -107,7 +107,7 @@ def test_collection_emoji_package_filter_downloads_only_linked_emotes(tmp_path, 
     }
 
     class FakeEmoteService:
-        def __init__(self, session):
+        def __init__(self, session, cancel_event=None):
             pass
 
         def count_emotes(self, package_ids):

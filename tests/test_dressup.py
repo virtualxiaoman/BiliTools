@@ -49,7 +49,7 @@ def test_search_combines_emoji_collection_and_suit():
 class _FakeEmoteService:
     instances = []
 
-    def __init__(self, session, default_dir=None):
+    def __init__(self, session, default_dir=None, cancel_event=None):
         self.session = session
         self.default_dir = default_dir
         self.instances.append((session, default_dir))
@@ -63,7 +63,7 @@ class _FakeEmoteService:
 class _FakeGarbService:
     instances = []
 
-    def __init__(self, session, default_dir=None):
+    def __init__(self, session, default_dir=None, cancel_event=None):
         self.session = session
         self.default_dir = default_dir
         self.instances.append((session, default_dir))

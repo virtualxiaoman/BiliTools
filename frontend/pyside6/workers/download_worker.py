@@ -14,6 +14,7 @@ from src.services.video import VideoService
 from src.api.errors import BiliAuthError, BiliRiskError, DownloadCancelled
 from src.models.download_model import VideoQuality
 from src.models.download_request import DownloadRequest, DownloadSource, MediaType
+from src.util.downloader import cleanup_active_parts
 from src.services.account_capability import (
     capability_for,
     list_account_capabilities,
@@ -129,6 +130,11 @@ class DownloadWorker(QThread):
                 except Exception:
                     logger.warning("关闭账号下载会话失败", exc_info=True)
             self._owned_account_sessions.clear()
+            if self._cancel_event.is_set():
+                try:
+                    cleanup_active_parts(self._cancel_event)
+                except Exception:
+                    logger.warning("清理未完成临时文件失败", exc_info=True)
             if self._service is not None:
                 try:
                     self._service.session.close()
@@ -225,7 +231,7 @@ class DownloadWorker(QThread):
     def _execute_emote(self, service):
         request = self.request
         package_ids = request.input_value
-        emote_service = EmoteService(service.session)
+        emote_service = EmoteService(service.session, cancel_event=self._cancel_event)
         packages, count = emote_service.count_emotes(package_ids)
         adapter = self._make_adapter(
             request.threads if count > 1 else 1, count, f"表情包 {','.join(map(str, package_ids))}"
@@ -242,7 +248,7 @@ class DownloadWorker(QThread):
         items = request.input_value
         if not isinstance(items, list) or not items:
             raise ValueError("未选择要下载的装扮/表情包")
-        dressup_service = DressupService(service.session)
+        dressup_service = DressupService(service.session, cancel_event=self._cancel_event)
         adapter = self._make_adapter(request.threads, len(items), f"装扮 {len(items)} 项")
         return dressup_service.download_items(
             items, request.save_dir, threads=request.threads,
@@ -252,7 +258,7 @@ class DownloadWorker(QThread):
 
     def _execute_garb(self, service):
         request = self.request
-        garb_service = GarbService(service.session)
+        garb_service = GarbService(service.session, cancel_event=self._cancel_event)
         item, detail, count = garb_service.prepare_download(request.input_value)
         adapter = self._make_adapter(
             request.threads if count > 1 else 1, count,

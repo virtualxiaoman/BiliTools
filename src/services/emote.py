@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from src.api.session import BiliSession
 from src.config.path import COLLECTION_OUTPUT_DIR
+from src.api.errors import DownloadCancelled
 from src.models.download_model import DownloadResult
 from src.urls.emote_urls import EmoteUrls
 from src.util.downloader import ProgressCallback, download_stream
@@ -27,9 +28,10 @@ class EmoteService:
     当首选地址不存在时，会依次回退至 ``webp_url`` 与 ``url``。
     """
 
-    def __init__(self, session: Optional[BiliSession] = None, default_dir=None):
+    def __init__(self, session: Optional[BiliSession] = None, default_dir=None, cancel_event=None):
         self.session = session if session is not None else BiliSession()
         self.default_dir = Path(default_dir) if default_dir is not None else COLLECTION_OUTPUT_DIR
+        self.cancel_event = cancel_event
 
     @staticmethod
     def normalize_package_ids(package_ids) -> list[int]:
@@ -110,6 +112,8 @@ class EmoteService:
         ``threads > 1`` 时按表情文件并发，``account_sessions`` 非空时把并发文件
         轮询分摊到各账号的请求头上。
         """
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise DownloadCancelled("下载已取消")
         ids = self.normalize_package_ids(package_ids)
         if packages is None:
             packages = self.get_packages(ids)
@@ -149,7 +153,8 @@ class EmoteService:
             jobs.append((index, url, filename, package_dir / filename))
 
         services = (
-            [EmoteService(session=session, default_dir=self.default_dir) for session in account_sessions]
+            [EmoteService(session=session, default_dir=self.default_dir,
+                           cancel_event=self.cancel_event) for session in account_sessions]
             if account_sessions else [self]
         )
         headers = [dict(service.session.session.headers) for service in services]
@@ -157,6 +162,8 @@ class EmoteService:
 
         def run(job, worker_index):
             index, url, filename, save_path = job
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                raise DownloadCancelled("下载已取消")
             progress.start(index, filename)
             try:
                 if save_path.exists() and save_path.stat().st_size > 0:
@@ -168,6 +175,7 @@ class EmoteService:
                         url, save_path,
                         headers=headers[worker_index % len(headers)],
                         progress_cb=progress.make_stream_callback(),
+                        cancel_event=self.cancel_event,
                     )
                     result = DownloadResult(save_path, media_type="emote", size=size)
                 if progress_cb is not None:

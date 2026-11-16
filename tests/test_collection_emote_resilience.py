@@ -29,7 +29,7 @@ def test_collection_still_downloads_other_resources_when_emote_lookup_fails(tmp_
     }
 
     class BrokenEmoteService:
-        def __init__(self, session):
+        def __init__(self, session, cancel_event=None):
             pass
 
         def count_emotes(self, package_ids):
@@ -37,7 +37,7 @@ def test_collection_still_downloads_other_resources_when_emote_lookup_fails(tmp_
 
     calls = []
 
-    def fake_download(url, path, headers=None, progress_cb=None):
+    def fake_download(url, path, headers=None, progress_cb=None, cancel_event=None, **kwargs):
         calls.append(url)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"cover")

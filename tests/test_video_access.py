@@ -196,3 +196,52 @@ def test_collection_stops_when_cancelled(tmp_path, monkeypatch):
             cache_dirs=None, force=False, item_label=lambda bvid: "UP主",
         )
     assert called == []
+
+
+def test_page_download_reports_bytes_to_external_progress(tmp_path, monkeypatch):
+    """外部进度对象必须收到真实字节；否则会把刚下完的文件误报为“已存在”。"""
+    import types
+
+    from frontend.pyside6.workers.progress_adapter import ProgressAdapter
+    from src.models.download_model import AudioStream, DashStreams, VideoStream
+    from src.models.video_model import VideoInfo, VideoPage
+
+    messages = []
+
+    class _Signal:
+        def emit(self, *args):
+            pass
+
+    class _Worker:
+        def __init__(self):
+            self.progress = _Signal()
+            self.phase = _Signal()
+
+        def milestone(self, category, text):
+            messages.append(text)
+
+    service = VideoService(session=types.SimpleNamespace(
+        session=types.SimpleNamespace(headers={})))
+    service.default_dir = tmp_path
+    info = VideoInfo(bvid="BV1test", title="测试", cid=1,
+                     pages=[VideoPage(page=1, cid=1, part="P1", duration=10)])
+    dash = DashStreams(video=[VideoStream(url="http://v", quality=80, codecs="avc1")],
+                       audio=[AudioStream(url="http://a", codecs="mp4a")])
+    monkeypatch.setattr(service, "fetch_info", lambda bvid: info)
+    monkeypatch.setattr(service, "_fetch_streams",
+                        lambda bvid, page=1, quality=None: (info, dash, service))
+
+    def fake_download(url, save_path, headers, progress_cb=None, **kwargs):
+        if progress_cb:
+            progress_cb(30, 30)
+        Path(save_path).write_bytes(b"x")
+        return 1
+
+    monkeypatch.setattr("src.services.video.download_stream", fake_download)
+
+    adapter = ProgressAdapter(1, "测试", _Worker())
+    service._download_all_pages_report("BV1test", tmp_path, media_type="video", progress=adapter)
+
+    assert adapter.current_done == 30
+    assert any(text.startswith("下载完成") for text in messages)
+    assert not any(text.startswith("已存在，跳过") for text in messages)

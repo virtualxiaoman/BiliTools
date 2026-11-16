@@ -366,3 +366,60 @@ def test_download_stream_cancel_deletes_part(tmp_path):
 
     assert not target.exists()
     assert not (tmp_path / "f.bin.part").exists()
+
+
+def test_download_stream_cancel_interrupts_blocked_read(tmp_path):
+    """取消时应主动关闭连接，让阻塞的读取立即退出并删除 .part。"""
+    import threading
+
+    from src.api.errors import DownloadCancelled
+
+    entered = threading.Event()
+    closed = threading.Event()
+
+    class BlockingResp:
+        status_code = 200
+        headers = {"Content-Length": "10"}
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            entered.set()
+            closed.wait(5)  # 模拟阻塞中的 socket 读取
+            raise OSError("connection closed")
+
+        def close(self):
+            closed.set()
+
+    cancel = threading.Event()
+    outcome = {}
+
+    def run():
+        try:
+            dl.download_stream("http://x", tmp_path / "f.bin", cancel_event=cancel)
+        except Exception as exc:  # noqa: BLE001 - 测试需要捕获具体结果
+            outcome["exc"] = exc
+
+    with patch("requests.get", return_value=BlockingResp()):
+        thread = threading.Thread(target=run)
+        thread.start()
+        assert entered.wait(2)
+        cancel.set()
+        thread.join(3)
+
+    assert isinstance(outcome.get("exc"), DownloadCancelled)
+    assert not (tmp_path / "f.bin.part").exists()
+
+
+def test_cleanup_active_parts_removes_registered_files(tmp_path):
+    """终止兜底：登记过的未完成 .part 应被统一删除。"""
+    import threading
+
+    event = threading.Event()
+    part = tmp_path / "x.part"
+    part.write_bytes(b"partial")
+    dl._register_active_part(event, part)
+
+    assert dl.cleanup_active_parts(event) == 1
+    assert not part.exists()

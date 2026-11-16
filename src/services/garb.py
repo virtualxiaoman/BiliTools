@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 from src.api.session import BiliSession
 from src.config.path import COLLECTION_OUTPUT_DIR
+from src.api.errors import DownloadCancelled
 from src.models.download_model import DownloadResult
 from src.services.emote import EmoteService
 from src.urls.garb_urls import GarbUrls
@@ -79,9 +80,10 @@ class GarbService:
         "space_bg": "空间海报",
     }
 
-    def __init__(self, session: Optional[BiliSession] = None, default_dir=None):
+    def __init__(self, session: Optional[BiliSession] = None, default_dir=None, cancel_event=None):
         self.session = session if session is not None else BiliSession()
         self.default_dir = Path(default_dir) if default_dir is not None else COLLECTION_OUTPUT_DIR
+        self.cancel_event = cancel_event
         self._emote_packages_cache: dict[tuple[int, ...], tuple[list[dict], int]] = {}
 
     def search_items(self, keyword: str, *, page: int = 1, page_size: int = 20) -> list[dict]:
@@ -200,6 +202,8 @@ class GarbService:
         ``threads > 1`` 时按素材文件并发，``account_sessions`` 非空时把并发文件
         轮询分摊到各账号的请求头上。
         """
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise DownloadCancelled("下载已取消")
         if not isinstance(item, dict):
             raise ValueError("搜索项必须是字典")
         detail = self.get_detail(item) if detail is None else detail
@@ -230,7 +234,8 @@ class GarbService:
             jobs.append((index, resource, path))
 
         services = (
-            [GarbService(session=session, default_dir=self.default_dir) for session in account_sessions]
+            [GarbService(session=session, default_dir=self.default_dir,
+                          cancel_event=self.cancel_event) for session in account_sessions]
             if account_sessions else [self]
         )
         headers = [dict(service.session.session.headers) for service in services]
@@ -238,6 +243,8 @@ class GarbService:
 
         def run(job, worker_index):
             index, resource, path = job
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                raise DownloadCancelled("下载已取消")
             progress.start(index, path.name)
             try:
                 if path.exists() and path.stat().st_size > 0:
@@ -249,6 +256,7 @@ class GarbService:
                         resource.url, path,
                         headers=headers[worker_index % len(headers)],
                         progress_cb=progress.make_stream_callback(),
+                        cancel_event=self.cancel_event,
                     )
                     result = DownloadResult(path, media_type=resource.media_type, size=size)
                 if progress_cb is not None:
@@ -272,7 +280,7 @@ class GarbService:
                 progress_cb, offset=len(resources), total=total_count,
             )
             results.extend(
-                EmoteService(self.session).download_packages(
+                EmoteService(self.session, cancel_event=self.cancel_event).download_packages(
                     package_ids,
                     root,
                     progress=emote_progress,

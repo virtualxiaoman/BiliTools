@@ -24,7 +24,7 @@ def _key(url, **params):
 
 
 def _fake_download(calls):
-    def download(url, path, headers=None, progress_cb=None):
+    def download(url, path, headers=None, progress_cb=None, cancel_event=None, **kwargs):
         calls.append((url, path, headers))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"ok")

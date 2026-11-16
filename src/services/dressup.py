@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 from urllib.parse import parse_qs, urlparse
 
+from src.api.errors import DownloadCancelled
 from src.api.session import BiliSession
 from src.config.path import COLLECTION_OUTPUT_DIR
 from src.models.download_model import DownloadResult
@@ -71,9 +72,10 @@ class DressupItem:
 class DressupService:
     """装扮页签的搜索与批量下载服务。"""
 
-    def __init__(self, session: Optional[BiliSession] = None, default_dir=None):
+    def __init__(self, session: Optional[BiliSession] = None, default_dir=None, cancel_event=None):
         self.session = session if session is not None else BiliSession()
         self.default_dir = Path(default_dir) if default_dir is not None else COLLECTION_OUTPUT_DIR
+        self.cancel_event = cancel_event
 
     # ---- 按 ID 导入 ----
 
@@ -230,6 +232,7 @@ class DressupService:
         normalized = [self._normalize_item(item) for item in items]
         if not normalized:
             raise ValueError("请选择要下载的装扮/表情包")
+        self._raise_if_cancelled()
 
         root = Path(directory) if directory is not None else self.default_dir
         if threads < 1:
@@ -273,6 +276,10 @@ class DressupService:
             return item
         return DressupItem.from_dict(item)
 
+    def _raise_if_cancelled(self) -> None:
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise DownloadCancelled("下载已取消")
+
     @staticmethod
     def _package_id(payload: dict) -> int:
         try:
@@ -294,9 +301,10 @@ class DressupService:
         progress_cb: Optional[ProgressCallback] = None,
         use_full_name: bool = False,
     ) -> list[DownloadResult]:
+        self._raise_if_cancelled()
         session = sessions[index % len(sessions)] if sessions else self.session
         if item.kind == "emoji":
-            service = EmoteService(session, default_dir=root)
+            service = EmoteService(session, default_dir=root, cancel_event=self.cancel_event)
             return service.download_packages(
                 [self._package_id(item.payload)],
                 root,
@@ -305,7 +313,7 @@ class DressupService:
                 use_full_name=use_full_name,
             )
         if item.kind in ("collection", "suit"):
-            service = GarbService(session, default_dir=root)
+            service = GarbService(session, default_dir=root, cancel_event=self.cancel_event)
             return service.download_item(
                 item.payload, root, progress=progress, progress_cb=progress_cb,
             )

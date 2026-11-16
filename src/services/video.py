@@ -90,7 +90,12 @@ _ALLOWED_MEDIA_TYPES = {"video", "audio", "video_with_audio", "cover", "danmaku"
 _RETRY_OUTCOME = object()
 
 # 多P文件名里的分P标签：`[标题]-P07-[分P标题](BV号).mp4`
-_PAGE_TAG_RE = re.compile(r"-p\d{2,3}-")
+_PAGE_TAG_RE = re.compile(r"-p\d{2,3}(?=[-(])")
+
+
+def _has_page_tag(stem: str, page: int) -> bool:
+    """文件名里是否有该分P的标签（兼容分P标题为空的情况）。"""
+    return bool(re.search(rf"-p{page:02d}(?=[-(])", stem))
 
 
 @dataclass
@@ -395,6 +400,8 @@ class VideoService:
             try:
                 with part_path.open("wb") as output:
                     for part in parts:
+                        if cancel_event is not None and cancel_event.is_set():
+                            raise DownloadCancelled("下载已取消")
                         with part.open("rb") as source:
                             shutil.copyfileobj(source, output)
                 part_path.replace(save_path)
@@ -529,8 +536,8 @@ class VideoService:
             if cap.is_vip and not capability_matches_session(cap, self.session)
         ]
         if not candidates:
-            logger.info("视频 %s 请求 %s，当前账号无大会员且没有其它会员账号，按可用清晰度下载。",
-                        bvid, quality.display_name)
+            logger.debug("视频 %s 请求 %s，当前账号无大会员且没有其它会员账号，按可用清晰度下载。",
+                         bvid, quality.display_name)
             return None
         for cap in candidates:
             service = self._permission_service(cap)
@@ -729,7 +736,7 @@ class VideoService:
                               roots: Optional[Iterable[Path]] = None) -> Optional[Path]:
         search_roots = list(roots) if roots is not None else [root or self.default_dir]
         extensions = {ext.lower().lstrip(".") for ext in extensions}
-        page_tag = f"-p{page:02d}" if page is not None else None
+        page = int(page) if page is not None else None
         for value in search_roots:
             if value is None:
                 continue
@@ -745,12 +752,11 @@ class VideoService:
                     continue
                 if path.suffix.casefold().lstrip(".") not in extensions:
                     continue
-                if page_tag is not None:
-                    if page_tag not in stem:
-                        # 第 1 分P可命中“无分P标签”的单P文件；
-                        # 其它分P必须精确匹配 -Pxx-，避免把别的分P当成已下载。
-                        if page != 1 or _PAGE_TAG_RE.search(stem):
-                            continue
+                if page is not None and not _has_page_tag(stem, page):
+                    # 第 1 分P可命中“无分P标签”的单P文件；
+                    # 其它分P必须精确匹配 -Pxx-，避免把别的分P当成已下载。
+                    if page != 1 or _PAGE_TAG_RE.search(stem):
+                        continue
                 return path
         return None
 
@@ -768,7 +774,6 @@ class VideoService:
         if existing is not None:
             return DownloadResult(path=existing, media_type="video", size=existing.stat().st_size, cached=True)
         info, dash, stream_service = self._fetch_streams(bvid, page, quality=quality)
-        progress = None
         auto = False
         success = False
         try:
@@ -813,7 +818,6 @@ class VideoService:
         if existing is not None:
             return DownloadResult(path=existing, media_type="audio", size=existing.stat().st_size, cached=True)
         info, dash, stream_service = self._fetch_streams(bvid, page)
-        progress = None
         auto = False
         success = False
         try:
@@ -870,7 +874,6 @@ class VideoService:
         if existing is not None:
             return DownloadResult(path=existing, media_type="video", size=existing.stat().st_size, cached=True)
         info, dash, stream_service = self._fetch_streams(bvid, page, quality=quality)
-        progress = None
         auto = False
         success = False
         try:
@@ -1098,6 +1101,7 @@ class VideoService:
         if output_format not in {"ass", "xml"}:
             raise ValueError("弹幕格式只支持 ass 或 xml")
         extension = output_format
+        self._raise_if_cancelled()
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
             bvid, {extension}, page=page, roots=self._cache_roots(save_dir, cache_dirs)
@@ -1126,6 +1130,7 @@ class VideoService:
                 params={"oid": target.cid},
                 max_bytes=64 * 1024 * 1024,
             )
+            self._raise_if_cancelled()
             content = self._decode_danmaku_xml(content)
             if output_format == "ass":
                 content = self._danmaku_xml_to_ass(content)
@@ -1147,11 +1152,13 @@ class VideoService:
             progress: Optional[BatchProgress] = None, filename: Optional[str] = None,
             cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None, force: bool = False,
     ) -> DownloadResult:
+        self._raise_if_cancelled()
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
             bvid, {"jpg", "jpeg", "png", "webp"}, roots=self._cache_roots(save_dir, cache_dirs))
         if existing is not None:
             return DownloadResult(path=existing, media_type="cover", size=existing.stat().st_size, cached=True)
+        self._raise_if_cancelled()
         info = self.fetch_info(bvid)
         if not info.pic:
             raise ValueError(f"视频 {bvid} 的封面地址获取失败。")
@@ -1164,6 +1171,7 @@ class VideoService:
         success = False
         try:
             content = self.session.get_raw(info.pic, max_bytes=16 * 1024 * 1024)
+            self._raise_if_cancelled()
             if not _valid_image_bytes(content):
                 raise ValueError("封面响应不是受支持的图片格式")
             part = save_path.with_name(save_path.name + ".part")
@@ -1318,6 +1326,7 @@ class VideoService:
             meta = data.get("meta") or {}
             episodes = []
             for a in data.get("archives", []):
+                self._raise_if_cancelled()
                 bvid = a.get("bvid", "")
                 # archives 条目不含分P信息，补一次 fetch_info 拿完整 pages
                 pages = self.fetch_info(bvid).pages if bvid else []
@@ -1497,6 +1506,7 @@ class VideoService:
         :return: DownloadResult 列表
         :raises ValueError: 无法定位合集
         """
+        self._raise_if_cancelled()
         if media_type not in _ALLOWED_MEDIA_TYPES:
             raise ValueError(f"不支持的媒体类型：{media_type!r}，允许值：{sorted(_ALLOWED_MEDIA_TYPES)}")
         if season is None:
@@ -1899,6 +1909,7 @@ class VideoService:
         :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
         :return: DownloadResult 列表
         """
+        self._raise_if_cancelled()
         from src.services.fav import FavService
 
         # 收藏夹链路：media_id -> 收藏夹详情（决定目录名）-> BV 列表 ->
@@ -1968,6 +1979,7 @@ class VideoService:
         others = []  # 他人稿件：该 UP 主只是联合投稿里的嘉宾
         pn = 1
         while True:
+            self._raise_if_cancelled()
             params = {"mid": mid, "pn": pn, "ps": ps, "order": "pubdate"}
             get_wbi(params)  # 原地追加 wts 与 w_rid
             data = self.session.get(UserUrls.SPACE_ARC_SEARCH, params=params)
@@ -2036,6 +2048,7 @@ class VideoService:
         :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
         :return: DownloadResult 列表
         """
+        self._raise_if_cancelled()
         from src.services.user import UserService
 
         # UP 主链路：规范化 mid -> 空间投稿分页得到 BV 列表 -> 查询昵称作为

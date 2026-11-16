@@ -2,7 +2,7 @@
 
 百分比是「覆盖式」就地刷新（QProgressBar.setValue），不产生日志行。
 """
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
