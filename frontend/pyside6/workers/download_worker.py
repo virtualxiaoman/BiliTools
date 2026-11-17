@@ -11,7 +11,13 @@ from src.services.emote import EmoteService
 from src.services.fav import FavService
 from src.services.garb import GarbService
 from src.services.video import VideoService
-from src.api.errors import BiliAuthError, BiliRiskError, DownloadCancelled
+from src.api.errors import (
+    VIDEO_UNAVAILABLE_REASONS,
+    BiliAPIError,
+    BiliAuthError,
+    BiliRiskError,
+    DownloadCancelled,
+)
 from src.models.download_model import VideoQuality
 from src.models.download_request import DownloadRequest, DownloadSource, MediaType
 from src.util.downloader import cleanup_active_parts
@@ -117,6 +123,12 @@ class DownloadWorker(QThread):
                 logger.info("[DownloadWorker] 任务已终止：%s", self.request.description)
                 self.milestone(LogCategory.WARN, "任务已终止：未完成的临时文件已删除，已完成的文件保留")
                 result_payload = (False, "任务已终止", ERROR_OTHER)
+            elif isinstance(e, BiliAPIError) and e.code in VIDEO_UNAVAILABLE_REASONS:
+                reason = VIDEO_UNAVAILABLE_REASONS.get(e.code, "不可下载")
+                message = f"已跳过：{reason}"
+                logger.warning("[DownloadWorker] %s：%s", message, self.request.description)
+                self.milestone(LogCategory.WARN, message)
+                result_payload = (True, message, ERROR_NONE)
             else:
                 kind = self._error_kind(e)
                 text = self._error_text(e)

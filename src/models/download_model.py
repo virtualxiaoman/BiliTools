@@ -104,24 +104,35 @@ class VideoStream:
         return path_suffix if path_suffix in ("mp4", "flv", "m4s") else "m4s"
 
 
+# 音频优先顺序：杜比全景声 > 无损 FLAC > AAC。数值越大越优先。
+_AUDIO_KIND_PRIORITY = {"dolby": 3, "flac": 2, "aac": 1, "": 1}
+
+
 @dataclass
 class AudioStream:
-    """DASH 音频流。"""
+    """DASH 音频流（AAC / 杜比 / 无损 FLAC）。"""
 
     url: str  # baseUrl 直链
     codecs: str = ""
     bandwidth: int = 0
     size: int = 0
+    kind: str = "aac"  # aac / dolby / flac
 
     @property
     def ext(self) -> str:
         """推断音频流的实际格式扩展名。
 
         DASH 音频流 URL 后缀基本都是 `.m4s`（含查询串），真实编码在 codecs 字段：
+        - 杜比 E-AC-3 → `m4a`（fMP4 容器，供合成临时文件使用）
+        - 无损 FLAC → `flac`
         - `mp4a.*`（AAC）→ `m4a`
         - 含 `opus` → `opus`
         - 其余 → 从 URL 路径后缀解析，兜底 `m4a`
         """
+        if self.kind == "flac":
+            return "flac"
+        if self.kind == "dolby":
+            return "m4a"
         codecs = self.codecs.lower()
         if codecs.startswith("mp4a"):
             return "m4a"
@@ -198,6 +209,15 @@ class DashStreams:
                 return stream
         return self.video[0]  # 无精确匹配 → 回退到最高可用
 
+    def audio_candidates(self) -> list:
+        """按优先顺序返回音频流：杜比 > 无损 FLAC > AAC，同级按码率降序。"""
+        return sorted(
+            self.audio,
+            key=lambda stream: (_AUDIO_KIND_PRIORITY.get(stream.kind, 1), stream.bandwidth),
+            reverse=True,
+        )
+
     def best_audio(self) -> Optional[AudioStream]:
-        """返回码率最高的音频流。"""
-        return self.audio[0] if self.audio else None
+        """返回优先级最高的音频流（杜比/无损优先，失败由下载层回退）。"""
+        candidates = self.audio_candidates()
+        return candidates[0] if candidates else None

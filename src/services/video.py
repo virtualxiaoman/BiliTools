@@ -28,6 +28,7 @@ from typing import Any, Callable, Iterable, Optional, Union
 
 from src.api.auth import get_wbi
 from src.api.errors import (
+    VIDEO_UNAVAILABLE_REASONS,
     BiliAPIError,
     BiliAuthError,
     BiliForbiddenError,
@@ -134,6 +135,22 @@ def _best_quality(dash: DashStreams) -> int:
         return int(dash.progressive.quality or 0)
     stream = dash.best_video()
     return int(stream.quality) if stream is not None else 0
+
+
+_AUDIO_KIND_LABELS = {"dolby": "杜比全景声", "flac": "无损 FLAC", "aac": "AAC"}
+
+
+def _audio_label(stream: AudioStream) -> str:
+    return _AUDIO_KIND_LABELS.get(stream.kind, stream.codecs or "音频")
+
+
+def _audio_output_ext(stream: AudioStream) -> str:
+    """纯音频下载的最终扩展名：杜比用 mka、无损用 flac，AAC 直接 m4a。"""
+    if stream.kind == "flac":
+        return "flac"
+    if stream.kind == "dolby":
+        return "mka"  # E-AC-3 不能放进 m4a 容器，Matroska 可容纳
+    return stream.ext
 
 
 class VideoService:
@@ -329,11 +346,31 @@ class VideoService:
                                       quality=value.get("id", 0), frame_rate=value.get("frameRate", ""),
                                       size=value.get("size", 0)))
         audios = []
-        for value in raw_audios:
-            if not isinstance(value, dict) or not isinstance(value.get("baseUrl"), str) or not value["baseUrl"]:
-                continue
-            audios.append(AudioStream(url=value["baseUrl"], codecs=value.get("codecs", ""),
-                                      bandwidth=value.get("bandwidth", 0), size=value.get("size", 0)))
+        seen_audio_urls = set()
+
+        def _add_audios(values, kind: str) -> None:
+            if isinstance(values, dict):
+                values = [values]
+            if not isinstance(values, list):
+                return
+            for value in values:
+                if not isinstance(value, dict) or not isinstance(value.get("baseUrl"), str) or not value["baseUrl"]:
+                    continue
+                if value["baseUrl"] in seen_audio_urls:
+                    continue
+                seen_audio_urls.add(value["baseUrl"])
+                audios.append(AudioStream(url=value["baseUrl"], codecs=value.get("codecs", ""),
+                                          bandwidth=value.get("bandwidth", 0), size=value.get("size", 0),
+                                          kind=kind))
+
+        _add_audios(raw_audios, "aac")
+        # 杜比（30250, E-AC-3）与无损（30251, FLAC）是独立音轨，需要大会员权限才会返回。
+        dolby = dash.get("dolby")
+        if isinstance(dolby, dict):
+            _add_audios(dolby.get("audio"), "dolby")
+        flac = dash.get("flac")
+        if isinstance(flac, dict):
+            _add_audios(flac.get("audio"), "flac")
         if not videos or not audios:
             raise BiliAPIError(-1, "播放流响应不含可用的视频或音频流")
         return DashStreams(video=videos, audio=audios)
@@ -612,8 +649,8 @@ class VideoService:
         return progress, False
 
     def _is_video_unavailable_error(self, exc: Exception) -> bool:
-        """视频不存在或不可见（-404 不存在 / 62002 稿件不可见），批量下载时跳过该视频即可。"""
-        return isinstance(exc, BiliAPIError) and exc.code in (-404, 62002)
+        """稿件不可下载（不存在/不可见/审核中/仅UP主可见）：批量下载时跳过该视频。"""
+        return isinstance(exc, BiliAPIError) and exc.code in VIDEO_UNAVAILABLE_REASONS
 
     def _is_risk_control_error(self, exc: Exception) -> bool:
         """是否触发风控（-412 触发风控 / -403 被拒绝访问），这类错误稍作等待后重试通常可恢复。"""
@@ -665,7 +702,8 @@ class VideoService:
                     logger.warning("视频 %s 无法下载完整内容，跳过（%s）：%s", bvid, label, e)
                     return None
                 if self._is_video_unavailable_error(e):
-                    logger.warning("视频 %s 不可见，跳过（%s）。", bvid, label)
+                    reason = VIDEO_UNAVAILABLE_REASONS.get(e.code, "不可下载")
+                    logger.warning("视频 %s 跳过：%s（%s）。", bvid, reason, label)
                     return None
                 if isinstance(e, FFmpegNotFoundError):
                     raise
@@ -814,30 +852,30 @@ class VideoService:
         self._raise_if_cancelled()
         save_dir = Path(dir) if dir is not None else self.default_dir
         existing = None if force else self._find_downloaded_file(
-            bvid, {"m4a", "mp3", "flac", "aac"}, page=page, roots=self._cache_roots(save_dir, cache_dirs))
+            bvid, {"m4a", "mp3", "flac", "aac", "mka"}, page=page,
+            roots=self._cache_roots(save_dir, cache_dirs))
         if existing is not None:
             return DownloadResult(path=existing, media_type="audio", size=existing.stat().st_size, cached=True)
         info, dash, stream_service = self._fetch_streams(bvid, page)
         auto = False
         success = False
         try:
+            import tempfile
             progressive = dash.progressive
-            stream = dash.best_audio()
-            if progressive is None and stream is None:
+            candidates = dash.audio_candidates()
+            if progressive is None and not candidates:
                 raise ValueError(f"视频 {bvid} 第 {page} 分P 没有可用的音频流。")
-            safe_name = filename or self._default_filename(
-                info, bvid, page, "m4a" if progressive is not None else stream.ext)
-            save_path = resolve_save_path(save_dir, safe_name)
-            if save_path.is_file() and save_path.stat().st_size > 0 and not force:
-                return DownloadResult(path=save_path, media_type="audio",
-                                      size=save_path.stat().st_size, cached=True)
-            progress, auto = self._auto_progress(safe_name, progress, progress_cb)
             if progressive is not None:
                 # 直出流音视频合一：先下载完整文件，再用 ffmpeg 提取音轨。
+                safe_name = filename or self._default_filename(info, bvid, page, "m4a")
+                save_path = resolve_save_path(save_dir, safe_name)
+                if save_path.is_file() and save_path.stat().st_size > 0 and not force:
+                    return DownloadResult(path=save_path, media_type="audio",
+                                          size=save_path.stat().st_size, cached=True)
+                progress, auto = self._auto_progress(safe_name, progress, progress_cb)
                 if not ffmpeg_available():
                     raise FFmpegNotFoundError(
                         "该视频仅提供直出流（音视频合一），提取音频需要 ffmpeg，且未安装 imageio-ffmpeg 库。")
-                import tempfile
                 with tempfile.TemporaryDirectory(prefix="bilitools_", dir=save_dir) as tmp:
                     source = Path(tmp) / f"source.{progressive.ext}"
                     stream_service._download_progressive(
@@ -846,13 +884,66 @@ class VideoService:
                     if progress:
                         progress.status("直出流下载完成，正在提取音频...")
                     extract_audio(source, save_path, cancel_event=getattr(self, "cancel_event", None))
-                size = save_path.stat().st_size
-            else:
-                size = download_stream(stream.url, save_path, stream_service.session.session.headers,
-                                       progress_cb=progress.make_stream_callback() if progress else progress_cb,
-                                       overwrite=force, cancel_event=getattr(self, "cancel_event", None))
-            success = True
-            return DownloadResult(path=save_path, media_type="audio", size=size)
+                success = True
+                return DownloadResult(path=save_path, media_type="audio", size=save_path.stat().st_size)
+
+            # 优先杜比/无损，失败逐个回退到下一音轨（最后是 AAC）。
+            last_error: Optional[Exception] = None
+            for index, stream in enumerate(candidates):
+                ext = _audio_output_ext(stream)
+                safe_name = filename or self._default_filename(info, bvid, page, ext)
+                save_path = resolve_save_path(save_dir, safe_name)
+                if save_path.is_file() and save_path.stat().st_size > 0 and not force:
+                    return DownloadResult(path=save_path, media_type="audio",
+                                          size=save_path.stat().st_size, cached=True)
+                attempt_progress, attempt_auto = self._auto_progress(safe_name, progress, progress_cb)
+                attempt_success = False
+                try:
+                    if stream.kind in ("dolby", "flac"):
+                        if not ffmpeg_available():
+                            raise FFmpegNotFoundError("杜比/无损音轨需要 ffmpeg 封装")
+                        with tempfile.TemporaryDirectory(prefix="bilitools_", dir=save_dir) as tmp:
+                            source = Path(tmp) / f"source.{stream.ext}"
+                            download_stream(
+                                stream.url, source, stream_service.session.session.headers,
+                                progress_cb=(attempt_progress.make_stream_callback()
+                                             if attempt_progress else progress_cb),
+                                cancel_event=getattr(self, "cancel_event", None))
+                            self._raise_if_cancelled()
+                            if attempt_progress:
+                                attempt_progress.status(
+                                    f"{_audio_label(stream)}下载完成，正在封装音轨...")
+                            extract_audio(source, save_path,
+                                          cancel_event=getattr(self, "cancel_event", None))
+                        size = save_path.stat().st_size
+                    else:
+                        size = download_stream(
+                            stream.url, save_path, stream_service.session.session.headers,
+                            progress_cb=(attempt_progress.make_stream_callback()
+                                         if attempt_progress else progress_cb),
+                            overwrite=force, cancel_event=getattr(self, "cancel_event", None))
+                    attempt_success = True
+                    return DownloadResult(path=save_path, media_type="audio", size=size)
+                except DownloadCancelled:
+                    raise
+                except FFmpegNotFoundError as exc:
+                    last_error = exc
+                    if index == len(candidates) - 1:
+                        raise
+                    logger.warning("音轨 %s 需要 ffmpeg，回退下一音轨：%s", _audio_label(stream), exc)
+                    continue
+                except DownloadError as exc:
+                    last_error = exc
+                    if index == len(candidates) - 1:
+                        raise
+                    logger.warning("音轨 %s 下载失败，回退下一音轨：%s", _audio_label(stream), exc)
+                    continue
+                finally:
+                    if attempt_auto:
+                        attempt_progress.finish(success=attempt_success)
+            if last_error is not None:
+                raise last_error
+            raise ValueError(f"视频 {bvid} 第 {page} 分P 没有可用的音频流。")
         finally:
             self._release_service(stream_service)
             if auto:
@@ -897,8 +988,9 @@ class VideoService:
                 return DownloadResult(path=save_path, media_type="video", size=size)
             if not ffmpeg_available():
                 raise FFmpegNotFoundError("未检测到 ffmpeg，且未安装 imageio-ffmpeg 库，无法进行音视频合成。")
-            video_stream, audio_stream = dash.pick_video(quality), dash.best_audio()
-            if video_stream is None or audio_stream is None:
+            video_stream = dash.pick_video(quality)
+            audio_candidates = dash.audio_candidates()
+            if video_stream is None or not audio_candidates:
                 raise ValueError(f"视频 {bvid} 第 {page} 分P 的视频流或音频流不可用，无法合成。")
             safe_name = filename or self._default_filename(info, bvid, page, "mp4")
             save_path = resolve_save_path(save_dir, safe_name)
@@ -913,7 +1005,6 @@ class VideoService:
             with tempfile.TemporaryDirectory(prefix="bilitools_", dir=save_dir) as tmp:
                 tmp_dir = Path(tmp)
                 video_tmp = tmp_dir / f"video.{video_stream.ext}"
-                audio_tmp = tmp_dir / f"audio.{audio_stream.ext}"
                 state = {"id": 0, "last": 0}
 
                 def cb(done: int, total: Optional[int]) -> None:
@@ -928,16 +1019,44 @@ class VideoService:
                                 progress_cb=cb, cancel_event=getattr(self, "cancel_event", None))
                 if progress:
                     progress.status("视频流下载完成，正在下载音频流...")
+
+                # 音轨优先杜比/无损；下载或合成失败时逐个回退，最后是 AAC。
+                chosen_audio = None
+                chosen_audio_tmp = None
+                last_error: Optional[Exception] = None
+                for index, audio_stream in enumerate(audio_candidates):
+                    audio_tmp = tmp_dir / f"audio_{index}.{audio_stream.ext}"
                     state["id"], state["last"] = 1, 0
-                download_stream(audio_stream.url, audio_tmp, stream_service.session.session.headers,
-                                progress_cb=cb, cancel_event=getattr(self, "cancel_event", None))
-                if progress:
-                    progress.status("正在用 ffmpeg 合成音视频...")
-                merge_video_audio(video_tmp, audio_tmp, save_path, progress_cb=progress_cb,
-                                  cancel_event=getattr(self, "cancel_event", None))
+                    try:
+                        download_stream(audio_stream.url, audio_tmp,
+                                        stream_service.session.session.headers,
+                                        progress_cb=cb,
+                                        cancel_event=getattr(self, "cancel_event", None))
+                        if progress:
+                            progress.status("正在用 ffmpeg 合成音视频...")
+                        merge_video_audio(video_tmp, audio_tmp, save_path, progress_cb=progress_cb,
+                                          cancel_event=getattr(self, "cancel_event", None))
+                        chosen_audio, chosen_audio_tmp = audio_stream, audio_tmp
+                        break
+                    except DownloadCancelled:
+                        raise
+                    except FFmpegNotFoundError:
+                        raise
+                    except DownloadError as exc:
+                        last_error = exc
+                        audio_tmp.unlink(missing_ok=True)
+                        audio_tmp.with_name(audio_tmp.name + ".part").unlink(missing_ok=True)
+                        if index == len(audio_candidates) - 1:
+                            raise
+                        logger.warning("音轨 %s 下载/合成失败，回退下一音轨：%s",
+                                       _audio_label(audio_stream), exc)
+                        continue
+                if chosen_audio is None:
+                    raise last_error or DownloadError("音轨下载失败")
                 if keep_parts:
                     video_tmp.replace(save_dir / f"{save_path.stem}.video.{video_stream.ext}")
-                    audio_tmp.replace(save_dir / f"{save_path.stem}.audio.{audio_stream.ext}")
+                    chosen_audio_tmp.replace(
+                        save_dir / f"{save_path.stem}.audio.{chosen_audio.ext}")
             success = True
             return DownloadResult(path=save_path, media_type="video", size=save_path.stat().st_size)
         finally:

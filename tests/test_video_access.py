@@ -245,3 +245,14 @@ def test_page_download_reports_bytes_to_external_progress(tmp_path, monkeypatch)
     assert adapter.current_done == 30
     assert any(text.startswith("下载完成") for text in messages)
     assert not any(text.startswith("已存在，跳过") for text in messages)
+
+
+def test_batch_skips_only_up_visible_and_auditing():
+    """62012/62004/-404 都不应中断批量任务，只跳过当前视频。"""
+    from src.api.errors import BiliAPIError
+
+    service = VideoService(session=object())
+    for code in (-404, 62002, 62004, 62012):
+        outcome = service._execute_batch_download(
+            "BV1test", _raising_action(BiliAPIError(code, str(code))), label="UP主")
+        assert outcome is None

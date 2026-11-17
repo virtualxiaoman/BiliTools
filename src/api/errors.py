@@ -39,6 +39,15 @@ class VideoNotFoundError(BiliAPIError):
     """视频不存在或已失效（典型错误码 -404）。"""
 
 
+# 稿件级“不可下载但无需中断任务”的错误码：批量下载时跳过并记录日志。
+VIDEO_UNAVAILABLE_REASONS = {
+    -404: "视频不存在",
+    62002: "稿件不可见",
+    62004: "稿件审核中",
+    62012: "仅UP主自己可见",
+}
+
+
 class VideoChargingError(BiliError):
     """充电专属视频，当前账号未充电/未购买，无完整播放权限。"""
 
