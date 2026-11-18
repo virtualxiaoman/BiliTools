@@ -181,9 +181,17 @@ class DownloadPanel(QWidget):
         # ---- 下载选项 ----
         self.force_check = QCheckBox("忽略缓存")
         self.force_check.setToolTip("忽略所有缓存；目标文件名完全一致时覆盖，否则保留旧文件并下载新文件")
+        self.dynamic_check = QCheckBox("包含动态视频")
+        self.dynamic_check.setToolTip(
+            "UP 主页签：从动态流补充只发布在动态里的视频（不在投稿列表）。\n"
+            "首次会多花些时间扫描，之后使用增量快照缓存。"
+        )
+        self.dynamic_check.setChecked(True)
+        self.dynamic_check.setVisible(False)
         options_row = QHBoxLayout()
         options_row.setContentsMargins(0, 0, 0, 0)
         options_row.addWidget(self.force_check)
+        options_row.addWidget(self.dynamic_check)
         options_row.addStretch(1)
         outer.addLayout(options_row)
 
@@ -276,6 +284,7 @@ class DownloadPanel(QWidget):
         self._update_tabs_layout(idx)
         is_dressup = idx == 4
         self.range_row.setVisible(idx == 0)  # 范围选项仅视频页签可用
+        self.dynamic_check.setVisible(idx == 3)  # 仅 UP 主页签可补充动态视频
         self.type_row.setVisible(not is_dressup)
         self.quality_row.setVisible(not is_dressup)
         self.btn_download.setText("下载选中" if is_dressup else "下载")
@@ -433,7 +442,9 @@ class DownloadPanel(QWidget):
                         "save_dir": save_dir, "threads": threads,
                         "distribute_accounts": distribute,
                          "cache_dirs": self.settings.get("cache_dirs", []),
-                         "force": self.force_check.isChecked(), "desc": f"UP主 {mid}"}
+                         "force": self.force_check.isChecked(),
+                         "include_dynamic": self.dynamic_check.isChecked(),
+                         "desc": f"UP主 {mid}"}
         except NeedsUrlResolution:
             # 短链等本地解析不了的链接：先建 pending 任务，交给下载线程跟随跳转，
             # 避免在界面线程发 HTTP 请求卡住 UI
@@ -463,6 +474,7 @@ class DownloadPanel(QWidget):
             "distribute_accounts": distribute,
             "cache_dirs": self.settings.get("cache_dirs", []),
             "force": self.force_check.isChecked(),
+            "include_dynamic": self.dynamic_check.isChecked(),
             "desc": f"{labels[tab]}（解析链接中…）",
         }
 

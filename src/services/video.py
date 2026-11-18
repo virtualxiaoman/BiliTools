@@ -1845,13 +1845,19 @@ class VideoService:
             force: bool,
             item_label: Callable[[str], str],
             on_skip: Optional[Callable[[str, int, int], None]] = None,
+            progress_offset: int = 0,
+            progress_total: Optional[int] = None,
     ) -> list:
         """统一执行收藏夹、UP 主等 BV 列表批量下载。
 
         单个视频下载失败（CDN 超时等）不会中断任务：先继续其余视频，全部结束后
         把失败项排到队尾统一重试一轮；仍失败则记录日志并跳过。
+
+        ``progress_offset`` / ``progress_total`` 用于分两批下载同一任务（如 UP 投稿
+        + 后台扫描到的动态视频）：序号与总数沿用整条任务的计数，不重新从 1 开始。
         """
         total = len(bvids)
+        report_total = total if progress_total is None else int(progress_total)
 
         def run_item(service, bvid, risk_gate=None):
             def action():
@@ -1896,7 +1902,7 @@ class VideoService:
                 return download_count
             results.extend(page_results)
             return self._report_bvid_download(
-                item.bvid, page_results, download_count, total, total)
+                item.bvid, page_results, download_count, report_total, report_total)
 
         def collect_retry_item(bvid, outcome):
             if isinstance(outcome, _RetryPages):
@@ -1913,7 +1919,7 @@ class VideoService:
                 service = services[index % len(services)]
                 return run_item(service, bvid, risk_gate=gate)
 
-            completed_count = 0
+            completed_count = progress_offset
             download_count = 0
 
             def report_completion(index, outcome):
@@ -1924,10 +1930,10 @@ class VideoService:
                     return
                 if outcome is None:
                     if on_skip is not None:
-                        on_skip(bvid, completed_count, total)
+                        on_skip(bvid, completed_count, report_total)
                     return
                 download_count = self._report_bvid_download(
-                    bvid, outcome, download_count, completed_count, total,
+                    bvid, outcome, download_count, completed_count, report_total,
                 )
 
             try:
@@ -1961,6 +1967,7 @@ class VideoService:
         retry_items = []
         for index, bvid in enumerate(bvids, 1):
             self._raise_if_cancelled()
+            display_index = progress_offset + index
             logger.info("%s：%s", item_label(bvid), bvid)
             outcome = run_item(self, bvid)
             item = collect_retry_item(bvid, outcome)
@@ -1970,11 +1977,11 @@ class VideoService:
                 continue
             if outcome is None:
                 if on_skip is not None:
-                    on_skip(bvid, index, total)
+                    on_skip(bvid, display_index, report_total)
                 continue
             results.extend(outcome)
             download_count = self._report_bvid_download(
-                bvid, outcome, download_count, index, total,
+                bvid, outcome, download_count, display_index, report_total,
             )
         if retry_items:
             self._raise_if_cancelled()
@@ -2075,19 +2082,35 @@ class VideoService:
             raise ValueError(f"mid 必须是纯数字，收到：{mid}")
         return int(s)
 
-    def list_up_videos(self, mid: Optional[int] = None, ps: int = 30) -> list:
+    def list_up_videos(
+            self,
+            mid: Optional[int] = None,
+            ps: int = 30,
+            *,
+            include_dynamic: bool = True,
+            dynamic_page_interval: float = 1.0,
+            dynamic_use_cache: bool = True,
+    ) -> list:
         """获取某个 UP 主空间的全部视频 BV 号列表（分页翻到底）。
 
         空间“投稿”列表包含该 UP 主作为嘉宾参与的**他人联合投稿**；这些稿件
         不是该 UP 主自己的投稿，但仍会一并返回（与 B 站空间页面一致），
         并在日志中标注，便于核对下载范围。
 
+        默认还会合并动态流里的视频：B 站「动态视频」只出现在动态时间线，
+        不会进入空间的投稿列表（``arc/search``）。这里用 ``feed/space?type=video``
+        拉取视频类动态并按 BV 去重后追加，普通投稿/合作视频不会重复加入。
+
         [使用方法]:
             service = VideoService()
             bvs = service.list_up_videos(249056021)
+            bvs = service.list_up_videos(249056021, include_dynamic=False)  # 仅投稿列表
 
         :param mid: UP主 mid（int）
         :param ps: 每页数量（最大 50）
+        :param include_dynamic: 是否从动态流补充视频（默认 True）
+        :param dynamic_page_interval: 动态流翻页间隔（秒），默认 1.0
+        :param dynamic_use_cache: 动态流列表是否复用快照做增量刷新（默认 True）
         :return: 视频bv号列表
         """
         from src.api.auth import get_wbi
@@ -2122,7 +2145,136 @@ class VideoService:
                 mid, len(bvids), len(others))
             for bvid, author in others:
                 logger.info("  他人稿件：%s（UP主：%s）", bvid, author)
+        if include_dynamic:
+            entries = self._load_up_dynamic_videos(
+                mid, page_interval=dynamic_page_interval, use_cache=dynamic_use_cache)
+            self._merge_up_dynamic_videos(mid, bvids, entries)
         return bvids
+
+    def _dynamic_scan_session(self):
+        """为后台动态扫描创建独立会话，避免与下载主线程共用 requests.Session。"""
+        if not isinstance(self.session, BiliSession):
+            return self.session, False
+        return BiliSession(
+            cookie_path=self.session.cookie_path,
+            referer=self.session.referer,
+            max_retry=self.session.max_retry,
+            timeout=self.session.timeout,
+        ), True
+
+    def _load_up_dynamic_videos(
+            self,
+            mid: int,
+            *,
+            page_interval: float = 1.0,
+            use_cache: bool = True,
+            captcha_wait: bool = True,
+    ) -> list:
+        """从动态流拉取视频类动态，返回按 BV 去重后的 ``[(bvid, title), ...]``。
+
+        只保留 ``DYNAMIC_TYPE_AV``；获取失败只告警并返回空列表，
+        用户终止时抛出 ``DownloadCancelled``（通过逐页进度回调检查取消事件）。
+        ``captcha_wait=False`` 用于后台扫描：触发 -352 时直接放弃本次补全，
+        不阻塞下载主线程等待控制台输入（快照会保留已爬部分）。
+        """
+        self._raise_if_cancelled()
+        from src.services.dynamic import DynamicService
+        session, owned = self._dynamic_scan_session()
+        try:
+            items = DynamicService(session).list_user_dynamics(
+                mid,
+                feed_type="video",
+                page_interval=page_interval,
+                use_cache=use_cache,
+                display=False,
+                captcha_wait=captcha_wait,
+                progress_cb=lambda page, count: self._raise_if_cancelled(),
+            )
+        except DownloadCancelled:
+            raise
+        except Exception as exc:
+            if getattr(exc, "code", 0) == -352:
+                logger.warning(
+                    "UP主 %s 动态视频扫描触发风控验证（-352），本次跳过补全；"
+                    "稍后重试会从已保存的快照继续。", mid)
+            else:
+                logger.warning(
+                    "UP主 %s 动态流视频获取失败，本次仅下载投稿列表：%s", mid, exc)
+            return []
+        finally:
+            if owned:
+                try:
+                    session.close()
+                except Exception:
+                    logger.warning("关闭动态扫描会话失败", exc_info=True)
+
+        result = []
+        seen = set()
+        for item in items:
+            if not isinstance(item, dict) or item.get("type") != "DYNAMIC_TYPE_AV":
+                continue
+            major = ((item.get("modules") or {}).get("module_dynamic") or {}).get("major") or {}
+            archive = major.get("archive") or {}
+            bvid = archive.get("bvid")
+            if not bvid or bvid in seen:
+                continue
+            seen.add(bvid)
+            result.append((bvid, str(archive.get("title") or "")))
+        return result
+
+    @staticmethod
+    def _merge_up_dynamic_videos(mid: int, bvids: list, entries: list) -> list:
+        """把动态流条目合并进 BV 列表（原地追加），返回新增的 BV。"""
+        known = set(bvids)
+        added = []
+        for bvid, title in entries:
+            if bvid in known:
+                continue
+            known.add(bvid)
+            added.append((bvid, title))
+        logger.info(
+            "UP主 %s 动态流共 %d 条视频，其中 %d 条不在投稿列表（来自动态视频）。",
+            mid, len(entries), len(added))
+        for bvid, title in added:
+            logger.info("  动态视频：%s（%s）", bvid, title)
+        bvids.extend(bvid for bvid, _ in added)
+        return [bvid for bvid, _ in added]
+
+    def _start_up_dynamic_scan(
+            self,
+            mid: int,
+            *,
+            page_interval: float = 1.0,
+            use_cache: bool = True,
+    ) -> dict:
+        """在后台线程扫描动态视频；返回带完成事件的 holder。"""
+        logger.info("UP主 %s：开始后台扫描动态视频（不影响投稿下载）。", mid)
+        holder = {"done": threading.Event(), "entries": [], "error": None}
+
+        def run():
+            try:
+                holder["entries"] = self._load_up_dynamic_videos(
+                    mid, page_interval=page_interval, use_cache=use_cache,
+                    captcha_wait=False)
+            except BaseException as exc:
+                holder["error"] = exc
+            finally:
+                holder["done"].set()
+
+        threading.Thread(target=run, name="up-dynamic-scan", daemon=True).start()
+        return holder
+
+    def _wait_up_dynamic_scan(self, holder: dict) -> list:
+        """等待后台扫描完成；等待期间响应终止请求。"""
+        while not holder["done"].wait(0.5):
+            self._raise_if_cancelled()
+        error = holder.get("error")
+        if error is not None:
+            if isinstance(error, DownloadCancelled):
+                raise error
+            logger.warning("UP主 动态流扫描线程异常：%s", error, exc_info=error)
+            return []
+        return holder.get("entries") or []
 
     def download_up(
             self,
@@ -2138,11 +2290,12 @@ class VideoService:
             account_sessions: Optional[list] = None,
             cache_dirs: Optional[Union[Iterable[Path], Path, str]] = None,
             force: bool = False,
+            include_dynamic: bool = True,
     ) -> list:
         """下载某个 UP 主空间的全部视频（有声音）或仅音频。
 
-        逐个下载该 UP 主的所有投稿，保存到 `<dir>/<UP主昵称>/`（默认 `output/video/<昵称>/`）。
-        每个视频若有分P则逐P下载，带进度显示。
+        逐个下载该 UP 主的所有投稿（默认还会补充动态视频），保存到
+        `<dir>/<UP主昵称>/`（默认 `output/video/<昵称>/`）。每个视频若有分P则逐P下载，带进度显示。
         `threads > 1` 时多个视频并发下载；任一视频触发风控时所有线程在下一次获取信息前各自随机暂停。
         `account_sessions` 非空时，并发任务**均匀分摊到各账号**（按下标轮询），降低单个账号风控风险。
 
@@ -2158,25 +2311,31 @@ class VideoService:
         :param quality: 目标清晰度（精确匹配，默认 HD4K 最高）
         :param progress_cb: 进度回调 (downloaded, total)
         :param progress: BatchProgress 进度显示（与 progress_cb 二选一，通常由 UI 传入以获取逐文件事件）
-        :param bvids: 可选：外部已获取的 UP 主视频 BV 号列表。传入时跳过内部重复翻页拉取
-            （GUI 场景会先取列表用于进度总数，传回此处避免请求两次）；None 时内部自动获取
+        :param bvids: 可选：外部已获取的 UP 主视频 BV 号列表（应为空间投稿列表，
+            不包含动态视频）。传入时跳过内部重复翻页拉取；None 时内部自动获取。
         :param threads: 并发下载线程数（>1 启用并发，需线程安全的 progress）
         :param account_sessions: 可选：多个账号的 BiliSession 列表，用于把并发任务均匀
             分摊到各账号（多账号降风控）；None 时全部任务使用当前账号
         :param cache_dirs: 额外缓存查验目录；当前保存目录始终自动加入且优先查验
         :param force: 是否忽略缓存并强制下载；同名目标文件覆盖
+        :param include_dynamic: 是否在后台扫描动态流并补充动态视频（默认 True）。
+            投稿列表先开始下载，扫描完成后把新增 BV 接到同一任务继续下载。
         :return: DownloadResult 列表
         """
         self._raise_if_cancelled()
         from src.services.user import UserService
 
         # UP 主链路：规范化 mid -> 空间投稿分页得到 BV 列表 -> 查询昵称作为
-        # 输出目录 -> 每个 BV 进入 download_all_pages；列表可由 GUI 预取后传入。
+        # 输出目录 -> 每个 BV 进入 download_all_pages。动态视频不阻塞首集下载：
+        # 投稿先开跑，动态流在后台线程扫描，扫完把新增 BV 追加到同一任务。
         mid = self._resolve_mid(mid)
         if bvids is None:
-            bvids = self.list_up_videos(mid)
-        if not bvids:
+            bvids = self.list_up_videos(mid, include_dynamic=False)
+        space_bvids = list(bvids)
+        if not space_bvids and not include_dynamic:
             raise ValueError(f"UP主 {mid} 没有视频。")
+
+        scan = self._start_up_dynamic_scan(mid) if include_dynamic else None
 
         up_name = UserService(self.session).get_name(mid) or f"up_{mid}"
         up_dir = sanitize_filename(up_name)
@@ -2185,15 +2344,39 @@ class VideoService:
 
         media_type = "audio" if mode == "audio" else "video_with_audio"
         label = f"UP主「{up_name}」"
-        total = len(bvids)
+        total = len(space_bvids)
         if progress is None:
             progress = (ParallelBatchProgress(n=total, label=label)
                         if threads > 1 else BatchProgress(n=total, label=label))
 
-        return self._download_bvid_collection(
-            bvids, save_dir, quality=quality, media_type=media_type,
-            progress=progress, progress_cb=progress_cb, threads=threads,
-            account_sessions=account_sessions, cache_dirs=cache_dirs, force=force,
-            item_label=lambda bvid: label,
-        )
+        results = []
+        if space_bvids:
+            results = self._download_bvid_collection(
+                space_bvids, save_dir, quality=quality, media_type=media_type,
+                progress=progress, progress_cb=progress_cb, threads=threads,
+                account_sessions=account_sessions, cache_dirs=cache_dirs, force=force,
+                item_label=lambda bvid: label,
+                progress_total=total,
+            )
+
+        if scan is not None:
+            entries = self._wait_up_dynamic_scan(scan)
+            before = len(space_bvids)
+            self._merge_up_dynamic_videos(mid, space_bvids, entries)
+            extras = space_bvids[before:]
+            if extras:
+                combined = len(space_bvids)
+                if hasattr(progress, "n"):
+                    progress.n = combined
+                results.extend(self._download_bvid_collection(
+                    extras, save_dir, quality=quality, media_type=media_type,
+                    progress=progress, progress_cb=progress_cb, threads=threads,
+                    account_sessions=account_sessions, cache_dirs=cache_dirs, force=force,
+                    item_label=lambda bvid: label,
+                    progress_offset=before, progress_total=combined,
+                ))
+            elif not space_bvids:
+                raise ValueError(f"UP主 {mid} 没有视频。")
+
+        return results
 

@@ -639,3 +639,37 @@ class TestListSnapshot:
 
         assert [item["id_str"] for item in items] == ["900002"]
         assert not self._snapshot_path(tmp_path).exists()
+
+
+class TestFeedType:
+    def test_video_feed_passes_type_and_uses_own_snapshot(self, tmp_path, wbi_stub):
+        """feed_type=video 应传 type=video，并写入独立的视频动态快照。"""
+        pages = [[make_item("archive", 900001, ts_of(2026, 9, 20))]]
+        service, session = make_service(tmp_path, pages)
+
+        items = service.list_user_dynamics(MID, feed_type="video", display=False)
+
+        assert len(items) == 1
+        assert session.calls[0]["type"] == "video"
+        video_snapshot = tmp_path / str(MID) / "dynamic_video_list.json"
+        assert video_snapshot.is_file()
+        assert json.loads(video_snapshot.read_text(encoding="utf-8"))["feed_type"] == "video"
+        # 全量动态快照不应被视频流写入
+        assert not (tmp_path / str(MID) / "dynamic_list.json").exists()
+        loaded = service.load_dynamic_list(MID, save_dir=tmp_path, feed_type="video")
+        assert [item["id_str"] for item in loaded] == ["900001"]
+
+    def test_all_feed_does_not_pass_type(self, tmp_path, wbi_stub):
+        pages = [[make_item("word", 900001, ts_of(2026, 9, 20))]]
+        service, session = make_service(tmp_path, pages)
+
+        service.list_user_dynamics(MID, display=False)
+
+        assert "type" not in session.calls[0]
+        assert (tmp_path / str(MID) / "dynamic_list.json").is_file()
+        assert not (tmp_path / str(MID) / "dynamic_video_list.json").exists()
+
+    def test_unknown_feed_type_rejected(self, tmp_path):
+        service = DynamicService(default_dir=tmp_path)
+        with pytest.raises(ValueError):
+            service.list_user_dynamics(MID, feed_type="draw", display=False)

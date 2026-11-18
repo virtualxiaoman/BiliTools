@@ -92,7 +92,12 @@ _CDN_HOST_FALLBACKS = ("i2.hdslb.com", "i1.hdslb.com")
 _CDN_HOST_RE = re.compile(r"^i(0|1|2)\.hdslb\.com$")
 
 # 列表快照文件名（保存在 `{save_dir}/{mid}/` 下，供复用已爬取的列表）
+# 按 feed_type 分开存放：全量动态与视频类动态的条目集合不同，不能互相覆盖。
 _LIST_SNAPSHOT_NAME = "dynamic_list.json"
+_LIST_SNAPSHOT_NAMES = {
+    "all": _LIST_SNAPSHOT_NAME,
+    "video": "dynamic_video_list.json",
+}
 
 # _crawl_pages 的三种结束原因
 _SEGMENT_HIT = "hit"  # 撞到快照覆盖区间（stop_ids）
@@ -342,6 +347,7 @@ class DynamicService:
         *,
         max_count: int = -1,
         since=None,
+        feed_type: str = "all",
         page_interval: float = _FEED_PAGE_INTERVAL,
         display: bool = True,
         progress_cb=None,
@@ -377,6 +383,8 @@ class DynamicService:
         :param max_count: 最多返回多少条（-1 表示翻到底；非 -1 时不做快照读写）
         :param since: 只保留该日期（含当天，北京时间）之后发布的动态；
                       YYYY-MM-DD 字符串、时间戳或 datetime 均可
+        :param feed_type: 动态流类型：``all``（全部）或 ``video``（仅视频类动态，
+                          对应接口的 ``type=video``）。两种类型使用各自的列表快照。
         :param page_interval: 翻页间隔基准秒数（默认 1.0，附加最多 50% 随机抖动；
                               0 表示不等待，仅测试用）
         :param display: 未提供 ``progress_cb`` 时，是否在控制台逐页打印爬取进度
@@ -397,12 +405,16 @@ class DynamicService:
             raise ValueError("page_interval 不能为负数")
         if risk_retries < 0:
             raise ValueError("risk_retries 不能为负数")
+        feed_type = str(feed_type or "all").strip().lower()
+        if feed_type not in _LIST_SNAPSHOT_NAMES:
+            raise ValueError("feed_type 仅支持 'all' 或 'video'")
         uid = self.normalize_mid(mid)
         since_ts = self._parse_since(since)
         options = _CrawlOptions(
             gate=risk_gate if risk_gate is not None else RiskGate(),
             risk_retries=risk_retries,
             page_interval=page_interval,
+            feed_type=feed_type,
             captcha_handler=captcha_handler,
             captcha_wait=captcha_wait,
             display=display,
@@ -414,7 +426,8 @@ class DynamicService:
         cached_items: list = []
         cached_meta: dict = {}
         if full_request and use_cache:
-            cached_items, cached_meta = self._load_list_snapshot(uid, save_dir=save_dir)
+            cached_items, cached_meta = self._load_list_snapshot(
+                uid, save_dir=save_dir, feed_type=feed_type)
 
         top_items: list = []
         deep_items: list = []
@@ -461,7 +474,9 @@ class DynamicService:
             if full_request and save_snapshot:
                 partial = self._merge_items(top_items, cached_items, deep_items)
                 if partial:
-                    self._save_dynamic_list(uid, partial, save_dir=save_dir, complete=False, display=display)
+                    self._save_dynamic_list(
+                        uid, partial, save_dir=save_dir, complete=False,
+                        display=display, feed_type=feed_type)
             raise
 
         if cached_items and hit_cache:
@@ -477,7 +492,9 @@ class DynamicService:
         if options.printed:
             print(f"\r[爬取列表] 完成：共 {len(items)} 条{self._crawl_tail(items)}            ")
         if full_request and save_snapshot and items:
-            self._save_dynamic_list(uid, items, save_dir=save_dir, complete=complete, display=display)
+            self._save_dynamic_list(
+                uid, items, save_dir=save_dir, complete=complete,
+                display=display, feed_type=feed_type)
         return items
 
     def _crawl_pages(
@@ -511,6 +528,7 @@ class DynamicService:
                 uid, offset,
                 gate=options.gate, risk_retries=options.risk_retries, page=options.page + 1,
                 captcha_handler=options.captcha_handler, captcha_wait=options.captcha_wait,
+                feed_type=options.feed_type,
             )
             options.page += 1
             page_items = data.get("items") if isinstance(data, dict) else None
@@ -582,28 +600,36 @@ class DynamicService:
 
     # ---- 阶段 4 · 列表快照读写 ----
 
-    def load_dynamic_list(self, mid: int | str, *, save_dir=None) -> list[dict]:
+    def load_dynamic_list(
+        self, mid: int | str, *, save_dir=None, feed_type: str = "all",
+    ) -> list[dict]:
         """读取已保存的列表快照（``{save_dir}/{mid}/dynamic_list.json``）。
 
+        ``feed_type="video"`` 读取视频类动态的独立快照（``dynamic_video_list.json``）。
         不存在或损坏时返回空列表；数据为 :meth:`list_user_dynamics` 的原始 item 列表。
         """
         uid = self.normalize_mid(mid)
-        items, _ = self._load_list_snapshot(uid, save_dir=save_dir)
+        feed_type = str(feed_type or "all").strip().lower()
+        if feed_type not in _LIST_SNAPSHOT_NAMES:
+            raise ValueError("feed_type 仅支持 'all' 或 'video'")
+        items, _ = self._load_list_snapshot(uid, save_dir=save_dir, feed_type=feed_type)
         return items
 
-    def _snapshot_path(self, uid: int, save_dir) -> Path:
-        """列表快照的文件路径：``{save_dir}/{mid}/dynamic_list.json``。"""
+    def _snapshot_path(self, uid: int, save_dir, feed_type: str = "all") -> Path:
+        """列表快照的文件路径：``{save_dir}/{mid}/<按 feed_type 区分的快照名>``。"""
         root = Path(save_dir) if save_dir is not None else self.default_dir
-        return root / str(uid) / _LIST_SNAPSHOT_NAME
+        return root / str(uid) / _LIST_SNAPSHOT_NAMES[feed_type]
 
-    def _load_list_snapshot(self, uid: int, *, save_dir) -> tuple[list, dict]:
+    def _load_list_snapshot(
+        self, uid: int, *, save_dir, feed_type: str = "all",
+    ) -> tuple[list, dict]:
         """读取列表快照。
 
         输入：UP 的 mid 与保存根目录；输出：``(items, meta)``——
         items 为原始动态 item 列表，meta 含 ``fetched_at/complete/count``。
         文件不存在、损坏或格式异常时返回 ``([], {})``（调用方按"无快照"处理）。
         """
-        path = self._snapshot_path(uid, save_dir)
+        path = self._snapshot_path(uid, save_dir, feed_type)
         if not path.is_file():
             return [], {}
         try:
@@ -621,17 +647,21 @@ class DynamicService:
         }
         return [item for item in items if isinstance(item, dict)], meta
 
-    def _save_dynamic_list(self, uid: int, items: list, *, save_dir, complete: bool, display: bool):
+    def _save_dynamic_list(
+        self, uid: int, items: list, *, save_dir, complete: bool, display: bool,
+        feed_type: str = "all",
+    ):
         """保存列表快照（原子写入）。
 
         输入：UP 的 mid、完整/部分 item 列表、``complete``（是否已爬到尽头）。
         输出：快照路径（写入失败返回 None，仅记 warning 不打断下载）。
         快照是"连续的一段历史区间"，供下次增量刷新复用（见 list_user_dynamics）。
         """
-        path = self._snapshot_path(uid, save_dir)
+        path = self._snapshot_path(uid, save_dir, feed_type)
         payload = {
             "schema_version": 1,
             "mid": uid,
+            "feed_type": feed_type,
             "fetched_at": _now_iso(),
             "complete": bool(complete),
             "count": len(items),
@@ -672,13 +702,20 @@ class DynamicService:
         page: int,
         captcha_handler=None,
         captcha_wait: bool = True,
+        feed_type: str = "all",
     ) -> dict:
-        """请求一页空间动态；风控退避重试；-352 可暂停等待用户完成验证码。"""
+        """请求一页空间动态；风控退避重试；-352 可暂停等待用户完成验证码。
+
+        ``feed_type="video"`` 时附加接口参数 ``type=video``，只返回视频类动态
+        （动态视频 / 投稿视频 / 合作视频）；默认 ``all`` 保持原行为。
+        """
         params = {
             "host_mid": mid,
             "timezone_offset": -480,
             "features": DynamicUrls.DETAIL_FEATURES,
         }
+        if feed_type != "all":
+            params["type"] = feed_type
         if offset:
             params["offset"] = offset
         attempt = 0
@@ -1362,6 +1399,7 @@ class _CrawlOptions:
     gate: RiskGate
     risk_retries: int = 3
     page_interval: float = _FEED_PAGE_INTERVAL
+    feed_type: str = "all"
     captcha_handler: Any = None
     captcha_wait: bool = True
     display: bool = True

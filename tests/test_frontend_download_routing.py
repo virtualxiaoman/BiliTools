@@ -59,8 +59,8 @@ class _FakeService:
         CALLS.append(("download_up", mid, dir, kw))
         return []
 
-    def list_up_videos(self, mid):
-        CALLS.append(("list_up_videos", mid))
+    def list_up_videos(self, mid, **kwargs):
+        CALLS.append(("list_up_videos", mid, kwargs))
         return ["BV1", "BV2"]
 
     def fetch_info(self, bvid):
@@ -165,10 +165,21 @@ def test_emote(monkeypatch):
 def test_up():
     _worker("up", 249056021, cache_dirs=["archive"], force=True)._execute(_FakeService())
     assert any(c[0] == "list_up_videos" for c in CALLS)
+    (_, _mid, list_kw), = [c for c in CALLS if c[0] == "list_up_videos"]
+    assert list_kw["include_dynamic"] is False  # 预取只拉投稿，动态由 download_up 后台补
     (_, mid, _dir, kw), = [c for c in CALLS if c[0] == "download_up"]
     assert kw["progress"].__class__.__name__ == "ProgressAdapter"
     assert kw["cache_dirs"] == ["archive"]
     assert kw["force"] is True
+    assert kw["include_dynamic"] is True
+
+
+def test_up_without_dynamic():
+    _worker("up", 249056021, include_dynamic=False)._execute(_FakeService())
+    (_, _mid, list_kw), = [c for c in CALLS if c[0] == "list_up_videos"]
+    assert list_kw["include_dynamic"] is False
+    (_, _mid, _dir, kw), = [c for c in CALLS if c[0] == "download_up"]
+    assert kw["include_dynamic"] is False
 
 
 def test_bv_all_pages():

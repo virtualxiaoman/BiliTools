@@ -44,6 +44,7 @@ class DownloadRequest:
     distribute_accounts: bool = False
     cache_dirs: tuple[Path | str, ...] = field(default_factory=tuple)
     force: bool = False
+    include_dynamic: bool = True
     pending_resolve: bool = False
     description: str = ""
     emote_full_name: bool = False
@@ -75,6 +76,7 @@ class DownloadRequest:
             distribute_accounts=bool(spec.get("distribute_accounts", False)),
             cache_dirs=tuple(spec.get("cache_dirs") or ()),
             force=bool(spec.get("force", False)),
+            include_dynamic=bool(spec.get("include_dynamic", True)),
             pending_resolve=bool(spec.get("pending_resolve", False)),
             description=str(spec.get("desc", "")),
             emote_full_name=bool(spec.get("emote_full_name", False)),
@@ -95,6 +97,7 @@ class DownloadRequest:
             distribute_accounts=self.distribute_accounts,
             cache_dirs=self.cache_dirs,
             force=self.force,
+            include_dynamic=self.include_dynamic,
             pending_resolve=False,
             description=description,
             emote_full_name=self.emote_full_name,
@@ -112,6 +115,7 @@ class DownloadRequest:
             int(self.quality),
             str(self.save_dir),
             self.account_quality_policy,
+            self.include_dynamic,
         )
 
     def to_legacy_dict(self) -> dict[str, Any]:
@@ -128,6 +132,7 @@ class DownloadRequest:
             "distribute_accounts": self.distribute_accounts,
             "cache_dirs": list(self.cache_dirs),
             "force": self.force,
+            "include_dynamic": self.include_dynamic,
             "pending_resolve": self.pending_resolve,
             "desc": self.description,
             "emote_full_name": self.emote_full_name,

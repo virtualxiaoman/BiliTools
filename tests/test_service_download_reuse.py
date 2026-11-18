@@ -106,7 +106,7 @@ def test_download_up_reuses_external_bvids(tmp_path, monkeypatch):
 
     calls = {"list_up_videos": 0}
 
-    def fake_list(mid):
+    def fake_list(mid, **kwargs):
         calls["list_up_videos"] += 1
         return ["BV1"]
 
@@ -121,11 +121,146 @@ def test_download_up_reuses_external_bvids(tmp_path, monkeypatch):
 
     monkeypatch.setattr("src.services.user.UserService", FakeUser)
 
-    svc.download_up(1, tmp_path, mode="audio", bvids=["BV1"])
+    svc.download_up(1, tmp_path, mode="audio", bvids=["BV1"], include_dynamic=False)
     assert calls["list_up_videos"] == 0  # 复用外部列表，不再翻页
 
-    svc.download_up(1, tmp_path, mode="audio")
+    svc.download_up(1, tmp_path, mode="audio", include_dynamic=False)
     assert calls["list_up_videos"] == 1  # 未传列表时保持原有行为
+
+
+def _dynamic_video_item(dyn_id, bvid, title):
+    return {
+        "id_str": str(dyn_id),
+        "type": "DYNAMIC_TYPE_AV",
+        "modules": {"module_dynamic": {"major": {"archive": {"bvid": bvid, "title": title}}}},
+    }
+
+
+def test_load_and_merge_up_dynamic_videos(tmp_path, monkeypatch):
+    """动态流视频按 BV 去重后合并：投稿已有的不重复加，非视频动态忽略。"""
+    svc = _svc(tmp_path)
+    received = {}
+
+    class FakeDynamic:
+        def __init__(self, session):
+            pass
+
+        def list_user_dynamics(self, mid, **kwargs):
+            received.update(kwargs)
+            return [
+                _dynamic_video_item(1, "BV1", "已在投稿列表"),
+                _dynamic_video_item(2, "BV3", "动态视频"),
+                _dynamic_video_item(3, "BV3", "同 BV 重复"),
+                {"id_str": "4", "type": "DYNAMIC_TYPE_DRAW", "modules": {}},
+            ]
+
+    monkeypatch.setattr("src.services.dynamic.DynamicService", FakeDynamic)
+    entries = svc._load_up_dynamic_videos(1, page_interval=0, use_cache=False)
+    bvids = ["BV1"]
+    added = svc._merge_up_dynamic_videos(1, bvids, entries)
+
+    assert received["feed_type"] == "video"
+    assert received["display"] is False
+    assert entries == [("BV1", "已在投稿列表"), ("BV3", "动态视频")]
+    assert added == ["BV3"]
+    assert bvids == ["BV1", "BV3"]
+
+
+def test_load_up_dynamic_videos_failure_keeps_post_list(tmp_path, monkeypatch):
+    """动态流获取失败只告警，不影响已获取的投稿列表。"""
+    svc = _svc(tmp_path)
+
+    class BoomDynamic:
+        def __init__(self, session):
+            pass
+
+        def list_user_dynamics(self, mid, **kwargs):
+            raise RuntimeError("feed 不可用")
+
+    monkeypatch.setattr("src.services.dynamic.DynamicService", BoomDynamic)
+    bvids = ["BV1"]
+
+    entries = svc._load_up_dynamic_videos(1)
+    svc._merge_up_dynamic_videos(1, bvids, entries)
+
+    assert entries == []
+    assert bvids == ["BV1"]
+
+
+def test_download_up_appends_background_dynamic_videos(tmp_path, monkeypatch):
+    """投稿批先下载；后台扫描完成后动态视频接到同一任务，序号连续。"""
+    svc = _svc(tmp_path)
+    svc._resolve_mid = lambda mid: 1
+    svc._load_up_dynamic_videos = lambda mid, **kwargs: [
+        ("BV1", "投稿已有"),
+        ("BV3", "动态视频"),
+    ]
+    calls = []
+
+    def fake_collection(bvids, save_dir, **kwargs):
+        calls.append((list(bvids), kwargs))
+        return [f"result-{bvid}" for bvid in bvids]
+
+    svc._download_bvid_collection = fake_collection
+
+    class FakeUser:
+        def __init__(self, session):
+            pass
+
+        def get_name(self, mid):
+            return "测试UP"
+
+    monkeypatch.setattr("src.services.user.UserService", FakeUser)
+
+    results = svc.download_up(
+        1, tmp_path, mode="audio", bvids=["BV1"], include_dynamic=True)
+
+    assert results == ["result-BV1", "result-BV3"]
+    assert len(calls) == 2
+    assert calls[0][0] == ["BV1"] and calls[0][1]["progress_total"] == 1
+    assert calls[1][0] == ["BV3"]
+    assert calls[1][1]["progress_offset"] == 1
+    assert calls[1][1]["progress_total"] == 2
+
+
+def test_background_dynamic_scan_does_not_block_on_captcha(tmp_path):
+    """后台扫描触发 -352 时必须直接放弃，不能等待控制台输入。"""
+    svc = _svc(tmp_path)
+    seen = {}
+
+    def fake_load(mid, **kwargs):
+        seen.update(kwargs)
+        return []
+
+    svc._load_up_dynamic_videos = fake_load
+    holder = svc._start_up_dynamic_scan(1)
+    entries = svc._wait_up_dynamic_scan(holder)
+
+    assert entries == []
+    assert seen["captcha_wait"] is False
+
+
+def test_batch_progress_offset_keeps_combined_numbering(tmp_path):
+    """第二批（动态视频）的日志序号应接在投稿批次之后。"""
+    from src.models.download_model import VideoQuality
+
+    svc = _svc(tmp_path)
+    svc._download_all_pages_report = lambda *a, **k: ([], [])
+    svc._execute_batch_download = (
+        lambda bvid, action, label=None, risk_gate=None: action())
+    reports = []
+    svc._report_bvid_download = (
+        lambda bvid, results, count, index, total:
+        (reports.append((bvid, index, total)) or count))
+
+    svc._download_bvid_collection(
+        ["BV9"], tmp_path, quality=VideoQuality.P1080, media_type="audio",
+        progress=object(), progress_cb=None, threads=1, account_sessions=None,
+        cache_dirs=None, force=False, item_label=lambda bvid: bvid,
+        progress_offset=537, progress_total=587,
+    )
+
+    assert reports == [("BV9", 538, 587)]
 
 
 def test_download_season_reuses_external_season(tmp_path):
@@ -192,8 +327,8 @@ def test_download_dirs_sanitize_blank_titles(tmp_path, monkeypatch):
     svc.download_fav(1, tmp_path, mode="video")
     svc._download_bvid_collection = fake_download_collection_up
     # stub session 不联网：download_up 未传 bvids 时会内部取列表，这里显式提供
-    svc.list_up_videos = lambda mid: ["BV1"]
-    svc.download_up(1, tmp_path, mode="video")
+    svc.list_up_videos = lambda mid, **kwargs: ["BV1"]
+    svc.download_up(1, tmp_path, mode="video", include_dynamic=False)
 
     class FakeSeason:
         def __init__(self):

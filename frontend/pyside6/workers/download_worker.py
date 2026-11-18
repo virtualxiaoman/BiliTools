@@ -284,7 +284,10 @@ class DownloadWorker(QThread):
 
     def _execute_uploader(self, service):
         request = self.request
-        bvids = service.list_up_videos(request.input_value)
+        # 只预取投稿列表用于进度总数；动态视频由 download_up 在后台扫描并追加，
+        # 避免首集下载前先等整条动态流爬完。
+        bvids = service.list_up_videos(
+            request.input_value, include_dynamic=False)
         adapter = self._make_adapter(request.threads, len(bvids), f"UP主 {request.input_value}")
         return service.download_up(
             request.input_value, request.save_dir,
@@ -292,6 +295,7 @@ class DownloadWorker(QThread):
             progress=adapter, bvids=bvids, threads=request.threads,
             account_sessions=self._account_sessions(request),
             cache_dirs=list(request.cache_dirs), force=request.force,
+            include_dynamic=request.include_dynamic,
         )
 
     @staticmethod
